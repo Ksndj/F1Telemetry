@@ -1,0 +1,41 @@
+namespace F1Telemetry.Udp.Packets;
+
+public sealed record LapDataPacket(
+    LapDataEntry[] Cars,
+    byte TimeTrialPersonalBestCarIndex,
+    byte TimeTrialRivalCarIndex) : IUdpPacket;
+
+public sealed record LapDataEntry(
+    uint LastLapTimeInMs,
+    uint CurrentLapTimeInMs,
+    ushort Sector1TimeInMs,
+    byte Sector1TimeMinutes,
+    ushort Sector2TimeInMs,
+    byte Sector2TimeMinutes,
+    ushort DeltaToCarInFrontInMs,
+    byte DeltaToCarInFrontMinutes,
+    ushort DeltaToRaceLeaderInMs,
+    byte DeltaToRaceLeaderMinutes,
+    float LapDistance,
+    float TotalDistance,
+    float SafetyCarDelta,
+    byte CarPosition,
+    byte CurrentLapNumber,
+    byte PitStatus,
+    byte NumPitStops,
+    byte Sector,
+    bool IsCurrentLapInvalid,
+    byte Penalties,
+    byte TotalWarnings,
+    byte CornerCuttingWarnings,
+    byte NumUnservedDriveThroughPenalties,
+    byte NumUnservedStopGoPenalties,
+    byte GridPosition,
+    byte DriverStatus,
+    byte ResultStatus,
+    bool IsPitLaneTimerActive,
+    ushort PitLaneTimeInLaneInMs,
+    ushort PitStopTimerInMs,
+    bool ShouldServePitStopPenalty,
+    float SpeedTrapFastestSpeed,
+    byte SpeedTrapFastestLap);

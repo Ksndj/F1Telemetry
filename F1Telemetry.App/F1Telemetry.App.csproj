@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\F1Telemetry.AI\F1Telemetry.AI.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Analytics\F1Telemetry.Analytics.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Core\F1Telemetry.Core.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Storage\F1Telemetry.Storage.csproj" />
+    <ProjectReference Include="..\F1Telemetry.TTS\F1Telemetry.TTS.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Udp\F1Telemetry.Udp.csproj" />
+  </ItemGroup>
+
+</Project>

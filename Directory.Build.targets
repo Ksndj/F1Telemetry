@@ -1,0 +1,11 @@
+<Project>
+  <Target Name="EnsureTaskSpecExists" BeforeTargets="Build">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)TASK_SPEC.md')"
+           Text="缺少任务规范文件 TASK_SPEC.md。请先恢复仓库规范文件后再继续构建。" />
+
+    <Message Importance="high"
+             Text="F1Telemetry 强制规范：修改前先阅读项目结构与命名；尽量复用已有类型；仅修改当前里程碑范围；不要一次性重构无关模块；保持 WPF + MVVM 清晰；不要把业务逻辑写进 code-behind；公开类和方法添加简洁注释；新增代码必须可构建；新增依赖优先最少依赖方案；信息不足时先做最稳妥实现并标记待确认项。" />
+    <Message Importance="high"
+             Text="任务完成后必须输出：1. 修改了哪些文件 2. 为什么这样设计 3. 还有哪些风险。" />
+  </Target>
+</Project>

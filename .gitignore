@@ -1,0 +1,20 @@
+# Build outputs
+.artifacts/
+bin/
+obj/
+TestResults/
+
+# Local caches and tooling state
+.dotnet_cli/
+.nuget/
+.logs/
+.vs/
+.protocol_ref/
+
+# Logs
+*.log
+
+# User-specific files
+*.user
+*.suo
+*.tmp

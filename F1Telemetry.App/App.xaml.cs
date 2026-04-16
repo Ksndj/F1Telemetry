@@ -1,0 +1,47 @@
+using System.Windows;
+using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Analytics.Services;
+using F1Telemetry.Analytics.State;
+using F1Telemetry.App.ViewModels;
+using F1Telemetry.Udp.Parsers;
+using F1Telemetry.Udp.Services;
+
+namespace F1Telemetry.App;
+
+/// <summary>
+/// Boots the WPF shell and wires the UDP pipeline into the central state store.
+/// </summary>
+public partial class App : Application
+{
+    private DashboardViewModel? _shellViewModel;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        var udpListener = new UdpListener();
+        var packetDispatcher = new PacketDispatcher(new PacketHeaderParser());
+        var lapAnalyzer = new LapAnalyzer();
+        var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer);
+        packetDispatcher.PacketParsed += (_, parsedPacket) => stateAggregator.ApplyPacket(parsedPacket);
+        _shellViewModel = new DashboardViewModel(
+            udpListener,
+            packetDispatcher,
+            stateAggregator.SessionStateStore,
+            lapAnalyzer,
+            Dispatcher);
+        var mainWindow = new MainWindow
+        {
+            DataContext = _shellViewModel
+        };
+
+        MainWindow = mainWindow;
+        mainWindow.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _shellViewModel?.Dispose();
+        base.OnExit(e);
+    }
+}
