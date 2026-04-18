@@ -10,6 +10,7 @@ TestResults/
 .logs/
 .vs/
 .protocol_ref/
+.worktrees/
 
 # Logs
 *.log
