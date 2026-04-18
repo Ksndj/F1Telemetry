@@ -7,7 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\F1Telemetry.AI\F1Telemetry.AI.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Analytics\F1Telemetry.Analytics.csproj" />
     <ProjectReference Include="..\F1Telemetry.Core\F1Telemetry.Core.csproj" />
+    <ProjectReference Include="..\F1Telemetry.Udp\F1Telemetry.Udp.csproj" />
   </ItemGroup>
 
 </Project>

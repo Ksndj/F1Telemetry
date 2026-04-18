@@ -12,6 +12,7 @@ using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
+using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.TTS;
 using F1Telemetry.TTS.Models;
 using F1Telemetry.TTS.Services;
@@ -20,7 +21,7 @@ using F1Telemetry.Udp.Packets;
 namespace F1Telemetry.App.ViewModels;
 
 /// <summary>
-/// Drives the milestone 5 real-time dashboard and projects the central state store for WPF binding.
+/// Drives the real-time dashboard and coordinates UI-safe access to analytics, AI, TTS, and storage outputs.
 /// </summary>
 public sealed class DashboardViewModel : ViewModelBase, IDisposable
 {
@@ -34,6 +35,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly IAppSettingsStore _appSettingsStore;
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
+    private readonly IStoragePersistenceService _storagePersistenceService;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly ConcurrentQueue<LogEntryViewModel> _pendingEventLogs = new();
@@ -82,6 +84,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private bool _isApplyingSettings;
     private bool _isAiAnalysisRunning;
     private int? _lastAnalyzedLapNumber;
+    private int? _lastPersistedLapNumber;
     private bool _disposed;
 
     /// <summary>
@@ -96,6 +99,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <param name="appSettingsStore">The local application settings store.</param>
     /// <param name="ttsMessageFactory">The mapper that converts event and AI outputs into TTS queue messages.</param>
     /// <param name="ttsQueue">The TTS queue that plays race events and AI guidance.</param>
+    /// <param name="storagePersistenceService">The background SQLite persistence coordinator.</param>
     /// <param name="dispatcher">The UI dispatcher.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
@@ -107,6 +111,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         IAppSettingsStore appSettingsStore,
         TtsMessageFactory ttsMessageFactory,
         TtsQueue ttsQueue,
+        IStoragePersistenceService storagePersistenceService,
         Dispatcher dispatcher)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
@@ -118,6 +123,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _appSettingsStore = appSettingsStore ?? throw new ArgumentNullException(nameof(appSettingsStore));
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
+        _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
         OpponentCars = new ObservableCollection<CarStateItemViewModel>();
@@ -139,6 +145,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
+        _storagePersistenceService.LogEmitted += OnStorageLogEmitted;
 
         _uiTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
         {
@@ -157,7 +164,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "Milestone 8 · DeepSeek 接入与 Windows TTS 播报";
+    public string Subtitle => "Milestone 9 · SQLite 持久化";
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
@@ -610,8 +617,15 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _udpListener.DatagramReceived -= OnDatagramReceived;
         _udpListener.ReceiveFaulted -= OnReceiveFaulted;
+        _storagePersistenceService.LogEmitted -= OnStorageLogEmitted;
 
-        _lifecycleCts.Cancel();
+        try
+        {
+            _storagePersistenceService.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch
+        {
+        }
 
         try
         {
@@ -622,6 +636,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
         finally
         {
+            _lifecycleCts.Cancel();
             _ttsQueue.Dispose();
             _lifecycleCts.Dispose();
             _settingsGate.Dispose();
@@ -686,6 +701,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         try
         {
             await _udpListener.StopAsync(_lifecycleCts.Token);
+            await _storagePersistenceService.CompleteActiveSessionAsync(_lifecycleCts.Token);
             IsListening = false;
             IsConnected = false;
             ListeningPort = null;
@@ -723,6 +739,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         EnqueueEventLog("异常", $"UDP 接收异常：{exception.Message}");
     }
 
+    private void OnStorageLogEmitted(object? sender, string message)
+    {
+        EnqueueEventLog("存储", message);
+    }
+
     private void OnUiTimerTick(object? sender, EventArgs e)
     {
         DrainDetectedRaceEvents();
@@ -740,6 +761,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
             AddRecentAiEvent(raceEvent.Message);
             TryEnqueueRaceEventSpeech(raceEvent);
+            _storagePersistenceService.EnqueueRaceEvent(raceEvent);
         }
     }
 
@@ -824,6 +846,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         UpdatePlayerCard(sessionState, playerCar);
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
+        PersistLatestLapIfNeeded();
         TrackLatestEvent(sessionState.LastEventCode);
         _ = TriggerAiAnalysisIfNeededAsync(sessionState, playerCar);
     }
@@ -880,6 +903,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             RecentLapSummaries.Add(LapSummaryItemViewModel.FromSummary(summary));
         }
+    }
+
+    private void PersistLatestLapIfNeeded()
+    {
+        var lastLap = _lapAnalyzer.CaptureLastLap();
+        if (lastLap is null || _lastPersistedLapNumber == lastLap.LapNumber)
+        {
+            return;
+        }
+
+        _lastPersistedLapNumber = lastLap.LapNumber;
+        _storagePersistenceService.EnqueueLapSummary(lastLap);
     }
 
     private void TrackLatestEvent(string? eventCode)
@@ -1028,6 +1063,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
                     RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
                 },
                 _lifecycleCts.Token);
+
+            _storagePersistenceService.EnqueueAiReport(lastLap.LapNumber, result);
 
             if (result.IsSuccess)
             {

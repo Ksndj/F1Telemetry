@@ -5,6 +5,8 @@ using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
+using F1Telemetry.Storage.Repositories;
+using F1Telemetry.Storage.Services;
 using F1Telemetry.TTS.Models;
 using F1Telemetry.TTS.Services;
 using F1Telemetry.App.ViewModels;
@@ -36,8 +38,20 @@ public partial class App : Application
         var aiAnalysisService = new DeepSeekAnalysisService(
             new DeepSeekClient(_aiHttpClient),
             new PromptBuilder());
+        var databaseService = new SqliteDatabaseService();
+        var storagePersistenceService = new StoragePersistenceService(
+            new SessionRepository(databaseService),
+            new LapRepository(databaseService),
+            new EventRepository(databaseService),
+            new AIReportRepository(databaseService),
+            databaseService.InitializeAsync,
+            databaseService);
         var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer, eventDetectionService);
-        packetDispatcher.PacketParsed += (_, parsedPacket) => stateAggregator.ApplyPacket(parsedPacket);
+        packetDispatcher.PacketParsed += (_, parsedPacket) =>
+        {
+            stateAggregator.ApplyPacket(parsedPacket);
+            storagePersistenceService.ObserveParsedPacket(parsedPacket);
+        };
         _shellViewModel = new DashboardViewModel(
             udpListener,
             packetDispatcher,
@@ -48,6 +62,7 @@ public partial class App : Application
             appSettingsStore,
             ttsMessageFactory,
             ttsQueue,
+            storagePersistenceService,
             Dispatcher);
         var mainWindow = new MainWindow
         {

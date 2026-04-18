@@ -1,0 +1,240 @@
+using F1Telemetry.AI.Models;
+using F1Telemetry.Analytics.Events;
+using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Storage.Interfaces;
+using F1Telemetry.Storage.Models;
+using F1Telemetry.Storage.Repositories;
+using F1Telemetry.Storage.Services;
+using Xunit;
+
+namespace F1Telemetry.Tests;
+
+/// <summary>
+/// Verifies SQLite repositories persist and query recent session data.
+/// </summary>
+public sealed class StorageRepositoryTests
+{
+    /// <summary>
+    /// Verifies that sessions can be created, ended, and queried back.
+    /// </summary>
+    [Fact]
+    public async Task SessionRepository_CreatesAndEndsSession()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        ISessionRepository repository = new SessionRepository(databaseService);
+        var startedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z");
+        var endedAt = DateTimeOffset.Parse("2026-04-18T10:30:00Z");
+        var session = new StoredSession
+        {
+            Id = "session-a",
+            SessionUid = "123456789",
+            TrackId = 10,
+            SessionType = 12,
+            StartedAt = startedAt
+        };
+
+        await repository.CreateAsync(session);
+        await repository.EndAsync(session.Id, endedAt);
+
+        var recentSessions = await repository.GetRecentAsync(5);
+        var storedSession = Assert.Single(recentSessions);
+        Assert.Equal(session.Id, storedSession.Id);
+        Assert.Equal(session.SessionUid, storedSession.SessionUid);
+        Assert.Equal(endedAt, storedSession.EndedAt);
+    }
+
+    /// <summary>
+    /// Verifies that laps are inserted and queried in descending creation order.
+    /// </summary>
+    [Fact]
+    public async Task LapRepository_InsertsAndReturnsRecentLaps()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-lap");
+        ILapRepository repository = new LapRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-lap",
+            new LapSummary
+            {
+                LapNumber = 4,
+                LapTimeInMs = 90123,
+                Sector1TimeInMs = 30123,
+                Sector2TimeInMs = 30000,
+                Sector3TimeInMs = 30000,
+                AverageSpeedKph = 215.4,
+                FuelUsed = 1.42f,
+                ErsUsed = 160_000f,
+                IsValid = true,
+                StartTyre = "Medium",
+                EndTyre = "Medium",
+                ClosedAt = DateTimeOffset.Parse("2026-04-18T10:01:00Z")
+            });
+        await repository.AddAsync(
+            "session-lap",
+            new LapSummary
+            {
+                LapNumber = 5,
+                LapTimeInMs = 89900,
+                Sector1TimeInMs = 30000,
+                Sector2TimeInMs = 29900,
+                Sector3TimeInMs = 30000,
+                AverageSpeedKph = 217.2,
+                FuelUsed = 1.35f,
+                ErsUsed = 150_000f,
+                IsValid = false,
+                StartTyre = "Medium",
+                EndTyre = "Soft",
+                ClosedAt = DateTimeOffset.Parse("2026-04-18T10:02:00Z")
+            });
+
+        var recentLaps = await repository.GetRecentAsync("session-lap", 10);
+
+        Assert.Equal(2, recentLaps.Count);
+        Assert.Equal(5, recentLaps[0].LapNumber);
+        Assert.Equal(1.35f, recentLaps[0].FuelUsedLitres);
+        Assert.Equal("Soft", recentLaps[0].EndTyre);
+        Assert.Equal(4, recentLaps[1].LapNumber);
+    }
+
+    /// <summary>
+    /// Verifies that race events are inserted and queried in descending creation order.
+    /// </summary>
+    [Fact]
+    public async Task EventRepository_InsertsAndReturnsRecentEvents()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-event");
+        IEventRepository repository = new EventRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-event",
+            new RaceEvent
+            {
+                EventType = EventType.FrontCarPitted,
+                Severity = EventSeverity.Information,
+                LapNumber = 8,
+                VehicleIdx = 12,
+                DriverName = "Front Runner",
+                Message = "前车已进站。",
+                DedupKey = "event:front_pit:car12:lap8",
+                PayloadJson = "{\"pit\":true}",
+                Timestamp = DateTimeOffset.Parse("2026-04-18T10:05:00Z")
+            });
+        await repository.AddAsync(
+            "session-event",
+            new RaceEvent
+            {
+                EventType = EventType.LowFuel,
+                Severity = EventSeverity.Warning,
+                LapNumber = 9,
+                VehicleIdx = 0,
+                DriverName = "Player",
+                Message = "燃油低于阈值。",
+                DedupKey = "event:low_fuel:lap9",
+                Timestamp = DateTimeOffset.Parse("2026-04-18T10:06:00Z")
+            });
+
+        var recentEvents = await repository.GetRecentAsync("session-event", 10);
+
+        Assert.Equal(2, recentEvents.Count);
+        Assert.Equal(EventType.LowFuel, recentEvents[0].EventType);
+        Assert.Equal("Front Runner", recentEvents[1].DriverName);
+    }
+
+    /// <summary>
+    /// Verifies that AI reports are inserted and queried back.
+    /// </summary>
+    [Fact]
+    public async Task AiReportRepository_InsertsAndReturnsRecentReports()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-ai");
+        IAIReportRepository repository = new AIReportRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-ai",
+            10,
+            new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = "pace stable",
+                TyreAdvice = "stay out",
+                FuelAdvice = "target +0.2",
+                TrafficAdvice = "watch undercut",
+                TtsText = "pace is stable",
+                ErrorMessage = "-"
+            },
+            DateTimeOffset.Parse("2026-04-18T10:10:00Z"));
+        await repository.AddAsync(
+            "session-ai",
+            11,
+            new AIAnalysisResult
+            {
+                IsSuccess = false,
+                Summary = "-",
+                TyreAdvice = "-",
+                FuelAdvice = "-",
+                TrafficAdvice = "-",
+                TtsText = "-",
+                ErrorMessage = "API timeout"
+            },
+            DateTimeOffset.Parse("2026-04-18T10:11:00Z"));
+
+        var recentReports = await repository.GetRecentAsync("session-ai", 10);
+
+        Assert.Equal(2, recentReports.Count);
+        Assert.Equal(11, recentReports[0].LapNumber);
+        Assert.False(recentReports[0].IsSuccess);
+        Assert.Equal("pace stable", recentReports[1].Summary);
+    }
+
+    /// <summary>
+    /// Verifies that settings values can be upserted and read back.
+    /// </summary>
+    [Fact]
+    public async Task SettingsRepository_UpsertsAndReadsValues()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        ISettingsRepository repository = new SettingsRepository(databaseService);
+
+        await repository.UpsertAsync("ai.model", "deepseek-chat");
+        await repository.UpsertAsync("tts.enabled", "true");
+        await repository.UpsertAsync("tts.enabled", "false");
+
+        var aiModel = await repository.GetAsync("ai.model");
+        var ttsEnabled = await repository.GetAsync("tts.enabled");
+
+        Assert.Equal("deepseek-chat", aiModel);
+        Assert.Equal("false", ttsEnabled);
+    }
+
+    private static string CreateRootPath()
+    {
+        return Path.Combine(Path.GetTempPath(), "F1TelemetryTests", Guid.NewGuid().ToString("N"));
+    }
+
+    private static async Task SeedSessionAsync(IDatabaseService databaseService, string sessionId)
+    {
+        ISessionRepository repository = new SessionRepository(databaseService);
+        await repository.CreateAsync(
+            new StoredSession
+            {
+                Id = sessionId,
+                SessionUid = $"uid-{sessionId}",
+                TrackId = 10,
+                SessionType = 12,
+                StartedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z")
+            });
+    }
+}

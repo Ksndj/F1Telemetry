@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.Versioning;
 using System.Speech.Synthesis;
 using F1Telemetry.Core.Interfaces;
 
@@ -7,6 +8,7 @@ namespace F1Telemetry.TTS.Services;
 /// <summary>
 /// Uses a dedicated Windows speech thread so that a single <see cref="SpeechSynthesizer"/> instance is created, used, and disposed on the same thread.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsTtsService : ITtsService, IDisposable
 {
     private readonly BlockingCollection<SpeechWorkItem> _workItems = new();
