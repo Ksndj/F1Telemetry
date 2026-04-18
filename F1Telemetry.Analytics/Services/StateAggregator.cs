@@ -11,6 +11,7 @@ namespace F1Telemetry.Analytics.Services;
 public sealed class StateAggregator : IStateAggregator
 {
     private readonly ILapAnalyzer? _lapAnalyzer;
+    private readonly IEventDetectionService? _eventDetectionService;
 
     /// <summary>
     /// Initializes a new aggregator with a dedicated in-memory state store.
@@ -25,7 +26,7 @@ public sealed class StateAggregator : IStateAggregator
     /// </summary>
     /// <param name="sessionStateStore">The state store to update.</param>
     public StateAggregator(SessionStateStore sessionStateStore)
-        : this(sessionStateStore, null)
+        : this(sessionStateStore, null, null)
     {
     }
 
@@ -35,9 +36,24 @@ public sealed class StateAggregator : IStateAggregator
     /// <param name="sessionStateStore">The state store to update.</param>
     /// <param name="lapAnalyzer">The optional lap analyzer that consumes the aggregated player state.</param>
     public StateAggregator(SessionStateStore sessionStateStore, ILapAnalyzer? lapAnalyzer)
+        : this(sessionStateStore, lapAnalyzer, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new aggregator for the specified state store, lap analyzer, and event detection service.
+    /// </summary>
+    /// <param name="sessionStateStore">The state store to update.</param>
+    /// <param name="lapAnalyzer">The optional lap analyzer that consumes the aggregated player state.</param>
+    /// <param name="eventDetectionService">The optional event detection service that consumes aggregate session state.</param>
+    public StateAggregator(
+        SessionStateStore sessionStateStore,
+        ILapAnalyzer? lapAnalyzer,
+        IEventDetectionService? eventDetectionService)
     {
         SessionStateStore = sessionStateStore ?? throw new ArgumentNullException(nameof(sessionStateStore));
         _lapAnalyzer = lapAnalyzer;
+        _eventDetectionService = eventDetectionService;
     }
 
     /// <inheritdoc />
@@ -89,10 +105,14 @@ public sealed class StateAggregator : IStateAggregator
                 break;
         }
 
-        if (_lapAnalyzer is not null)
+        if (_lapAnalyzer is null && _eventDetectionService is null)
         {
-            _lapAnalyzer.Observe(parsedPacket, SessionStateStore.CaptureState());
+            return;
         }
+
+        var sessionState = SessionStateStore.CaptureState();
+        _lapAnalyzer?.Observe(parsedPacket, sessionState);
+        _eventDetectionService?.Observe(sessionState);
     }
 
     private void ApplySession(SessionPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
@@ -151,6 +171,7 @@ public sealed class StateAggregator : IStateAggregator
                     LastLapTimeInMs = car.LastLapTimeInMs,
                     CurrentLapTimeInMs = car.CurrentLapTimeInMs,
                     PitStatus = car.PitStatus,
+                    NumPitStops = car.NumPitStops,
                     LapDistance = car.LapDistance,
                     TotalDistance = car.TotalDistance,
                     DeltaToCarInFrontInMs = car.DeltaToCarInFrontInMs,

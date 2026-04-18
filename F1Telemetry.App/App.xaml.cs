@@ -1,4 +1,5 @@
 using System.Windows;
+using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
@@ -22,13 +23,15 @@ public partial class App : Application
         var udpListener = new UdpListener();
         var packetDispatcher = new PacketDispatcher(new PacketHeaderParser());
         var lapAnalyzer = new LapAnalyzer();
-        var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer);
+        var eventDetectionService = new EventDetectionService();
+        var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer, eventDetectionService);
         packetDispatcher.PacketParsed += (_, parsedPacket) => stateAggregator.ApplyPacket(parsedPacket);
         _shellViewModel = new DashboardViewModel(
             udpListener,
             packetDispatcher,
             stateAggregator.SessionStateStore,
             lapAnalyzer,
+            eventDetectionService,
             Dispatcher);
         var mainWindow = new MainWindow
         {

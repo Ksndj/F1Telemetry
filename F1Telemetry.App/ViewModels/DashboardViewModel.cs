@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.State;
@@ -22,6 +23,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
     private readonly SessionStateStore _sessionStateStore;
     private readonly ILapAnalyzer _lapAnalyzer;
+    private readonly IEventDetectionService _eventDetectionService;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly ConcurrentQueue<LogEntryViewModel> _pendingEventLogs = new();
@@ -64,18 +66,21 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <param name="packetDispatcher">The packet dispatcher used for header validation.</param>
     /// <param name="sessionStateStore">The central session state store.</param>
     /// <param name="lapAnalyzer">The lap analyzer that exposes completed player laps.</param>
+    /// <param name="eventDetectionService">The event detection service that exposes reusable race events.</param>
     /// <param name="dispatcher">The UI dispatcher.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
         SessionStateStore sessionStateStore,
         ILapAnalyzer lapAnalyzer,
+        IEventDetectionService eventDetectionService,
         Dispatcher dispatcher)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
         _sessionStateStore = sessionStateStore ?? throw new ArgumentNullException(nameof(sessionStateStore));
         _lapAnalyzer = lapAnalyzer ?? throw new ArgumentNullException(nameof(lapAnalyzer));
+        _eventDetectionService = eventDetectionService ?? throw new ArgumentNullException(nameof(eventDetectionService));
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
         OpponentCars = new ObservableCollection<CarStateItemViewModel>();
@@ -114,7 +119,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "Milestone 5 · 单圈聚合与单圈表";
+    public string Subtitle => "Milestone 6 · 事件检测与事件日志";
 
     /// <summary>
     /// Gets the projected opponent rows.
@@ -515,10 +520,19 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
     private void OnUiTimerTick(object? sender, EventArgs e)
     {
+        DrainDetectedRaceEvents();
         DrainPendingEventLogs();
         RefreshConnectionState();
         RefreshCounters();
         RefreshCentralState();
+    }
+
+    private void DrainDetectedRaceEvents()
+    {
+        foreach (var raceEvent in _eventDetectionService.DrainPendingEvents())
+        {
+            EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
+        }
     }
 
     private void DrainPendingEventLogs()
@@ -661,6 +675,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             Category = category,
             Message = message
         };
+    }
+
+    private static string BuildEventCategory(RaceEvent raceEvent)
+    {
+        return raceEvent.Severity == EventSeverity.Warning ? "告警" : "事件";
     }
 
     private static string BuildTrackText(sbyte? trackId)

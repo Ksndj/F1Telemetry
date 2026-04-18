@@ -161,6 +161,11 @@ public sealed record CarSnapshot
     public byte? PitStatus { get; init; }
 
     /// <summary>
+    /// Gets the total number of pit stops completed by this car when known.
+    /// </summary>
+    public byte? NumPitStops { get; init; }
+
+    /// <summary>
     /// Gets a value indicating whether the current lap is valid when known.
     /// </summary>
     public bool? IsCurrentLapValid { get; init; }
