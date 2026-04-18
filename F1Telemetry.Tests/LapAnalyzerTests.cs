@@ -427,6 +427,80 @@ public sealed class LapAnalyzerTests
     }
 
     /// <summary>
+    /// Verifies session reset clears in-memory lap history and current lap state.
+    /// </summary>
+    [Fact]
+    public void ResetForSession_ChangesHistoryAndState()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 600),
+            CreateState(CreatePlayerCar(
+                lapNumber: 1,
+                lapDistance: 100f,
+                currentLapTimeInMs: 1_500,
+                lastLapTimeInMs: 95_000,
+                speedKph: 168,
+                throttle: 0.70,
+                brake: 0.01,
+                steering: 0.01f,
+                gear: 5,
+                fuelRemaining: 20f,
+                fuelLapsRemaining: 8.5f,
+                ersStoreEnergy: 2.8f,
+                tyreWear: 6.6f,
+                position: 2,
+                deltaFront: 800,
+                deltaLeader: 5_500,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 601),
+            CreateState(CreatePlayerCar(
+                lapNumber: 2,
+                lapDistance: 10f,
+                currentLapTimeInMs: 180,
+                lastLapTimeInMs: 93_000,
+                speedKph: 150,
+                throttle: 0.66,
+                brake: 0.00,
+                steering: 0.03f,
+                gear: 4,
+                fuelRemaining: 19.8f,
+                fuelLapsRemaining: 8.4f,
+                ersStoreEnergy: 2.6f,
+                tyreWear: 6.7f,
+                position: 2,
+                deltaFront: 760,
+                deltaLeader: 5_200,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+
+        Assert.Single(analyzer.CaptureAllLaps());
+        Assert.NotNull(analyzer.CaptureLastLap());
+        Assert.NotNull(analyzer.CaptureBestLap());
+
+        analyzer.ResetForSession(99);
+
+        Assert.Empty(analyzer.CaptureAllLaps());
+        Assert.Null(analyzer.CaptureLastLap());
+        Assert.Null(analyzer.CaptureBestLap());
+        Assert.Empty(analyzer.CaptureCurrentLapSamples());
+    }
+
+    /// <summary>
     /// Verifies that player car damage packets enrich current lap samples with four-wheel wear.
     /// </summary>
     [Fact]
@@ -660,7 +734,11 @@ public sealed class LapAnalyzerTests
         };
     }
 
-    private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex, uint frameIdentifier)
+    private static ParsedPacket CreateParsedPacket(
+        IUdpPacket packet,
+        byte playerCarIndex,
+        uint frameIdentifier,
+        ulong sessionUid = 1)
     {
         var header = new PacketHeader(
             PacketFormat: 2025,
@@ -669,7 +747,7 @@ public sealed class LapAnalyzerTests
             GameMinorVersion: 0,
             PacketVersion: 1,
             RawPacketId: GetPacketId(packet),
-            SessionUid: 1,
+            SessionUid: sessionUid,
             SessionTime: 1,
             FrameIdentifier: frameIdentifier,
             OverallFrameIdentifier: frameIdentifier,

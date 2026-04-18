@@ -1,4 +1,5 @@
-using System.Collections.Concurrent;
+using System.Globalization;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -27,6 +28,7 @@ namespace F1Telemetry.App.ViewModels;
 public sealed class DashboardViewModel : ViewModelBase, IDisposable
 {
     private const int MaxLogEntries = 50;
+    private const int MaxPendingEventLogs = 200;
     private readonly IUdpListener _udpListener;
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
     private readonly SessionStateStore _sessionStateStore;
@@ -41,7 +43,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly TrendChartBuilder _trendChartBuilder;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
-    private readonly ConcurrentQueue<LogEntryViewModel> _pendingEventLogs = new();
+    private readonly Queue<LogEntryViewModel> _pendingEventLogs = new();
+    private readonly object _pendingEventLogsLock = new();
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
     private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
@@ -86,8 +89,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private int _ttsCooldownSeconds = 8;
     private bool _isApplyingSettings;
     private bool _isAiAnalysisRunning;
-    private int? _lastAnalyzedLapNumber;
-    private int? _lastPersistedLapNumber;
+    private ulong? _activeSessionUid;
+    private string? _lastAnalyzedLapKey;
+    private string? _lastPersistedLapKey;
     private int? _lastTrendRefreshLapNumber;
     private bool _disposed;
 
@@ -159,6 +163,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
+        _packetDispatcher.PacketDispatched += OnPacketDispatched;
         _storagePersistenceService.LogEmitted += OnStorageLogEmitted;
 
         _uiTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
@@ -651,6 +656,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _udpListener.DatagramReceived -= OnDatagramReceived;
         _udpListener.ReceiveFaulted -= OnReceiveFaulted;
+        _packetDispatcher.PacketDispatched -= OnPacketDispatched;
         _storagePersistenceService.LogEmitted -= OnStorageLogEmitted;
 
         try
@@ -705,6 +711,13 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             await _udpListener.StartAsync(port, _lifecycleCts.Token);
             ListeningPort = _udpListener.ListeningPort;
             IsListening = _udpListener.IsListening;
+            if (IsListening)
+            {
+                _activeSessionUid = null;
+                _lastAnalyzedLapKey = null;
+                _lastPersistedLapKey = null;
+                _lastTrendRefreshLapNumber = null;
+            }
             IsConnected = false;
             Interlocked.Exchange(ref _lastPacketReceivedUnixMs, -1);
             _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
@@ -741,6 +754,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             ListeningPort = null;
             Interlocked.Exchange(ref _lastPacketReceivedUnixMs, -1);
             PacketsPerSecond = 0;
+            _activeSessionUid = null;
+            _lastAnalyzedLapKey = null;
+            _lastPersistedLapKey = null;
+            _lastTrendRefreshLapNumber = null;
             StatusMessage = "UDP 监听已停止。";
             EnqueueEventLog("系统", StatusMessage);
         }
@@ -771,6 +788,30 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private void OnReceiveFaulted(object? sender, Exception exception)
     {
         EnqueueEventLog("异常", $"UDP 接收异常：{exception.Message}");
+    }
+
+    private void OnPacketDispatched(
+        object? sender,
+        PacketDispatchResult<PacketId, PacketHeader> dispatchResult)
+    {
+        if (dispatchResult.PacketId != PacketId.Session)
+        {
+            return;
+        }
+
+        var incomingSessionUid = dispatchResult.Header.SessionUid;
+        if (_activeSessionUid == incomingSessionUid)
+        {
+            return;
+        }
+
+        _activeSessionUid = incomingSessionUid;
+        _lapAnalyzer.ResetForSession(incomingSessionUid);
+        _lastAnalyzedLapKey = null;
+        _lastPersistedLapKey = null;
+        _lastTrendRefreshLapNumber = null;
+        EnqueueEventLog("会话", $"检测到会话切换：SessionUid={incomingSessionUid}");
+        EnqueueAiTtsLog("System", $"已切换到新会话（UID {incomingSessionUid}），圈历史已清空。");
     }
 
     private void OnStorageLogEmitted(object? sender, string message)
@@ -823,8 +864,17 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
     private void DrainPendingEventLogs()
     {
-        while (_pendingEventLogs.TryDequeue(out var logEntry))
+        while (true)
         {
+            LogEntryViewModel? logEntry;
+            lock (_pendingEventLogsLock)
+            {
+                if (!_pendingEventLogs.TryDequeue(out logEntry))
+                {
+                    break;
+                }
+            }
+
             EventLogs.Insert(0, logEntry);
 
             while (EventLogs.Count > MaxLogEntries)
@@ -961,12 +1011,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private void PersistLatestLapIfNeeded()
     {
         var lastLap = _lapAnalyzer.CaptureLastLap();
-        if (lastLap is null || _lastPersistedLapNumber == lastLap.LapNumber)
+        if (lastLap is null)
         {
             return;
         }
 
-        _lastPersistedLapNumber = lastLap.LapNumber;
+        var lapKey = BuildSessionLapKey(lastLap.LapNumber);
+        if (string.Equals(_lastPersistedLapKey, lapKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastPersistedLapKey = lapKey;
         _storagePersistenceService.EnqueueLapSummary(lastLap);
     }
 
@@ -983,7 +1039,14 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
     private void EnqueueEventLog(string category, string message)
     {
-        _pendingEventLogs.Enqueue(CreateLogEntry(category, message));
+        lock (_pendingEventLogsLock)
+        {
+            _pendingEventLogs.Enqueue(CreateLogEntry(category, message));
+            while (_pendingEventLogs.Count > MaxPendingEventLogs)
+            {
+                _pendingEventLogs.Dequeue();
+            }
+        }
     }
 
     private void EnqueueAiTtsLog(string category, string message)
@@ -1020,6 +1083,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"设置加载失败：{ex.Message}");
+        }
         finally
         {
             _isApplyingSettings = false;
@@ -1052,6 +1119,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"AI 设置保存失败：{ex.Message}");
+        }
         finally
         {
             if (gateHeld)
@@ -1078,6 +1149,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         catch (OperationCanceledException)
         {
         }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"TTS 设置保存失败：{ex.Message}");
+        }
         finally
         {
             if (gateHeld)
@@ -1095,12 +1170,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
 
         var lastLap = _lapAnalyzer.CaptureLastLap();
-        if (lastLap is null || _lastAnalyzedLapNumber == lastLap.LapNumber)
+        if (lastLap is null)
         {
             return;
         }
 
-        _lastAnalyzedLapNumber = lastLap.LapNumber;
+        var lapKey = BuildSessionLapKey(lastLap.LapNumber);
+        if (string.Equals(_lastAnalyzedLapKey, lapKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastAnalyzedLapKey = lapKey;
         _isAiAnalysisRunning = true;
 
         try
@@ -1181,6 +1262,12 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
             RecentEvents = _recentAiEvents.ToArray()
         };
+    }
+
+    private string BuildSessionLapKey(int lapNumber)
+    {
+        var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        return $"{sessionToken}:{lapNumber}";
     }
 
     private TtsOptions BuildTtsOptions()

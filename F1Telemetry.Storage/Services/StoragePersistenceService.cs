@@ -20,9 +20,11 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     private readonly IAIReportRepository _aiReportRepository;
     private readonly Func<CancellationToken, Task>? _initializeAsync;
     private readonly IDatabaseService? _ownedDatabaseService;
-    private readonly Channel<StorageCommand> _commands = Channel.CreateUnbounded<StorageCommand>(
-        new UnboundedChannelOptions
+    private const int MaxQueueLength = 1024;
+    private readonly Channel<StorageCommand> _commands = Channel.CreateBounded<StorageCommand>(
+        new BoundedChannelOptions(MaxQueueLength)
         {
+            FullMode = BoundedChannelFullMode.DropOldest,
             SingleReader = true,
             SingleWriter = false
         });
@@ -101,7 +103,12 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         }
 
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        EnqueueCommand(new CompleteActiveSessionCommand(DateTimeOffset.UtcNow, completion));
+        if (!EnqueueCommand(
+                new CompleteActiveSessionCommand(DateTimeOffset.UtcNow, completion),
+                "SQLite 队列已满，停止会话请求可能延迟。"))
+        {
+            completion.TrySetResult();
+        }
 
         using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
         await completion.Task;
@@ -147,15 +154,23 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
 
     private void EnqueueCommand(StorageCommand command)
     {
+        _ = EnqueueCommand(command, "SQLite 队列已关闭，已跳过一次持久化请求。");
+    }
+
+    private bool EnqueueCommand(StorageCommand command, string dropMessage)
+    {
         if (_disposed)
         {
-            return;
+            return false;
         }
 
         if (!_commands.Writer.TryWrite(command))
         {
-            EmitLog("SQLite 队列已关闭，已跳过一次持久化请求。");
+            EmitLog(dropMessage);
+            return false;
         }
+
+        return true;
     }
 
     private async Task ProcessCommandsAsync()

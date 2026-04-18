@@ -12,6 +12,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
 {
     private readonly object _syncRoot = new();
     private LapBuilder? _currentLapBuilder;
+    private ulong? _activeSessionUid;
     private SessionHistoryPacket? _latestPlayerHistory;
     private LapSummary[] _allLaps = Array.Empty<LapSummary>();
     private LapSummary? _bestLap;
@@ -92,6 +93,28 @@ public sealed class LapAnalyzer : ILapAnalyzer
             _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: false);
             _lastFrameIdentifier = sample.FrameIdentifier;
             _hasSeenFrame = true;
+        }
+    }
+
+    /// <inheritdoc />
+    public void ResetForSession(ulong sessionUid)
+    {
+        lock (_syncRoot)
+        {
+            if (_activeSessionUid == sessionUid)
+            {
+                return;
+            }
+
+            _activeSessionUid = sessionUid;
+            _currentLapBuilder = null;
+            _latestPlayerHistory = null;
+            _allLaps = Array.Empty<LapSummary>();
+            _bestLap = null;
+            _lastLap = null;
+            _latestPlayerTyreWearPerWheel = null;
+            _lastFrameIdentifier = 0;
+            _hasSeenFrame = false;
         }
     }
 

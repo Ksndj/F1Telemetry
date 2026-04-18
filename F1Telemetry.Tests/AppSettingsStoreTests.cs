@@ -206,6 +206,89 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(12, persisted.Tts.CooldownSeconds);
     }
 
+    /// <summary>
+    /// Verifies API key is read from a plain-text legacy file as before.
+    /// </summary>
+    [Fact]
+    public async Task ReadLegacyPlainTextApiKey_WhenNotProtected()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "legacy-plain",
+                "baseUrl": "https://api.deepseek.com",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 10
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal("legacy-plain", settings.Ai.ApiKey);
+    }
+
+    /// <summary>
+    /// Verifies saved API key can be loaded back for the same platform and degrades safely on legacy values.
+    /// </summary>
+    [Fact]
+    public async Task SaveAiSettingsAsync_SupportsSecureStorageAndLegacyFallback()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        var store = new AppSettingsStore(root);
+        await store.SaveAiSettingsAsync(
+            new AISettings
+            {
+                ApiKey = "configured-secret-key",
+                BaseUrl = "https://example.com/api",
+                Model = "deepseek-chat",
+                AiEnabled = true,
+                RequestTimeoutSeconds = 10
+            });
+
+        var raw = await File.ReadAllTextAsync(Path.Combine(root, "F1Telemetry", "settings.json"));
+        using var json = JsonDocument.Parse(raw);
+        var persistedApiKey = json.RootElement.GetProperty("ai").GetProperty("apiKey").GetString();
+        var loaded = await store.LoadAsync();
+
+        Assert.Equal("configured-secret-key", loaded.Ai.ApiKey);
+        Assert.NotNull(persistedApiKey);
+
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.NotEqual("configured-secret-key", persistedApiKey);
+        }
+
+        var legacyRoot = Path.Combine(root, "legacy");
+        Directory.CreateDirectory(legacyRoot);
+        var legacySettingsPath = Path.Combine(legacyRoot, "settings.json");
+        await File.WriteAllTextAsync(
+            legacySettingsPath,
+            """
+            {
+              "apiKey": "legacy-recover",
+              "baseUrl": "https://api.deepseek.com",
+              "model": "deepseek-chat",
+              "enabled": true,
+              "requestTimeoutSeconds": 10
+            }
+            """);
+
+        var legacyStore = new AppSettingsStore(legacyRoot);
+        var legacySettings = await legacyStore.LoadAsync();
+        Assert.Equal("legacy-recover", legacySettings.Ai.ApiKey);
+    }
+
     private static string CreateRootPath()
     {
         return Path.Combine(Path.GetTempPath(), "F1TelemetryTests", Guid.NewGuid().ToString("N"));

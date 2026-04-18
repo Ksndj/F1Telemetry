@@ -16,6 +16,12 @@ public interface ILapAnalyzer
     void Observe(ParsedPacket parsedPacket, Core.Models.SessionState sessionState);
 
     /// <summary>
+    /// Clears in-memory lap history and resets lap state for a new F1 session.
+    /// </summary>
+    /// <param name="sessionUid">Session unique identifier from packet header.</param>
+    void ResetForSession(ulong sessionUid);
+
+    /// <summary>
     /// Returns all lap summaries collected during the current session.
     /// </summary>
     IReadOnlyList<LapSummary> CaptureAllLaps();

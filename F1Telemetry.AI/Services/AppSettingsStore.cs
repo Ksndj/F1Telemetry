@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
@@ -43,7 +45,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
         ArgumentNullException.ThrowIfNull(settings);
 
         var existing = await LoadDocumentCoreAsync(cancellationToken);
-        await WriteDocumentAsync(existing with { Ai = settings }, cancellationToken);
+        await WriteDocumentAsync(existing with { Ai = settings with { ApiKey = ProtectApiKey(settings.ApiKey) } }, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -126,7 +128,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             return new AISettings
             {
-                ApiKey = ReadString(aiElement, "apiKey"),
+                ApiKey = ReadApiKey(aiElement),
                 BaseUrl = ReadString(aiElement, "baseUrl", "https://api.deepseek.com"),
                 Model = ReadString(aiElement, "model", "deepseek-chat"),
                 AiEnabled = ReadBool(aiElement, "enabled", ReadBool(aiElement, "aiEnabled")),
@@ -189,6 +191,62 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 rootElement.TryGetProperty("enabled", out _) ||
                 rootElement.TryGetProperty("aiEnabled", out _) ||
                 rootElement.TryGetProperty("requestTimeoutSeconds", out _));
+    }
+
+    private static string ReadApiKey(JsonElement aiElement)
+    {
+        var candidate = ReadString(aiElement, "apiKey");
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return string.Empty;
+        }
+
+        if (TryUnprotect(candidate, out var decryptedApiKey))
+        {
+            return decryptedApiKey;
+        }
+
+        return candidate;
+    }
+
+    private static string ProtectApiKey(string apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey) || !OperatingSystem.IsWindows())
+        {
+            return apiKey;
+        }
+
+        try
+        {
+            var bytes = Encoding.UTF8.GetBytes(apiKey);
+            return Convert.ToBase64String(ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser));
+        }
+        catch
+        {
+            return apiKey;
+        }
+    }
+
+    private static bool TryUnprotect(string encryptedValue, out string apiKey)
+    {
+        apiKey = string.Empty;
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(encryptedValue);
+            var decrypted = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+            apiKey = Encoding.UTF8.GetString(decrypted);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string ReadString(JsonElement element, string propertyName, string defaultValue = "")

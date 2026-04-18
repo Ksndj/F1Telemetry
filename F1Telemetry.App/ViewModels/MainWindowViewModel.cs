@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -20,8 +20,12 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly SessionStateStore _sessionStateStore;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
-    private readonly ConcurrentQueue<PacketLogItemViewModel> _pendingPacketLogs = new();
-    private readonly ConcurrentQueue<string> _pendingStatusMessages = new();
+    private const int MaxPendingPacketLogs = 300;
+    private const int MaxPendingStatusMessages = 64;
+    private readonly Queue<PacketLogItemViewModel> _pendingPacketLogs = new();
+    private readonly Queue<string> _pendingStatusMessages = new();
+    private readonly object _pendingPacketLogsLock = new();
+    private readonly object _pendingStatusMessagesLock = new();
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
     private bool _isBusy;
@@ -335,7 +339,14 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (!_packetDispatcher.TryDispatch(datagram, out var error) && !string.IsNullOrWhiteSpace(error))
         {
-            _pendingStatusMessages.Enqueue($"Header 解析失败：{error}");
+            lock (_pendingStatusMessagesLock)
+            {
+                _pendingStatusMessages.Enqueue($"Header 解析失败：{error}");
+                while (_pendingStatusMessages.Count > MaxPendingStatusMessages)
+                {
+                    _pendingStatusMessages.Dequeue();
+                }
+            }
         }
     }
 
@@ -343,16 +354,31 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         object? sender,
         PacketDispatchResult<PacketId, PacketHeader> packetDispatchResult)
     {
-        _pendingPacketLogs.Enqueue(new PacketLogItemViewModel
+        lock (_pendingPacketLogsLock)
         {
-            ReceivedAt = packetDispatchResult.Datagram.ReceivedAt.ToLocalTime().ToString("HH:mm:ss.fff"),
-            PacketType = packetDispatchResult.Packet.PacketTypeName
-        });
+            _pendingPacketLogs.Enqueue(new PacketLogItemViewModel
+            {
+                ReceivedAt = packetDispatchResult.Datagram.ReceivedAt.ToLocalTime().ToString("HH:mm:ss.fff"),
+                PacketType = packetDispatchResult.Packet.PacketTypeName
+            });
+
+            while (_pendingPacketLogs.Count > MaxPendingPacketLogs)
+            {
+                _pendingPacketLogs.Dequeue();
+            }
+        }
     }
 
     private void OnReceiveFaulted(object? sender, Exception exception)
     {
-        _pendingStatusMessages.Enqueue($"UDP 接收异常：{exception.Message}");
+        lock (_pendingStatusMessagesLock)
+        {
+            _pendingStatusMessages.Enqueue($"UDP 接收异常：{exception.Message}");
+            while (_pendingStatusMessages.Count > MaxPendingStatusMessages)
+            {
+                _pendingStatusMessages.Dequeue();
+            }
+        }
     }
 
     private void OnUiTimerTick(object? sender, EventArgs e)
@@ -366,8 +392,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void DrainPendingPacketLogs()
     {
-        while (_pendingPacketLogs.TryDequeue(out var packetLog))
+        while (true)
         {
+            PacketLogItemViewModel? packetLog;
+            lock (_pendingPacketLogsLock)
+            {
+                if (!_pendingPacketLogs.TryDequeue(out packetLog))
+                {
+                    break;
+                }
+            }
+
             RecentPackets.Insert(0, packetLog);
 
             while (RecentPackets.Count > 50)
@@ -380,8 +415,17 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
     private void DrainPendingStatusMessages()
     {
         string? latestStatusMessage = null;
-        while (_pendingStatusMessages.TryDequeue(out var statusMessage))
+        while (true)
         {
+            string? statusMessage;
+            lock (_pendingStatusMessagesLock)
+            {
+                if (!_pendingStatusMessages.TryDequeue(out statusMessage))
+                {
+                    break;
+                }
+            }
+
             latestStatusMessage = statusMessage;
         }
 
