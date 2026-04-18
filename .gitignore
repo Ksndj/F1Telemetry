@@ -1,8 +1,9 @@
 # Build outputs
-.artifacts/
+.artifacts*/
 bin/
 obj/
 TestResults/
+*wpftmp*.csproj
 
 # Local caches and tooling state
 .dotnet_cli/
