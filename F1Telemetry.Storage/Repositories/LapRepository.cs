@@ -67,7 +67,7 @@ public sealed class LapRepository : ILapRepository
                 command.Parameters.AddWithValue("@sector3_ms", (object?)lapSummary.Sector3TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector3TimeInMs.Value);
                 command.Parameters.AddWithValue("@is_valid", lapSummary.IsValid ? 1 : 0);
                 command.Parameters.AddWithValue("@avg_speed_kph", (object?)lapSummary.AverageSpeedKph ?? DBNull.Value);
-                command.Parameters.AddWithValue("@fuel_used_litres", (object?)lapSummary.FuelUsed ?? DBNull.Value);
+                command.Parameters.AddWithValue("@fuel_used_litres", (object?)lapSummary.FuelUsedLitres ?? DBNull.Value);
                 command.Parameters.AddWithValue("@ers_used", (object?)lapSummary.ErsUsed ?? DBNull.Value);
                 command.Parameters.AddWithValue("@start_tyre", lapSummary.StartTyre);
                 command.Parameters.AddWithValue("@end_tyre", lapSummary.EndTyre);

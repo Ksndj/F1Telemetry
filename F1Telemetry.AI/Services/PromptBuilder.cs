@@ -88,8 +88,9 @@ Each value must be a concise string.
         }
 
         var timeText = lap.LapTimeInMs is null ? "n/a" : $"{lap.LapTimeInMs} ms";
+        var fuelUsedText = lap.FuelUsedLitres is null ? "n/a" : $"{lap.FuelUsedLitres:0.00} L";
         var validText = lap.IsValid ? "valid" : "invalid";
-        return $"Lap {lap.LapNumber}, time {timeText}, {validText}";
+        return $"Lap {lap.LapNumber}, time {timeText}, fuel used {fuelUsedText}, {validText}";
     }
 
     private static string FormatNullable<T>(T? value)

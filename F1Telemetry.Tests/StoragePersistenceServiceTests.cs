@@ -43,7 +43,7 @@ public sealed class StoragePersistenceServiceTests
             new LapSummary
             {
                 LapNumber = 5,
-                FuelUsed = 1.2f,
+                FuelUsedLitres = 1.2f,
                 StartTyre = "Medium",
                 EndTyre = "Medium",
                 ClosedAt = DateTimeOffset.Parse("2026-04-18T10:05:00Z")

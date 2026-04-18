@@ -28,9 +28,9 @@ public sealed class LapSummaryItemViewModel
     public string AverageSpeedText { get; init; } = "-";
 
     /// <summary>
-    /// Gets the formatted fuel usage summary.
+    /// Gets the formatted fuel usage summary in litres.
     /// </summary>
-    public string FuelUsedText { get; init; } = "-";
+    public string FuelUsedLitresText { get; init; } = "-";
 
     /// <summary>
     /// Gets the formatted ERS usage summary.
@@ -71,7 +71,7 @@ public sealed class LapSummaryItemViewModel
             LapTimeText = FormatLapTime(summary.LapTimeInMs),
             SectorsText = $"{FormatLapTime(summary.Sector1TimeInMs)} / {FormatLapTime(summary.Sector2TimeInMs)} / {FormatLapTime(summary.Sector3TimeInMs)}",
             AverageSpeedText = summary.AverageSpeedKph is null ? "-" : $"{summary.AverageSpeedKph:0} km/h",
-            FuelUsedText = summary.FuelUsed is null ? "-" : $"{summary.FuelUsed:0.00} L",
+            FuelUsedLitresText = summary.FuelUsedLitres is null ? "-" : $"{summary.FuelUsedLitres:0.00} L",
             ErsUsedText = summary.ErsUsed is null ? "-" : $"{summary.ErsUsed.Value / 1_000_000f:0.00} MJ",
             TyreWearDeltaText = summary.TyreWearDelta is null ? "-" : $"{summary.TyreWearDelta:0.0}%",
             ValidityText = summary.IsValid ? "有效" : "无效",

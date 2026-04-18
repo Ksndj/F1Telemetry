@@ -51,6 +51,7 @@ public sealed class PromptBuilderTests
         Assert.Contains("Current tyre:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Lap 14", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("fuel used 1.24 L", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Rear car pitted.", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("packet", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("udp", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
@@ -76,12 +77,12 @@ public sealed class PromptBuilderTests
     {
         return new AIAnalysisContext
         {
-            LatestLap = new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, IsValid = true },
-            BestLap = new LapSummary { LapNumber = 10, LapTimeInMs = 90_300, IsValid = true },
+            LatestLap = new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, FuelUsedLitres = 1.24f, IsValid = true },
+            BestLap = new LapSummary { LapNumber = 10, LapTimeInMs = 90_300, FuelUsedLitres = 1.18f, IsValid = true },
             RecentLaps = includeRecentCollections
                 ? [
-                    new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, IsValid = true },
-                    new LapSummary { LapNumber = 13, LapTimeInMs = 91_500, IsValid = false }
+                    new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, FuelUsedLitres = 1.24f, IsValid = true },
+                    new LapSummary { LapNumber = 13, LapTimeInMs = 91_500, FuelUsedLitres = 1.31f, IsValid = false }
                 ]
                 : null!,
             CurrentFuelInTank = 8.4f,
