@@ -1,3 +1,5 @@
+using F1Telemetry.Udp.Packets;
+
 namespace F1Telemetry.Analytics.Laps;
 
 /// <summary>
@@ -55,6 +57,14 @@ public sealed class LapBuilder
     }
 
     /// <summary>
+    /// Returns an immutable snapshot of the current lap samples.
+    /// </summary>
+    public IReadOnlyList<LapSample> CaptureSamples()
+    {
+        return _samples.ToArray();
+    }
+
+    /// <summary>
     /// Builds a provisional summary for the lap.
     /// </summary>
     /// <param name="closedAt">The time when the lap was closed.</param>
@@ -73,9 +83,10 @@ public sealed class LapBuilder
             LapNumber = LapNumber,
             LapTimeInMs = closingSample?.LastLapTimeInMs ?? last.CurrentLapTimeInMs,
             AverageSpeedKph = speedSamples.Length == 0 ? null : speedSamples.Average(),
-            FuelUsed = ComputePositiveDelta(first.FuelRemaining, last.FuelRemaining),
+            FuelUsedLitres = ComputePositiveDelta(first.FuelRemaining, last.FuelRemaining),
             ErsUsed = ComputePositiveDelta(first.ErsStoreEnergy, last.ErsStoreEnergy),
             TyreWearDelta = ComputePositiveDelta(last.TyreWear, first.TyreWear),
+            TyreWearDeltaPerWheel = ComputeTyreWearDeltaPerWheel(first.TyreWearPerWheel, last.TyreWearPerWheel),
             IsValid = _samples.All(sample => sample.IsValid),
             StartTyre = FormatTyre(first),
             EndTyre = FormatTyre(last),
@@ -93,6 +104,20 @@ public sealed class LapBuilder
         }
 
         return Math.Max(0f, start.Value - end.Value);
+    }
+
+    private static WheelSet<float>? ComputeTyreWearDeltaPerWheel(WheelSet<float>? start, WheelSet<float>? end)
+    {
+        if (start is null || end is null)
+        {
+            return null;
+        }
+
+        return new WheelSet<float>(
+            RearLeft: ComputePositiveDelta(end.RearLeft, start.RearLeft) ?? 0f,
+            RearRight: ComputePositiveDelta(end.RearRight, start.RearRight) ?? 0f,
+            FrontLeft: ComputePositiveDelta(end.FrontLeft, start.FrontLeft) ?? 0f,
+            FrontRight: ComputePositiveDelta(end.FrontRight, start.FrontRight) ?? 0f);
     }
 
     private static bool IsPitSample(LapSample sample)

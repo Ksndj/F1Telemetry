@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ScottPlot.WPF" Version="5.0.36" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\F1Telemetry.AI\F1Telemetry.AI.csproj" />
     <ProjectReference Include="..\F1Telemetry.Analytics\F1Telemetry.Analytics.csproj" />
     <ProjectReference Include="..\F1Telemetry.Core\F1Telemetry.Core.csproj" />

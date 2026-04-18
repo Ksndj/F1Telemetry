@@ -153,8 +153,8 @@ public sealed class LapAnalyzerTests
         Assert.Equal((uint)30_000, summary.Sector3TimeInMs);
         Assert.NotNull(summary.AverageSpeedKph);
         Assert.InRange(summary.AverageSpeedKph!.Value, 199.5d, 200.5d);
-        Assert.NotNull(summary.FuelUsed);
-        Assert.InRange(summary.FuelUsed!.Value, 0.89f, 0.91f);
+        Assert.NotNull(summary.FuelUsedLitres);
+        Assert.InRange(summary.FuelUsedLitres!.Value, 0.89f, 0.91f);
         Assert.NotNull(summary.ErsUsed);
         Assert.InRange(summary.ErsUsed!.Value, 0.59f, 0.61f);
         Assert.NotNull(summary.TyreWearDelta);
@@ -354,6 +354,246 @@ public sealed class LapAnalyzerTests
         Assert.Empty(analyzer.CaptureAllLaps());
     }
 
+    /// <summary>
+    /// Verifies that in-flight lap samples can be read as an immutable snapshot.
+    /// </summary>
+    [Fact]
+    public void CaptureCurrentLapSamples_ReturnsIndependentSnapshot()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 400),
+            CreateState(CreatePlayerCar(
+                lapNumber: 11,
+                lapDistance: 120f,
+                currentLapTimeInMs: 10_000,
+                lastLapTimeInMs: 90_000,
+                speedKph: 180,
+                throttle: 0.80,
+                brake: 0.01,
+                steering: 0.00f,
+                gear: 6,
+                fuelRemaining: 24.8f,
+                fuelLapsRemaining: 10.9f,
+                ersStoreEnergy: 2.6f,
+                tyreWear: 8.0f,
+                position: 6,
+                deltaFront: 700,
+                deltaLeader: 9_100,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        var firstSnapshot = analyzer.CaptureCurrentLapSamples();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 401),
+            CreateState(CreatePlayerCar(
+                lapNumber: 11,
+                lapDistance: 240f,
+                currentLapTimeInMs: 12_000,
+                lastLapTimeInMs: 90_000,
+                speedKph: 188,
+                throttle: 0.84,
+                brake: 0.00,
+                steering: 0.02f,
+                gear: 6,
+                fuelRemaining: 24.6f,
+                fuelLapsRemaining: 10.8f,
+                ersStoreEnergy: 2.5f,
+                tyreWear: 8.2f,
+                position: 6,
+                deltaFront: 680,
+                deltaLeader: 8_900,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        var secondSnapshot = analyzer.CaptureCurrentLapSamples();
+
+        Assert.Single(firstSnapshot);
+        Assert.Equal(120f, firstSnapshot[0].LapDistance);
+        Assert.Equal(2, secondSnapshot.Count);
+        Assert.Equal(240f, secondSnapshot[^1].LapDistance);
+    }
+
+    /// <summary>
+    /// Verifies that player car damage packets enrich current lap samples with four-wheel wear.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerCarDamagePacket_CapturesTyreWearPerWheel()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 500),
+            CreateState(CreatePlayerCar(
+                lapNumber: 12,
+                lapDistance: 200f,
+                currentLapTimeInMs: 14_000,
+                lastLapTimeInMs: 90_000,
+                speedKph: 192,
+                throttle: 0.86,
+                brake: 0.00,
+                steering: 0.01f,
+                gear: 7,
+                fuelRemaining: 24.4f,
+                fuelLapsRemaining: 10.7f,
+                ersStoreEnergy: 2.4f,
+                tyreWear: 8.3f,
+                position: 6,
+                deltaFront: 650,
+                deltaLeader: 8_700,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new CarDamagePacket(CreateDamageCars(new WheelSet<float>(11f, 12f, 13f, 14f))),
+                playerCarIndex: 3,
+                frameIdentifier: 501),
+            CreateState(CreatePlayerCar(
+                lapNumber: 12,
+                lapDistance: 260f,
+                currentLapTimeInMs: 15_000,
+                lastLapTimeInMs: 90_000,
+                speedKph: 195,
+                throttle: 0.88,
+                brake: 0.00,
+                steering: -0.01f,
+                gear: 7,
+                fuelRemaining: 24.3f,
+                fuelLapsRemaining: 10.7f,
+                ersStoreEnergy: 2.3f,
+                tyreWear: 8.4f,
+                position: 6,
+                deltaFront: 640,
+                deltaLeader: 8_650,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        var samples = analyzer.CaptureCurrentLapSamples();
+        var latest = Assert.Single(samples.Skip(1));
+
+        Assert.NotNull(latest.TyreWearPerWheel);
+        Assert.Equal(11f, latest.TyreWearPerWheel!.RearLeft);
+        Assert.Equal(14f, latest.TyreWearPerWheel.FrontRight);
+    }
+
+    /// <summary>
+    /// Verifies that completed laps expose four-wheel wear deltas.
+    /// </summary>
+    [Fact]
+    public void Observe_LapCloses_ComputesTyreWearDeltaPerWheel()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new CarDamagePacket(CreateDamageCars(new WheelSet<float>(10f, 10f, 8f, 8f))),
+                playerCarIndex: 3,
+                frameIdentifier: 600),
+            CreateState(CreatePlayerCar(
+                lapNumber: 13,
+                lapDistance: 100f,
+                currentLapTimeInMs: 2_000,
+                lastLapTimeInMs: 89_000,
+                speedKph: 160,
+                throttle: 0.72,
+                brake: 0.00,
+                steering: 0.02f,
+                gear: 5,
+                fuelRemaining: 24.0f,
+                fuelLapsRemaining: 10.4f,
+                ersStoreEnergy: 2.2f,
+                tyreWear: 9.0f,
+                position: 6,
+                deltaFront: 620,
+                deltaLeader: 8_400,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new CarDamagePacket(CreateDamageCars(new WheelSet<float>(12f, 13f, 10f, 11f))),
+                playerCarIndex: 3,
+                frameIdentifier: 601),
+            CreateState(CreatePlayerCar(
+                lapNumber: 13,
+                lapDistance: 4_600f,
+                currentLapTimeInMs: 89_000,
+                lastLapTimeInMs: 89_000,
+                speedKph: 220,
+                throttle: 0.98,
+                brake: 0.00,
+                steering: -0.02f,
+                gear: 8,
+                fuelRemaining: 23.1f,
+                fuelLapsRemaining: 10.0f,
+                ersStoreEnergy: 1.8f,
+                tyreWear: 10.2f,
+                position: 5,
+                deltaFront: 280,
+                deltaLeader: 6_700,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 602),
+            CreateState(CreatePlayerCar(
+                lapNumber: 14,
+                lapDistance: 25f,
+                currentLapTimeInMs: 150,
+                lastLapTimeInMs: 89_000,
+                speedKph: 150,
+                throttle: 0.64,
+                brake: 0.00,
+                steering: 0.01f,
+                gear: 4,
+                fuelRemaining: 23.0f,
+                fuelLapsRemaining: 9.9f,
+                ersStoreEnergy: 1.7f,
+                tyreWear: 10.3f,
+                position: 5,
+                deltaFront: 260,
+                deltaLeader: 6_500,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 18,
+                actualTyreCompound: 21)));
+
+        var summary = Assert.Single(analyzer.CaptureAllLaps());
+
+        Assert.NotNull(summary.TyreWearDeltaPerWheel);
+        Assert.Equal(2f, summary.TyreWearDeltaPerWheel!.RearLeft);
+        Assert.Equal(3f, summary.TyreWearDeltaPerWheel.RearRight);
+        Assert.Equal(2f, summary.TyreWearDeltaPerWheel.FrontLeft);
+        Assert.Equal(3f, summary.TyreWearDeltaPerWheel.FrontRight);
+    }
+
     private static SessionState CreateState(CarSnapshot playerCar)
     {
         return new SessionState
@@ -446,8 +686,40 @@ public sealed class LapAnalyzerTests
         {
             LapDataPacket => (byte)PacketId.LapData,
             CarTelemetryPacket => (byte)PacketId.CarTelemetry,
+            CarDamagePacket => (byte)PacketId.CarDamage,
             SessionHistoryPacket => (byte)PacketId.SessionHistory,
             _ => throw new ArgumentOutOfRangeException(nameof(packet))
         };
+    }
+
+    private static CarDamageData[] CreateDamageCars(WheelSet<float> playerTyreWear)
+    {
+        var defaultDamage = new CarDamageData(
+            TyreWear: new WheelSet<float>(0f, 0f, 0f, 0f),
+            TyreDamage: new WheelSet<byte>(0, 0, 0, 0),
+            BrakesDamage: new WheelSet<byte>(0, 0, 0, 0),
+            TyreBlisters: new WheelSet<byte>(0, 0, 0, 0),
+            FrontLeftWingDamage: 0,
+            FrontRightWingDamage: 0,
+            RearWingDamage: 0,
+            FloorDamage: 0,
+            DiffuserDamage: 0,
+            SidepodDamage: 0,
+            DrsFault: false,
+            ErsFault: false,
+            GearBoxDamage: 0,
+            EngineDamage: 0,
+            EngineMguhWear: 0,
+            EngineEsWear: 0,
+            EngineCeWear: 0,
+            EngineIceWear: 0,
+            EngineMgukWear: 0,
+            EngineTcWear: 0,
+            EngineBlown: false,
+            EngineSeized: false);
+
+        var cars = Enumerable.Repeat(defaultDamage, 22).ToArray();
+        cars[3] = defaultDamage with { TyreWear = playerTyreWear };
+        return cars;
     }
 }

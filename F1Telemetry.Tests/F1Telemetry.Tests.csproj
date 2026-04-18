@@ -1,15 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\F1Telemetry.App\F1Telemetry.App.csproj" />
     <ProjectReference Include="..\F1Telemetry.AI\F1Telemetry.AI.csproj" />
     <ProjectReference Include="..\F1Telemetry.Analytics\F1Telemetry.Analytics.csproj" />
     <ProjectReference Include="..\F1Telemetry.Core\F1Telemetry.Core.csproj" />

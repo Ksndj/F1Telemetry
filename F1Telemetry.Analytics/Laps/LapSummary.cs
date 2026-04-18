@@ -1,3 +1,5 @@
+using F1Telemetry.Udp.Packets;
+
 namespace F1Telemetry.Analytics.Laps;
 
 /// <summary>
@@ -38,7 +40,7 @@ public sealed record LapSummary
     /// <summary>
     /// Gets the estimated fuel usage across the lap in litres.
     /// </summary>
-    public float? FuelUsed { get; init; }
+    public float? FuelUsedLitres { get; init; }
 
     /// <summary>
     /// Gets the estimated ERS energy usage across the lap in joules.
@@ -49,6 +51,11 @@ public sealed record LapSummary
     /// Gets the tyre wear delta across the lap in percentage points.
     /// </summary>
     public float? TyreWearDelta { get; init; }
+
+    /// <summary>
+    /// Gets the four-wheel tyre wear deltas across the lap in percentage points.
+    /// </summary>
+    public WheelSet<float>? TyreWearDeltaPerWheel { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether the completed lap is valid.

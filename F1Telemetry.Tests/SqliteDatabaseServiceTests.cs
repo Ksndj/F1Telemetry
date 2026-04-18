@@ -1,3 +1,4 @@
+using System.IO;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Services;
 using Xunit;

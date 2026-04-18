@@ -1,3 +1,5 @@
+using F1Telemetry.Udp.Packets;
+
 namespace F1Telemetry.Analytics.Laps;
 
 /// <summary>
@@ -84,6 +86,11 @@ public sealed record LapSample
     /// Gets the average tyre wear percentage.
     /// </summary>
     public float? TyreWear { get; init; }
+
+    /// <summary>
+    /// Gets the latest four-wheel tyre wear percentages when known.
+    /// </summary>
+    public WheelSet<float>? TyreWearPerWheel { get; init; }
 
     /// <summary>
     /// Gets the current race position.

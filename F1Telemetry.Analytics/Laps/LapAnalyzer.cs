@@ -10,11 +10,13 @@ namespace F1Telemetry.Analytics.Laps;
 /// </summary>
 public sealed class LapAnalyzer : ILapAnalyzer
 {
+    private readonly object _syncRoot = new();
     private LapBuilder? _currentLapBuilder;
     private SessionHistoryPacket? _latestPlayerHistory;
     private LapSummary[] _allLaps = Array.Empty<LapSummary>();
     private LapSummary? _bestLap;
     private LapSummary? _lastLap;
+    private WheelSet<float>? _latestPlayerTyreWearPerWheel;
     private uint _lastFrameIdentifier;
     private bool _hasSeenFrame;
 
@@ -29,65 +31,83 @@ public sealed class LapAnalyzer : ILapAnalyzer
             return;
         }
 
-        if (parsedPacket.Packet is SessionHistoryPacket historyPacket)
+        lock (_syncRoot)
         {
-            ObserveSessionHistory(historyPacket, sessionState.PlayerCarIndex.Value);
-            return;
-        }
+            if (parsedPacket.Packet is SessionHistoryPacket historyPacket)
+            {
+                ObserveSessionHistory(historyPacket, sessionState.PlayerCarIndex.Value);
+                return;
+            }
 
-        if (!ShouldSamplePacket(parsedPacket.Packet))
-        {
-            return;
-        }
+            if (parsedPacket.Packet is CarDamagePacket damagePacket
+                && sessionState.PlayerCarIndex.Value < damagePacket.Cars.Length)
+            {
+                _latestPlayerTyreWearPerWheel = damagePacket.Cars[sessionState.PlayerCarIndex.Value].TyreWear;
+            }
 
-        var sample = TryCreateSample(parsedPacket, sessionState.PlayerCar);
-        if (sample is null)
-        {
-            return;
-        }
+            if (!ShouldSamplePacket(parsedPacket.Packet))
+            {
+                return;
+            }
 
-        if (ShouldResetForRegression(sample))
-        {
+            var sample = TryCreateSample(parsedPacket, sessionState.PlayerCar);
+            if (sample is null)
+            {
+                return;
+            }
+
+            if (ShouldResetForRegression(sample))
+            {
+                _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: false);
+                _lastFrameIdentifier = sample.FrameIdentifier;
+                _hasSeenFrame = true;
+                return;
+            }
+
+            if (_currentLapBuilder is null)
+            {
+                _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: IsCleanLapStart(sample));
+                _lastFrameIdentifier = sample.FrameIdentifier;
+                _hasSeenFrame = true;
+                return;
+            }
+
+            if (sample.LapNumber == _currentLapBuilder.LapNumber)
+            {
+                _currentLapBuilder.AddSample(sample);
+                _lastFrameIdentifier = sample.FrameIdentifier;
+                _hasSeenFrame = true;
+                return;
+            }
+
+            if (sample.LapNumber > _currentLapBuilder.LapNumber)
+            {
+                CloseCurrentLap(sample);
+                _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: IsCleanLapStart(sample));
+                _lastFrameIdentifier = sample.FrameIdentifier;
+                _hasSeenFrame = true;
+                return;
+            }
+
             _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: false);
             _lastFrameIdentifier = sample.FrameIdentifier;
             _hasSeenFrame = true;
-            return;
         }
-
-        if (_currentLapBuilder is null)
-        {
-            _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: IsCleanLapStart(sample));
-            _lastFrameIdentifier = sample.FrameIdentifier;
-            _hasSeenFrame = true;
-            return;
-        }
-
-        if (sample.LapNumber == _currentLapBuilder.LapNumber)
-        {
-            _currentLapBuilder.AddSample(sample);
-            _lastFrameIdentifier = sample.FrameIdentifier;
-            _hasSeenFrame = true;
-            return;
-        }
-
-        if (sample.LapNumber > _currentLapBuilder.LapNumber)
-        {
-            CloseCurrentLap(sample);
-            _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: IsCleanLapStart(sample));
-            _lastFrameIdentifier = sample.FrameIdentifier;
-            _hasSeenFrame = true;
-            return;
-        }
-
-        _currentLapBuilder = new LapBuilder(sample, shouldEmitWhenClosed: false);
-        _lastFrameIdentifier = sample.FrameIdentifier;
-        _hasSeenFrame = true;
     }
 
     /// <inheritdoc />
     public IReadOnlyList<LapSummary> CaptureAllLaps()
     {
         return Volatile.Read(ref _allLaps);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<LapSample> CaptureCurrentLapSamples()
+    {
+        lock (_syncRoot)
+        {
+            return _currentLapBuilder?.CaptureSamples() ?? Array.Empty<LapSample>();
+        }
     }
 
     /// <inheritdoc />
@@ -240,7 +260,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
             || (sample.CurrentLapTimeInMs ?? uint.MaxValue) <= 5_000u;
     }
 
-    private static LapSample? TryCreateSample(ParsedPacket parsedPacket, CarSnapshot? playerCar)
+    private LapSample? TryCreateSample(ParsedPacket parsedPacket, CarSnapshot? playerCar)
     {
         if (playerCar?.CurrentLapNumber is null)
         {
@@ -265,6 +285,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
             FuelLapsRemaining = playerCar.FuelRemainingLaps,
             ErsStoreEnergy = playerCar.ErsStoreEnergy,
             TyreWear = playerCar.TyreWear,
+            TyreWearPerWheel = _latestPlayerTyreWearPerWheel,
             Position = playerCar.Position,
             DeltaFrontInMs = playerCar.DeltaToCarInFrontInMs,
             DeltaLeaderInMs = playerCar.DeltaToRaceLeaderInMs,

@@ -1,3 +1,4 @@
+using System.IO;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
@@ -67,7 +68,7 @@ public sealed class StorageRepositoryTests
                 Sector2TimeInMs = 30000,
                 Sector3TimeInMs = 30000,
                 AverageSpeedKph = 215.4,
-                FuelUsed = 1.42f,
+                FuelUsedLitres = 1.42f,
                 ErsUsed = 160_000f,
                 IsValid = true,
                 StartTyre = "Medium",
@@ -84,7 +85,7 @@ public sealed class StorageRepositoryTests
                 Sector2TimeInMs = 29900,
                 Sector3TimeInMs = 30000,
                 AverageSpeedKph = 217.2,
-                FuelUsed = 1.35f,
+                FuelUsedLitres = 1.35f,
                 ErsUsed = 150_000f,
                 IsValid = false,
                 StartTyre = "Medium",

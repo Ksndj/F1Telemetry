@@ -21,6 +21,11 @@ public interface ILapAnalyzer
     IReadOnlyList<LapSummary> CaptureAllLaps();
 
     /// <summary>
+    /// Returns an immutable snapshot of the current in-flight lap samples.
+    /// </summary>
+    IReadOnlyList<LapSample> CaptureCurrentLapSamples();
+
+    /// <summary>
     /// Returns the most recent completed laps, ordered newest first.
     /// </summary>
     /// <param name="maxCount">The maximum number of laps to return.</param>

@@ -8,6 +8,7 @@ using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.Charts;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Interfaces;
@@ -36,6 +37,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
     private readonly IStoragePersistenceService _storagePersistenceService;
+    private readonly CurrentLapChartBuilder _currentLapChartBuilder;
+    private readonly TrendChartBuilder _trendChartBuilder;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly ConcurrentQueue<LogEntryViewModel> _pendingEventLogs = new();
@@ -85,6 +88,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private bool _isAiAnalysisRunning;
     private int? _lastAnalyzedLapNumber;
     private int? _lastPersistedLapNumber;
+    private int? _lastTrendRefreshLapNumber;
     private bool _disposed;
 
     /// <summary>
@@ -124,12 +128,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
+        _currentLapChartBuilder = new CurrentLapChartBuilder();
+        _trendChartBuilder = new TrendChartBuilder();
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
         OpponentCars = new ObservableCollection<CarStateItemViewModel>();
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
         AiTtsLogs = new ObservableCollection<LogEntryViewModel>();
+        SpeedChartPanel = new ChartPanelViewModel();
+        InputsChartPanel = new ChartPanelViewModel();
+        FuelTrendChartPanel = new ChartPanelViewModel();
+        TyreWearTrendChartPanel = new ChartPanelViewModel();
         ChartPlaceholders = new ObservableCollection<DashboardPlaceholderViewModel>
         {
             new() { Title = "速度曲线", Description = "后续接入实时速度与速度陷阱走势。" },
@@ -137,6 +147,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             new() { Title = "轮胎窗口", Description = "后续接入温度、磨损与轮胎工作区间。" },
             new() { Title = "能量管理", Description = "后续接入 ERS、燃油与部署策略图表。" }
         };
+        SpeedChartPanel.UpdateFrom(_currentLapChartBuilder.BuildSpeedPanel(Array.Empty<LapSample>()));
+        InputsChartPanel.UpdateFrom(_currentLapChartBuilder.BuildThrottleBrakePanel(Array.Empty<LapSample>()));
+        FuelTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildFuelTrendPanel(Array.Empty<LapSummary>()));
+        TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(Array.Empty<LapSummary>()));
 
         AiTtsLogs.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
 
@@ -164,7 +178,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "Milestone 9 · SQLite 持久化";
+    public string Subtitle => "Milestone 10 · 实时图表";
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
@@ -350,6 +364,26 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the unified AI, TTS, and system log entries.
     /// </summary>
     public ObservableCollection<LogEntryViewModel> AiTtsLogs { get; }
+
+    /// <summary>
+    /// Gets the current-lap speed chart panel state.
+    /// </summary>
+    public ChartPanelViewModel SpeedChartPanel { get; }
+
+    /// <summary>
+    /// Gets the current-lap throttle and brake chart panel state.
+    /// </summary>
+    public ChartPanelViewModel InputsChartPanel { get; }
+
+    /// <summary>
+    /// Gets the multi-lap fuel trend chart panel state.
+    /// </summary>
+    public ChartPanelViewModel FuelTrendChartPanel { get; }
+
+    /// <summary>
+    /// Gets the multi-lap tyre wear trend chart panel state.
+    /// </summary>
+    public ChartPanelViewModel TyreWearTrendChartPanel { get; }
 
     /// <summary>
     /// Gets the chart placeholder panels.
@@ -846,6 +880,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         UpdatePlayerCard(sessionState, playerCar);
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
+        RefreshCharts();
         PersistLatestLapIfNeeded();
         TrackLatestEvent(sessionState.LastEventCode);
         _ = TriggerAiAnalysisIfNeededAsync(sessionState, playerCar);
@@ -903,6 +938,24 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             RecentLapSummaries.Add(LapSummaryItemViewModel.FromSummary(summary));
         }
+    }
+
+    private void RefreshCharts()
+    {
+        var currentLapSamples = _lapAnalyzer.CaptureCurrentLapSamples();
+        SpeedChartPanel.UpdateFrom(_currentLapChartBuilder.BuildSpeedPanel(currentLapSamples));
+        InputsChartPanel.UpdateFrom(_currentLapChartBuilder.BuildThrottleBrakePanel(currentLapSamples));
+
+        var latestCompletedLapNumber = _lapAnalyzer.CaptureLastLap()?.LapNumber;
+        if (_lastTrendRefreshLapNumber == latestCompletedLapNumber)
+        {
+            return;
+        }
+
+        _lastTrendRefreshLapNumber = latestCompletedLapNumber;
+        var recentLaps = _lapAnalyzer.CaptureRecentLaps(12);
+        FuelTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildFuelTrendPanel(recentLaps));
+        TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(recentLaps));
     }
 
     private void PersistLatestLapIfNeeded()
