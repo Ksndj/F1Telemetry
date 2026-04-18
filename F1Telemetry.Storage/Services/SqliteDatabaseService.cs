@@ -188,6 +188,15 @@ public sealed class SqliteDatabaseService : IDatabaseService
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_laps_session_created_at_desc
+                ON laps (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_events_session_created_at_desc
+                ON events (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_ai_reports_session_created_at_desc
+                ON ai_reports (session_id, created_at DESC);
             """;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
