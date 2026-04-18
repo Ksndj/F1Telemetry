@@ -1,0 +1,19 @@
+using F1Telemetry.TTS.Models;
+
+namespace F1Telemetry.AI.Models;
+
+/// <summary>
+/// Represents the persisted AI and TTS settings blocks stored in the local settings file.
+/// </summary>
+public sealed record AppSettingsDocument
+{
+    /// <summary>
+    /// Gets the AI settings block.
+    /// </summary>
+    public AISettings Ai { get; init; } = new();
+
+    /// <summary>
+    /// Gets the TTS settings block.
+    /// </summary>
+    public TtsOptions Tts { get; init; } = new();
+}

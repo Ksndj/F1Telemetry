@@ -1,7 +1,8 @@
 <Project>
   <PropertyGroup>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).artifacts\obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <BaseOutputPath>$(MSBuildThisFileDirectory).artifacts\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <F1TelemetryArtifactsRoot Condition="'$(F1TelemetryArtifactsRoot)' == ''">$(MSBuildThisFileDirectory).artifacts\</F1TelemetryArtifactsRoot>
+    <BaseIntermediateOutputPath>$(F1TelemetryArtifactsRoot)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(F1TelemetryArtifactsRoot)bin\$(MSBuildProjectName)\</BaseOutputPath>
     <DisableRarCache>true</DisableRarCache>
   </PropertyGroup>
 </Project>

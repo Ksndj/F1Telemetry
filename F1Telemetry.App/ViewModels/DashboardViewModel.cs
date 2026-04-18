@@ -2,6 +2,9 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using F1Telemetry.AI.Interfaces;
+using F1Telemetry.AI.Models;
+using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
@@ -9,6 +12,9 @@ using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
+using F1Telemetry.TTS;
+using F1Telemetry.TTS.Models;
+using F1Telemetry.TTS.Services;
 using F1Telemetry.Udp.Packets;
 
 namespace F1Telemetry.App.ViewModels;
@@ -24,9 +30,15 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly SessionStateStore _sessionStateStore;
     private readonly ILapAnalyzer _lapAnalyzer;
     private readonly IEventDetectionService _eventDetectionService;
+    private readonly IAIAnalysisService _aiAnalysisService;
+    private readonly IAppSettingsStore _appSettingsStore;
+    private readonly TtsMessageFactory _ttsMessageFactory;
+    private readonly TtsQueue _ttsQueue;
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly ConcurrentQueue<LogEntryViewModel> _pendingEventLogs = new();
+    private readonly SemaphoreSlim _settingsGate = new(1, 1);
+    private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
     private bool _isBusy;
@@ -57,6 +69,19 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private long _lastPacketsPerSecondSampleCount;
     private DateTimeOffset _lastPacketsPerSecondSampleAt;
     private string? _lastEventCode;
+    private bool _aiEnabled;
+    private string _aiBaseUrl = "https://api.deepseek.com";
+    private string _aiModel = "deepseek-chat";
+    private string _aiApiKey = string.Empty;
+    private int _aiRequestTimeoutSeconds = 10;
+    private bool _ttsEnabled;
+    private string _ttsVoiceName = string.Empty;
+    private int _ttsVolume = 100;
+    private int _ttsRate;
+    private int _ttsCooldownSeconds = 8;
+    private bool _isApplyingSettings;
+    private bool _isAiAnalysisRunning;
+    private int? _lastAnalyzedLapNumber;
     private bool _disposed;
 
     /// <summary>
@@ -67,6 +92,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <param name="sessionStateStore">The central session state store.</param>
     /// <param name="lapAnalyzer">The lap analyzer that exposes completed player laps.</param>
     /// <param name="eventDetectionService">The event detection service that exposes reusable race events.</param>
+    /// <param name="aiAnalysisService">The AI analysis service used after completed laps.</param>
+    /// <param name="appSettingsStore">The local application settings store.</param>
+    /// <param name="ttsMessageFactory">The mapper that converts event and AI outputs into TTS queue messages.</param>
+    /// <param name="ttsQueue">The TTS queue that plays race events and AI guidance.</param>
     /// <param name="dispatcher">The UI dispatcher.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
@@ -74,6 +103,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         SessionStateStore sessionStateStore,
         ILapAnalyzer lapAnalyzer,
         IEventDetectionService eventDetectionService,
+        IAIAnalysisService aiAnalysisService,
+        IAppSettingsStore appSettingsStore,
+        TtsMessageFactory ttsMessageFactory,
+        TtsQueue ttsQueue,
         Dispatcher dispatcher)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
@@ -81,12 +114,16 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _sessionStateStore = sessionStateStore ?? throw new ArgumentNullException(nameof(sessionStateStore));
         _lapAnalyzer = lapAnalyzer ?? throw new ArgumentNullException(nameof(lapAnalyzer));
         _eventDetectionService = eventDetectionService ?? throw new ArgumentNullException(nameof(eventDetectionService));
+        _aiAnalysisService = aiAnalysisService ?? throw new ArgumentNullException(nameof(aiAnalysisService));
+        _appSettingsStore = appSettingsStore ?? throw new ArgumentNullException(nameof(appSettingsStore));
+        _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
+        _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
         OpponentCars = new ObservableCollection<CarStateItemViewModel>();
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
-        AiBroadcastLogs = new ObservableCollection<LogEntryViewModel>();
+        AiTtsLogs = new ObservableCollection<LogEntryViewModel>();
         ChartPlaceholders = new ObservableCollection<DashboardPlaceholderViewModel>
         {
             new() { Title = "速度曲线", Description = "后续接入实时速度与速度陷阱走势。" },
@@ -95,7 +132,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             new() { Title = "能量管理", Description = "后续接入 ERS、燃油与部署策略图表。" }
         };
 
-        AiBroadcastLogs.Add(CreateLogEntry("AI", "AI 播报模块尚未接入，本区域先保留日志占位。"));
+        AiTtsLogs.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
@@ -109,6 +146,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         };
         _uiTimer.Tick += OnUiTimerTick;
         _uiTimer.Start();
+        _ = LoadSettingsAsync();
     }
 
     /// <summary>
@@ -119,7 +157,172 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "Milestone 6 · 事件检测与事件日志";
+    public string Subtitle => "Milestone 8 · DeepSeek 接入与 Windows TTS 播报";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether AI analysis is enabled.
+    /// </summary>
+    public bool AiEnabled
+    {
+        get => _aiEnabled;
+        set
+        {
+            if (SetProperty(ref _aiEnabled, value))
+            {
+                OnPropertyChanged(nameof(AiApiKeyStatusText));
+                _ = PersistAiSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the configured AI base URL.
+    /// </summary>
+    public string AiBaseUrl
+    {
+        get => _aiBaseUrl;
+        set
+        {
+            if (SetProperty(ref _aiBaseUrl, value))
+            {
+                _ = PersistAiSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the configured AI model.
+    /// </summary>
+    public string AiModel
+    {
+        get => _aiModel;
+        set
+        {
+            if (SetProperty(ref _aiModel, value))
+            {
+                _ = PersistAiSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the configured AI API key.
+    /// </summary>
+    public string AiApiKey
+    {
+        get => _aiApiKey;
+        set
+        {
+            if (SetProperty(ref _aiApiKey, value))
+            {
+                OnPropertyChanged(nameof(AiApiKeyStatusText));
+                _ = PersistAiSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a safe API key status label for the UI.
+    /// </summary>
+    public string AiApiKeyStatusText => string.IsNullOrWhiteSpace(AiApiKey) ? "未配置" : "已配置";
+
+    /// <summary>
+    /// Gets or sets a value indicating whether TTS playback is enabled.
+    /// </summary>
+    public bool TtsEnabled
+    {
+        get => _ttsEnabled;
+        set
+        {
+            if (SetProperty(ref _ttsEnabled, value))
+            {
+                _ttsQueue.UpdateOptions(BuildTtsOptions());
+                _ = PersistTtsSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the configured Windows voice name.
+    /// </summary>
+    public string TtsVoiceName
+    {
+        get => _ttsVoiceName;
+        set
+        {
+            if (SetProperty(ref _ttsVoiceName, value))
+            {
+                _ttsQueue.UpdateOptions(BuildTtsOptions());
+                _ = PersistTtsSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the TTS playback volume.
+    /// </summary>
+    public int TtsVolume
+    {
+        get => _ttsVolume;
+        set
+        {
+            var normalizedValue = Math.Clamp(value, 0, 100);
+            if (SetProperty(ref _ttsVolume, normalizedValue))
+            {
+                _ttsQueue.UpdateOptions(BuildTtsOptions());
+                _ = PersistTtsSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the TTS playback rate.
+    /// </summary>
+    public int TtsRate
+    {
+        get => _ttsRate;
+        set
+        {
+            var normalizedValue = Math.Clamp(value, -10, 10);
+            if (SetProperty(ref _ttsRate, normalizedValue))
+            {
+                _ttsQueue.UpdateOptions(BuildTtsOptions());
+                _ = PersistTtsSettingsAsync();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the AI API key for UI binding.
+    /// </summary>
+    public string ApiKey
+    {
+        get => AiApiKey;
+        set => AiApiKey = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the AI base URL for UI binding.
+    /// </summary>
+    public string BaseUrl
+    {
+        get => AiBaseUrl;
+        set => AiBaseUrl = value;
+    }
+
+    /// <summary>
+    /// Gets or sets the AI model name for UI binding.
+    /// </summary>
+    public string Model
+    {
+        get => AiModel;
+        set => AiModel = value;
+    }
+
+    /// <summary>
+    /// Gets the API key state text for UI binding.
+    /// </summary>
+    public string ApiKeyStateText => AiApiKeyStatusText;
 
     /// <summary>
     /// Gets the projected opponent rows.
@@ -137,9 +340,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     public ObservableCollection<LogEntryViewModel> EventLogs { get; }
 
     /// <summary>
-    /// Gets the AI broadcast placeholder log entries.
+    /// Gets the unified AI, TTS, and system log entries.
     /// </summary>
-    public ObservableCollection<LogEntryViewModel> AiBroadcastLogs { get; }
+    public ObservableCollection<LogEntryViewModel> AiTtsLogs { get; }
 
     /// <summary>
     /// Gets the chart placeholder panels.
@@ -419,7 +622,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
         finally
         {
+            _ttsQueue.Dispose();
             _lifecycleCts.Dispose();
+            _settingsGate.Dispose();
         }
     }
 
@@ -521,6 +726,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private void OnUiTimerTick(object? sender, EventArgs e)
     {
         DrainDetectedRaceEvents();
+        DrainTtsPlaybackRecords();
         DrainPendingEventLogs();
         RefreshConnectionState();
         RefreshCounters();
@@ -532,6 +738,30 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         foreach (var raceEvent in _eventDetectionService.DrainPendingEvents())
         {
             EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
+            AddRecentAiEvent(raceEvent.Message);
+            TryEnqueueRaceEventSpeech(raceEvent);
+        }
+    }
+
+    private void DrainTtsPlaybackRecords()
+    {
+        foreach (var record in _ttsQueue.DrainPendingRecords())
+        {
+            EnqueueAiTtsLog(record.Source, record.Message);
+        }
+    }
+
+    private void AddRecentAiEvent(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        _recentAiEvents.Enqueue(message);
+        while (_recentAiEvents.Count > 8)
+        {
+            _recentAiEvents.Dequeue();
         }
     }
 
@@ -595,6 +825,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
         TrackLatestEvent(sessionState.LastEventCode);
+        _ = TriggerAiAnalysisIfNeededAsync(sessionState, playerCar);
     }
 
     private void UpdatePlayerCard(SessionState sessionState, CarSnapshot? playerCar)
@@ -665,6 +896,213 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private void EnqueueEventLog(string category, string message)
     {
         _pendingEventLogs.Enqueue(CreateLogEntry(category, message));
+    }
+
+    private void EnqueueAiTtsLog(string category, string message)
+    {
+        AiTtsLogs.Insert(0, CreateLogEntry(category, message));
+
+        while (AiTtsLogs.Count > MaxLogEntries)
+        {
+            AiTtsLogs.RemoveAt(AiTtsLogs.Count - 1);
+        }
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        try
+        {
+            var settings = await _appSettingsStore.LoadAsync(_lifecycleCts.Token);
+            _isApplyingSettings = true;
+            AiEnabled = settings.Ai.AiEnabled;
+            AiBaseUrl = settings.Ai.BaseUrl;
+            AiModel = settings.Ai.Model;
+            AiApiKey = settings.Ai.ApiKey;
+            _aiRequestTimeoutSeconds = settings.Ai.RequestTimeoutSeconds <= 0 ? 10 : settings.Ai.RequestTimeoutSeconds;
+            TtsEnabled = settings.Tts.TtsEnabled;
+            TtsVoiceName = settings.Tts.VoiceName;
+            TtsVolume = settings.Tts.Volume;
+            TtsRate = settings.Tts.Rate;
+            _ttsCooldownSeconds = settings.Tts.CooldownSeconds <= 0 ? 8 : settings.Tts.CooldownSeconds;
+            _isApplyingSettings = false;
+
+            _ttsQueue.UpdateOptions(BuildTtsOptions());
+            EnqueueAiTtsLog("System", $"设置已加载 · AI API Key {AiApiKeyStatusText} · TTS {(TtsEnabled ? "已启用" : "未启用")}");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _isApplyingSettings = false;
+        }
+    }
+
+    private async Task PersistAiSettingsAsync()
+    {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync(_lifecycleCts.Token);
+            gateHeld = true;
+            await _appSettingsStore.SaveAiSettingsAsync(
+                new AISettings
+                {
+                    ApiKey = AiApiKey,
+                    BaseUrl = AiBaseUrl,
+                    Model = AiModel,
+                    AiEnabled = AiEnabled,
+                    RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
+                },
+                _lifecycleCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private async Task PersistTtsSettingsAsync()
+    {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync(_lifecycleCts.Token);
+            gateHeld = true;
+            await _appSettingsStore.SaveTtsSettingsAsync(BuildTtsOptions(), _lifecycleCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private async Task TriggerAiAnalysisIfNeededAsync(SessionState sessionState, CarSnapshot? playerCar)
+    {
+        if (_isAiAnalysisRunning || !AiEnabled)
+        {
+            return;
+        }
+
+        var lastLap = _lapAnalyzer.CaptureLastLap();
+        if (lastLap is null || _lastAnalyzedLapNumber == lastLap.LapNumber)
+        {
+            return;
+        }
+
+        _lastAnalyzedLapNumber = lastLap.LapNumber;
+        _isAiAnalysisRunning = true;
+
+        try
+        {
+            var result = await _aiAnalysisService.AnalyzeAsync(
+                BuildAiAnalysisContext(sessionState, playerCar, lastLap),
+                new AISettings
+                {
+                    ApiKey = AiApiKey,
+                    BaseUrl = AiBaseUrl,
+                    Model = AiModel,
+                    AiEnabled = AiEnabled,
+                    RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
+                },
+                _lifecycleCts.Token);
+
+            if (result.IsSuccess)
+            {
+                EnqueueAiTtsLog("AI", $"Lap {lastLap.LapNumber} · {result.Summary}");
+                TryEnqueueAiSpeech(lastLap, result);
+            }
+            else
+            {
+                EnqueueAiTtsLog("AI", $"Lap {lastLap.LapNumber} 分析失败：{result.ErrorMessage}");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            _isAiAnalysisRunning = false;
+        }
+    }
+
+    private void TryEnqueueRaceEventSpeech(RaceEvent raceEvent)
+    {
+        var ttsMessage = _ttsMessageFactory.CreateForRaceEvent(raceEvent, BuildTtsOptions());
+        if (ttsMessage is null)
+        {
+            return;
+        }
+
+        _ttsQueue.TryEnqueue(ttsMessage);
+    }
+
+    private void TryEnqueueAiSpeech(LapSummary lastLap, AIAnalysisResult result)
+    {
+        var ttsMessage = _ttsMessageFactory.CreateForAiResult(lastLap, result, BuildTtsOptions());
+        if (ttsMessage is null)
+        {
+            return;
+        }
+
+        _ttsQueue.TryEnqueue(ttsMessage);
+    }
+
+    private AIAnalysisContext BuildAiAnalysisContext(SessionState sessionState, CarSnapshot? playerCar, LapSummary lastLap)
+    {
+        var recentLaps = _lapAnalyzer.CaptureRecentLaps(5);
+        var carBehind = playerCar?.Position is null
+            ? null
+            : sessionState.Cars.FirstOrDefault(car => car.Position == playerCar.Position + 1);
+
+        return new AIAnalysisContext
+        {
+            LatestLap = lastLap,
+            BestLap = _lapAnalyzer.CaptureBestLap(),
+            RecentLaps = recentLaps,
+            CurrentFuelRemainingLaps = playerCar?.FuelRemainingLaps,
+            CurrentFuelInTank = playerCar?.FuelInTank,
+            CurrentErsStoreEnergy = playerCar?.ErsStoreEnergy,
+            CurrentTyre = playerCar is null ? "-" : BuildTyreText(playerCar),
+            CurrentTyreAgeLaps = playerCar?.TyresAgeLaps,
+            GapToFrontInMs = playerCar?.DeltaToCarInFrontInMs,
+            GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
+            RecentEvents = _recentAiEvents.ToArray()
+        };
+    }
+
+    private TtsOptions BuildTtsOptions()
+    {
+        return new TtsOptions
+        {
+            TtsEnabled = TtsEnabled,
+            VoiceName = TtsVoiceName,
+            Volume = TtsVolume,
+            Rate = TtsRate,
+            CooldownSeconds = _ttsCooldownSeconds
+        };
     }
 
     private static LogEntryViewModel CreateLogEntry(string category, string message)

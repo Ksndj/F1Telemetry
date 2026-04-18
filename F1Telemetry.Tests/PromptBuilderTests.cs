@@ -1,0 +1,99 @@
+using F1Telemetry.AI.Models;
+using F1Telemetry.AI.Services;
+using F1Telemetry.Analytics.Laps;
+using Xunit;
+
+namespace F1Telemetry.Tests;
+
+/// <summary>
+/// Verifies that AI prompts use the fixed JSON contract and only lap/state/event summaries.
+/// </summary>
+public sealed class PromptBuilderTests
+{
+    /// <summary>
+    /// Verifies that the system message asks for the fixed JSON response fields.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_IncludesFixedJsonContract()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext());
+
+        Assert.Contains("valid JSON", prompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("exactly these keys", prompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var key in new[]
+        {
+            "summary",
+            "tyreAdvice",
+            "fuelAdvice",
+            "trafficAdvice",
+            "ttsText"
+        })
+        {
+            Assert.Contains(key, prompt.SystemMessage, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that the user message stays in lap, state, and event summary territory.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_UsesLapStateAndEventSummaries()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext());
+
+        Assert.Contains("Latest lap:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Best lap:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Recent laps:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Current fuel remaining laps:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Current tyre:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Lap 14", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Rear car pitted.", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("packet", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("udp", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that null recent collections do not break prompt generation.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_AllowsNullRecentCollections()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(includeRecentCollections: false));
+
+        Assert.Contains("Latest lap:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Best lap:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Current fuel in tank:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recent laps:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
+    }
+
+    private static AIAnalysisContext CreateContext(bool includeRecentCollections = true)
+    {
+        return new AIAnalysisContext
+        {
+            LatestLap = new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, IsValid = true },
+            BestLap = new LapSummary { LapNumber = 10, LapTimeInMs = 90_300, IsValid = true },
+            RecentLaps = includeRecentCollections
+                ? [
+                    new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, IsValid = true },
+                    new LapSummary { LapNumber = 13, LapTimeInMs = 91_500, IsValid = false }
+                ]
+                : null!,
+            CurrentFuelInTank = 8.4f,
+            CurrentFuelRemainingLaps = 5.1f,
+            CurrentErsStoreEnergy = 2_250_000f,
+            CurrentTyre = "V16 / A19",
+            CurrentTyreAgeLaps = 7,
+            GapToFrontInMs = 1_250,
+            GapToBehindInMs = 980,
+            RecentEvents = includeRecentCollections
+                ? ["Rear car pitted."]
+                : null!
+        };
+    }
+}
