@@ -11,8 +11,23 @@
         Height="860"
         MinWidth="1160"
         MinHeight="720"
-        WindowStartupLocation="CenterScreen">
-    <Grid Background="#08111F">
+        MaxWidth="1920"
+        MaxHeight="1080"
+        WindowState="Normal"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="True"
+        UseLayoutRounding="True"
+        WindowStartupLocation="CenterScreen"
+        Loaded="Window_Loaded"
+        StateChanged="Window_StateChanged">
+    <Grid x:Name="WindowRoot"
+          Background="#08111F"
+          RenderTransformOrigin="0.5,0.5">
+        <Grid.RenderTransform>
+            <ScaleTransform x:Name="WindowRootScaleTransform"
+                            ScaleX="1"
+                            ScaleY="1" />
+        </Grid.RenderTransform>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -563,5 +578,35 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <Border x:Name="WindowStateToast"
+                Grid.RowSpan="3"
+                Margin="0,24,24,0"
+                Padding="14,10"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Panel.ZIndex="20"
+                Background="#E6EEF9"
+                BorderBrush="#BDD0EA"
+                BorderThickness="1"
+                CornerRadius="14"
+                IsHitTestVisible="False"
+                Opacity="0"
+                Visibility="Collapsed">
+            <Border.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform x:Name="WindowStateToastScaleTransform"
+                                    ScaleX="0.96"
+                                    ScaleY="0.96" />
+                    <TranslateTransform x:Name="WindowStateToastTranslateTransform"
+                                        Y="-6" />
+                </TransformGroup>
+            </Border.RenderTransform>
+            <TextBlock x:Name="WindowStateToastText"
+                       FontSize="14"
+                       FontWeight="SemiBold"
+                       Foreground="#132743"
+                       Text="窗口状态已更新" />
+        </Border>
     </Grid>
 </Window>
