@@ -270,8 +270,8 @@ public sealed class AppSettingsStoreTests
         }
 
         var legacyRoot = Path.Combine(root, "legacy");
-        Directory.CreateDirectory(legacyRoot);
-        var legacySettingsPath = Path.Combine(legacyRoot, "settings.json");
+        Directory.CreateDirectory(Path.Combine(legacyRoot, "F1Telemetry"));
+        var legacySettingsPath = Path.Combine(legacyRoot, "F1Telemetry", "settings.json");
         await File.WriteAllTextAsync(
             legacySettingsPath,
             """

@@ -250,6 +250,60 @@ public sealed class TtsQueueTests
         Assert.Contains(dropRecords, record => record.Message.Contains("已让出低优先级播报", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Verifies that pending playback records stay bounded even if the UI does not drain them immediately.
+    /// </summary>
+    [Fact]
+    public async Task DrainPendingRecords_WhenUiFallsBehind_KeepsOnlyRecentRecords()
+    {
+        var speaker = new BlockingSpeaker();
+        using var queue = new TtsQueue(speaker, new TtsOptions { TtsEnabled = true });
+
+        Assert.True(queue.TryEnqueue(new TtsMessage
+        {
+            Text = "Current buffered message",
+            Source = "TTS",
+            Type = "event",
+            DedupKey = "event:buffered:current",
+            Priority = TtsPriority.Normal
+        }));
+        await speaker.WaitForInvocationAsync();
+
+        for (var index = 0; index < 50; index++)
+        {
+            Assert.True(queue.TryEnqueue(new TtsMessage
+            {
+                Text = $"Buffered message {index}",
+                Source = "TTS",
+                Type = "event",
+                DedupKey = $"event:buffered:{index}",
+                Priority = TtsPriority.Normal
+            }));
+        }
+
+        for (var index = 50; index < 300; index++)
+        {
+            Assert.False(queue.TryEnqueue(new TtsMessage
+            {
+                Text = $"Buffered message {index}",
+                Source = "TTS",
+                Type = "event",
+                DedupKey = $"event:buffered:{index}",
+                Priority = TtsPriority.Low
+            }));
+        }
+
+        await Task.Delay(100);
+        var records = queue.DrainPendingRecords();
+
+        Assert.NotEmpty(records);
+        Assert.True(records.Count <= 200);
+        Assert.Contains(records, record => record.Message.Contains("Buffered message 299", StringComparison.Ordinal));
+
+        speaker.Release();
+        await DrainUntilAsync(queue, drained => drained.Any(record => record.Outcome == TtsPlaybackOutcome.PlaybackCompleted));
+    }
+
     private static async Task<IReadOnlyList<TtsPlaybackRecord>> DrainUntilAsync(
         TtsQueue queue,
         Func<IReadOnlyList<TtsPlaybackRecord>, bool> predicate)

@@ -106,6 +106,33 @@ public sealed class StateAggregatorTests
         Assert.Equal(1f, visibleOpponent.ErsStoreEnergy!.Value, 3);
     }
 
+    /// <summary>
+    /// Verifies that resetting the session store clears metadata and cached car snapshots between sessions.
+    /// </summary>
+    [Fact]
+    public void SessionStateStore_Reset_ClearsMetadataAndCars()
+    {
+        var aggregator = new StateAggregator();
+
+        aggregator.ApplyPacket(CreateParsedPacket(CreateSessionPacket(), playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new LapDataPacket(BuildLapDataCars(), TimeTrialPersonalBestCarIndex: 255, TimeTrialRivalCarIndex: 255),
+            playerCarIndex: 3));
+
+        aggregator.SessionStateStore.Reset();
+
+        var state = aggregator.SessionStateStore.CaptureState();
+        Assert.Null(state.PlayerCarIndex);
+        Assert.Null(state.TrackId);
+        Assert.Null(state.ActiveCarCount);
+        Assert.Null(state.PlayerCar);
+        Assert.Empty(state.Cars);
+        Assert.Empty(state.Opponents);
+    }
+
     private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
     {
         var header = new PacketHeader(

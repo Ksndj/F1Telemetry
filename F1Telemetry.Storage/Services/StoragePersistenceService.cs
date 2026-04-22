@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Threading.Channels;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
@@ -14,20 +13,20 @@ namespace F1Telemetry.Storage.Services;
 /// </summary>
 public sealed class StoragePersistenceService : IStoragePersistenceService
 {
+    private const int DefaultMaxBufferedCommands = 1024;
+    private const int DefaultMaxCriticalCommands = 32;
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
     private readonly Func<CancellationToken, Task>? _initializeAsync;
     private readonly IDatabaseService? _ownedDatabaseService;
-    private const int MaxQueueLength = 1024;
-    private readonly Channel<StorageCommand> _commands = Channel.CreateBounded<StorageCommand>(
-        new BoundedChannelOptions(MaxQueueLength)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false
-        });
+    private readonly object _queueLock = new();
+    private readonly Queue<StorageCommand> _criticalCommands = new();
+    private readonly Queue<StorageCommand> _bufferedCommands = new();
+    private readonly SemaphoreSlim _commandSignal = new(0);
+    private readonly int _maxBufferedCommands;
+    private readonly int _maxCriticalCommands;
     private readonly CancellationTokenSource _workerCts = new();
     private readonly Task _workerTask;
     private bool _disposed;
@@ -41,14 +40,21 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         IEventRepository eventRepository,
         IAIReportRepository aiReportRepository,
         Func<CancellationToken, Task>? initializeAsync = null,
-        IDatabaseService? ownedDatabaseService = null)
+        IDatabaseService? ownedDatabaseService = null,
+        int maxBufferedCommands = DefaultMaxBufferedCommands,
+        int maxCriticalCommands = DefaultMaxCriticalCommands)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedCommands);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCriticalCommands);
+
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
         _initializeAsync = initializeAsync;
         _ownedDatabaseService = ownedDatabaseService;
+        _maxBufferedCommands = maxBufferedCommands;
+        _maxCriticalCommands = maxCriticalCommands;
         _workerTask = Task.Run(ProcessCommandsAsync);
     }
 
@@ -131,7 +137,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         }
 
         _disposed = true;
-        _commands.Writer.TryComplete();
+        _commandSignal.Release();
 
         try
         {
@@ -147,6 +153,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                 await _ownedDatabaseService.DisposeAsync();
             }
 
+            _commandSignal.Dispose();
             _workerCts.Cancel();
             _workerCts.Dispose();
         }
@@ -154,7 +161,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
 
     private void EnqueueCommand(StorageCommand command)
     {
-        _ = EnqueueCommand(command, "SQLite 队列已关闭，已跳过一次持久化请求。");
+        _ = EnqueueCommand(command, "SQLite 持久化队列已满，已跳过一次持久化请求。");
     }
 
     private bool EnqueueCommand(StorageCommand command, string dropMessage)
@@ -164,12 +171,55 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             return false;
         }
 
-        if (!_commands.Writer.TryWrite(command))
+        string? logMessage = null;
+        var accepted = false;
+
+        lock (_queueLock)
         {
-            EmitLog(dropMessage);
+            if (_disposed)
+            {
+                return false;
+            }
+
+            if (command.IsCritical)
+            {
+                if (_criticalCommands.Count >= _maxCriticalCommands)
+                {
+                    logMessage = "SQLite 关键队列已满，已跳过一次会话生命周期请求。";
+                }
+                else
+                {
+                    _criticalCommands.Enqueue(command);
+                    accepted = true;
+                }
+            }
+            else if (_bufferedCommands.Count >= _maxBufferedCommands)
+            {
+                logMessage = dropMessage;
+            }
+            else
+            {
+                _bufferedCommands.Enqueue(command);
+                accepted = true;
+            }
+        }
+
+        if (!accepted)
+        {
+            if (command is CompleteActiveSessionCommand completeSession)
+            {
+                completeSession.Completion.TrySetResult();
+            }
+
+            if (!string.IsNullOrWhiteSpace(logMessage))
+            {
+                EmitLog(logMessage);
+            }
+
             return false;
         }
 
+        _commandSignal.Release();
         return true;
     }
 
@@ -190,8 +240,32 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             }
         }
 
-        await foreach (var command in _commands.Reader.ReadAllAsync(_workerCts.Token))
+        while (true)
         {
+            try
+            {
+                await _commandSignal.WaitAsync(_workerCts.Token);
+            }
+            catch (OperationCanceledException) when (_workerCts.IsCancellationRequested)
+            {
+                break;
+            }
+
+            StorageCommand? command;
+            lock (_queueLock)
+            {
+                command = DequeueNextCommandUnsafe();
+                if (command is null)
+                {
+                    if (_disposed)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+            }
+
             try
             {
                 switch (command)
@@ -261,6 +335,16 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         }
     }
 
+    private StorageCommand? DequeueNextCommandUnsafe()
+    {
+        if (_criticalCommands.Count > 0)
+        {
+            return _criticalCommands.Dequeue();
+        }
+
+        return _bufferedCommands.Count > 0 ? _bufferedCommands.Dequeue() : null;
+    }
+
     private async Task<(string? ActiveSessionId, string? ActiveSessionUid)> HandleObserveSessionAsync(
         ObserveSessionPacketCommand command,
         string? activeSessionId,
@@ -308,24 +392,24 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         LogEmitted?.Invoke(this, message);
     }
 
-    private abstract record StorageCommand;
+    private abstract record StorageCommand(bool IsCritical);
 
     private sealed record ObserveSessionPacketCommand(
         string SessionUid,
         int? TrackId,
         int? SessionType,
-        DateTimeOffset ObservedAt) : StorageCommand;
+        DateTimeOffset ObservedAt) : StorageCommand(true);
 
-    private sealed record PersistLapCommand(LapSummary LapSummary) : StorageCommand;
+    private sealed record PersistLapCommand(LapSummary LapSummary) : StorageCommand(false);
 
-    private sealed record PersistEventCommand(RaceEvent RaceEvent) : StorageCommand;
+    private sealed record PersistEventCommand(RaceEvent RaceEvent) : StorageCommand(false);
 
     private sealed record PersistAiReportCommand(
         int LapNumber,
         AIAnalysisResult AnalysisResult,
-        DateTimeOffset CreatedAt) : StorageCommand;
+        DateTimeOffset CreatedAt) : StorageCommand(false);
 
     private sealed record CompleteActiveSessionCommand(
         DateTimeOffset EndedAt,
-        TaskCompletionSource Completion) : StorageCommand;
+        TaskCompletionSource Completion) : StorageCommand(true);
 }

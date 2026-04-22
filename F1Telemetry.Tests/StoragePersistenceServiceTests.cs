@@ -58,6 +58,57 @@ public sealed class StoragePersistenceServiceTests
         await service.DisposeAsync();
     }
 
+    /// <summary>
+    /// Verifies that session lifecycle commands remain durable even when the normal write queue overflows.
+    /// </summary>
+    [Fact]
+    public async Task QueueOverflow_PreservesSessionLifecycleCommandsAndDropsBufferedNormalWrites()
+    {
+        var sessionRepository = new RecordingSessionRepository();
+        var lapRepository = new RecordingLapRepository();
+        var releaseInitialization = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StoragePersistenceService(
+            sessionRepository,
+            lapRepository,
+            new RecordingEventRepository(),
+            new RecordingAiReportRepository(),
+            _ => releaseInitialization.Task,
+            maxBufferedCommands: 1,
+            maxCriticalCommands: 8);
+        var emittedLogs = new List<string>();
+        service.LogEmitted += (_, message) => emittedLogs.Add(message);
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 10, sessionType: 12));
+        service.EnqueueLapSummary(new LapSummary
+        {
+            LapNumber = 1,
+            FuelUsedLitres = 1.1f,
+            StartTyre = "Medium",
+            EndTyre = "Medium",
+            ClosedAt = DateTimeOffset.Parse("2026-04-18T10:01:00Z")
+        });
+        service.EnqueueLapSummary(new LapSummary
+        {
+            LapNumber = 2,
+            FuelUsedLitres = 1.2f,
+            StartTyre = "Medium",
+            EndTyre = "Medium",
+            ClosedAt = DateTimeOffset.Parse("2026-04-18T10:02:00Z")
+        });
+        service.ObserveParsedPacket(CreateSessionParsedPacket(43UL, trackId: 11, sessionType: 12));
+
+        releaseInitialization.TrySetResult();
+
+        await WaitUntilAsync(() => sessionRepository.CreatedSessions.Count == 2);
+        await WaitUntilAsync(() => lapRepository.StoredLaps.Count == 1);
+        await service.CompleteActiveSessionAsync();
+        await service.DisposeAsync();
+
+        Assert.Equal(2, sessionRepository.CreatedSessions.Count);
+        Assert.Single(lapRepository.StoredLaps);
+        Assert.Contains(emittedLogs, message => message.Contains("队列已满", StringComparison.Ordinal));
+    }
+
     private static ParsedPacket CreateSessionParsedPacket(ulong sessionUid, sbyte trackId, byte sessionType)
     {
         var header = new PacketHeader(
@@ -159,6 +210,20 @@ public sealed class StoragePersistenceServiceTests
         return new ParsedPacket(PacketId.Session, header, packet, datagram);
     }
 
+    private static async Task WaitUntilAsync(Func<bool> predicate)
+    {
+        var timeoutAt = DateTime.UtcNow.AddSeconds(5);
+        while (!predicate())
+        {
+            if (DateTime.UtcNow >= timeoutAt)
+            {
+                throw new TimeoutException("The expected storage state was not reached in time.");
+            }
+
+            await Task.Delay(25);
+        }
+    }
+
     private sealed class RecordingSessionRepository : ISessionRepository
     {
         public List<StoredSession> CreatedSessions { get; } = [];
@@ -185,6 +250,22 @@ public sealed class StoragePersistenceServiceTests
         public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("lap insert failed");
+        }
+
+        public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLap>>(Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class RecordingLapRepository : ILapRepository
+    {
+        public List<LapSummary> StoredLaps { get; } = [];
+
+        public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
+        {
+            StoredLaps.Add(lapSummary);
+            return Task.CompletedTask;
         }
 
         public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)

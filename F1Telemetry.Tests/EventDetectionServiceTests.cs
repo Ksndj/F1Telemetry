@@ -104,6 +104,36 @@ public sealed class EventDetectionServiceTests
         Assert.Equal(EventType.LowFuel, raceEvent.EventType);
     }
 
+    /// <summary>
+    /// Verifies that resetting the detector clears pending state and allows the same threshold crossing in a new session.
+    /// </summary>
+    [Fact]
+    public void Reset_ClearsPendingStateAndAllowsFreshDetection()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions
+        {
+            LowFuelLapsThreshold = 3.0f
+        });
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.1f, tyreWear: 50f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.9f, tyreWear: 51f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+
+        service.Reset();
+
+        Assert.Empty(service.DrainPendingEvents());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.2f, tyreWear: 52f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.8f, tyreWear: 53f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents());
+        Assert.Equal(EventType.LowFuel, raceEvent.EventType);
+        Assert.Equal(1, raceEvent.LapNumber);
+    }
+
     private static SessionState CreateState(params CarSnapshot[] cars)
     {
         var playerCar = cars.Single(car => car.IsPlayer);

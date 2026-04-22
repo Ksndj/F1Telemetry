@@ -18,4 +18,9 @@ public interface IEventDetectionService
     /// Returns newly detected events since the last drain call.
     /// </summary>
     IReadOnlyList<RaceEvent> DrainPendingEvents();
+
+    /// <summary>
+    /// Clears cached detection state so a new session starts from a clean baseline.
+    /// </summary>
+    void Reset();
 }

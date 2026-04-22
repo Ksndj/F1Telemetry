@@ -52,6 +52,15 @@ public sealed class SessionStateStore
         };
     }
 
+    /// <summary>
+    /// Clears session metadata and all tracked car snapshots for a fresh session boundary.
+    /// </summary>
+    public void Reset()
+    {
+        CarStateStore.Reset();
+        Volatile.Write(ref _metadata, new SessionMetadataState());
+    }
+
     internal void SetPlayerCarIndex(byte playerCarIndex, DateTimeOffset updatedAt)
     {
         CarStateStore.SetPlayerCarIndex(playerCarIndex, updatedAt);

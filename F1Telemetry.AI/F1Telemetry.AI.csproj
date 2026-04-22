@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\F1Telemetry.Analytics\F1Telemetry.Analytics.csproj" />
     <ProjectReference Include="..\F1Telemetry.Core\F1Telemetry.Core.csproj" />
     <ProjectReference Include="..\F1Telemetry.TTS\F1Telemetry.TTS.csproj" />

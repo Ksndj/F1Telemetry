@@ -9,6 +9,7 @@ namespace F1Telemetry.Analytics.Events;
 /// </summary>
 public sealed class EventDetectionService : IEventDetectionService
 {
+    private const int MaxPendingEvents = 200;
     private readonly object _gate = new();
     private readonly EventDetectionOptions _options;
     private readonly Queue<RaceEvent> _pendingEvents = new();
@@ -64,6 +65,19 @@ public sealed class EventDetectionService : IEventDetectionService
             }
 
             return drained;
+        }
+    }
+
+    /// <inheritdoc />
+    public void Reset()
+    {
+        lock (_gate)
+        {
+            _pendingEvents.Clear();
+            _lastRaisedAtByDedupKey.Clear();
+            _highTyreWearTyreKeys.Clear();
+            _pitCandidates.Clear();
+            _previousState = null;
         }
     }
 
@@ -318,6 +332,11 @@ public sealed class EventDetectionService : IEventDetectionService
         };
 
         _pendingEvents.Enqueue(raceEvent);
+        while (_pendingEvents.Count > MaxPendingEvents)
+        {
+            _pendingEvents.Dequeue();
+        }
+
         _lastRaisedAtByDedupKey[dedupKey] = timestamp;
         return true;
     }

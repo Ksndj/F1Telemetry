@@ -29,6 +29,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 {
     private const int MaxLogEntries = 50;
     private const int MaxPendingEventLogs = 200;
+    private const int MaxPendingAiTtsLogs = 200;
     private readonly IUdpListener _udpListener;
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
     private readonly SessionStateStore _sessionStateStore;
@@ -44,7 +45,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly DispatcherTimer _uiTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly Queue<LogEntryViewModel> _pendingEventLogs = new();
+    private readonly Queue<LogEntryViewModel> _pendingAiTtsLogs = new();
     private readonly object _pendingEventLogsLock = new();
+    private readonly object _pendingAiTtsLogsLock = new();
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
     private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
@@ -799,17 +802,21 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var incomingSessionUid = dispatchResult.Header.SessionUid;
+        var incomingSessionUid = dispatchResult.Packet.SessionUid;
         if (_activeSessionUid == incomingSessionUid)
         {
             return;
         }
 
-        _activeSessionUid = incomingSessionUid;
+        _sessionStateStore.Reset();
+        _eventDetectionService.Reset();
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastAnalyzedLapKey = null;
         _lastPersistedLapKey = null;
         _lastTrendRefreshLapNumber = null;
+        _lastEventCode = null;
+        _recentAiEvents.Clear();
+        _activeSessionUid = incomingSessionUid;
         EnqueueEventLog("会话", $"检测到会话切换：SessionUid={incomingSessionUid}");
         EnqueueAiTtsLog("System", $"已切换到新会话（UID {incomingSessionUid}），圈历史已清空。");
     }
@@ -824,6 +831,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         DrainDetectedRaceEvents();
         DrainTtsPlaybackRecords();
         DrainPendingEventLogs();
+        DrainPendingAiTtsLogs();
         RefreshConnectionState();
         RefreshCounters();
         RefreshCentralState();
@@ -1049,13 +1057,37 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
     }
 
+    private void DrainPendingAiTtsLogs()
+    {
+        while (true)
+        {
+            LogEntryViewModel? logEntry;
+            lock (_pendingAiTtsLogsLock)
+            {
+                if (!_pendingAiTtsLogs.TryDequeue(out logEntry))
+                {
+                    break;
+                }
+            }
+
+            AiTtsLogs.Insert(0, logEntry);
+
+            while (AiTtsLogs.Count > MaxLogEntries)
+            {
+                AiTtsLogs.RemoveAt(AiTtsLogs.Count - 1);
+            }
+        }
+    }
+
     private void EnqueueAiTtsLog(string category, string message)
     {
-        AiTtsLogs.Insert(0, CreateLogEntry(category, message));
-
-        while (AiTtsLogs.Count > MaxLogEntries)
+        lock (_pendingAiTtsLogsLock)
         {
-            AiTtsLogs.RemoveAt(AiTtsLogs.Count - 1);
+            _pendingAiTtsLogs.Enqueue(CreateLogEntry(category, message));
+            while (_pendingAiTtsLogs.Count > MaxPendingAiTtsLogs)
+            {
+                _pendingAiTtsLogs.Dequeue();
+            }
         }
     }
 
@@ -1183,6 +1215,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _lastAnalyzedLapKey = lapKey;
         _isAiAnalysisRunning = true;
+        var analysisSessionUid = _activeSessionUid;
 
         try
         {
@@ -1197,6 +1230,13 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
                     RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
                 },
                 _lifecycleCts.Token);
+
+            if (_activeSessionUid != analysisSessionUid ||
+                !string.Equals(_lastAnalyzedLapKey, lapKey, StringComparison.Ordinal))
+            {
+                EnqueueAiTtsLog("System", $"已忽略过期 AI 分析结果：Lap {lastLap.LapNumber}。");
+                return;
+            }
 
             _storagePersistenceService.EnqueueAiReport(lastLap.LapNumber, result);
 

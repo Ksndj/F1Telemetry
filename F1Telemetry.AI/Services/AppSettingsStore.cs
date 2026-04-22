@@ -12,6 +12,8 @@ namespace F1Telemetry.AI.Services;
 /// </summary>
 public sealed class AppSettingsStore : IAppSettingsStore
 {
+    private const string ProtectedApiKeyPrefix = "dpapi:";
+
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -45,7 +47,9 @@ public sealed class AppSettingsStore : IAppSettingsStore
         ArgumentNullException.ThrowIfNull(settings);
 
         var existing = await LoadDocumentCoreAsync(cancellationToken);
-        await WriteDocumentAsync(existing with { Ai = settings with { ApiKey = ProtectApiKey(settings.ApiKey) } }, cancellationToken);
+        await WriteDocumentAsync(
+            existing with { Ai = settings with { ApiKey = ProtectApiKey(settings.ApiKey) } },
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -206,6 +210,11 @@ public sealed class AppSettingsStore : IAppSettingsStore
             return decryptedApiKey;
         }
 
+        if (candidate.StartsWith(ProtectedApiKeyPrefix, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
         return candidate;
     }
 
@@ -219,15 +228,49 @@ public sealed class AppSettingsStore : IAppSettingsStore
         try
         {
             var bytes = Encoding.UTF8.GetBytes(apiKey);
-            return Convert.ToBase64String(ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser));
+            var encrypted = ProtectedData.Protect(bytes, null, DataProtectionScope.CurrentUser);
+            return $"{ProtectedApiKeyPrefix}{Convert.ToBase64String(encrypted)}";
         }
-        catch
+        catch (Exception ex)
         {
-            return apiKey;
+            throw new InvalidOperationException("Windows DPAPI 不可用，已拒绝保存 API Key。", ex);
         }
     }
 
     private static bool TryUnprotect(string encryptedValue, out string apiKey)
+    {
+        apiKey = string.Empty;
+
+        if (TryUnprotectProtectedValue(encryptedValue, out apiKey))
+        {
+            return true;
+        }
+
+        return TryUnprotectLegacyValue(encryptedValue, out apiKey);
+    }
+
+    private static bool TryUnprotectProtectedValue(string encryptedValue, out string apiKey)
+    {
+        apiKey = string.Empty;
+
+        if (!encryptedValue.StartsWith(ProtectedApiKeyPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return TryUnprotectBase64(
+            encryptedValue[ProtectedApiKeyPrefix.Length..],
+            out apiKey);
+    }
+
+    private static bool TryUnprotectLegacyValue(string encryptedValue, out string apiKey)
+    {
+        apiKey = string.Empty;
+
+        return TryUnprotectBase64(encryptedValue, out apiKey);
+    }
+
+    private static bool TryUnprotectBase64(string encryptedValue, out string apiKey)
     {
         apiKey = string.Empty;
 

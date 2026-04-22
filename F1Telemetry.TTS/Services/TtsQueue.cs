@@ -10,6 +10,7 @@ namespace F1Telemetry.TTS.Services;
 public sealed class TtsQueue : IDisposable
 {
     private const int MaxQueuedMessages = 50;
+    private const int MaxPendingRecords = 200;
 
     private readonly ITtsService _ttsService;
     private readonly object _sync = new();
@@ -334,6 +335,10 @@ public sealed class TtsQueue : IDisposable
     private void AddRecordUnsafe(TtsPlaybackRecord record)
     {
         _pendingRecords.Enqueue(record);
+        while (_pendingRecords.Count > MaxPendingRecords)
+        {
+            _pendingRecords.Dequeue();
+        }
     }
 
     private TtsPlaybackRecord CreateRecord(

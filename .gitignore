@@ -7,7 +7,11 @@ TestResults/
 
 # Local caches and tooling state
 .dotnet_cli/
+.dotnet/
+.dotnet-install/
+.dotnet-cli-home/
 .nuget/
+.nuget-packages/
 .logs/
 .vs/
 .protocol_ref/
@@ -15,6 +19,9 @@ TestResults/
 
 # Logs
 *.log
+*.db
+*.sqlite*
+.env*
 
 # User-specific files
 *.user

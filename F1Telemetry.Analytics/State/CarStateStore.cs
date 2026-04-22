@@ -80,6 +80,20 @@ public sealed class CarStateStore
             .ToArray();
     }
 
+    /// <summary>
+    /// Clears all tracked cars, telemetry restrictions, and player indexing for a new session.
+    /// </summary>
+    public void Reset()
+    {
+        Interlocked.Exchange(ref _playerCarIndex, -1);
+
+        for (var index = 0; index < _cars.Length; index++)
+        {
+            _participantTelemetryRestricted[index] = false;
+            Volatile.Write(ref _cars[index], null);
+        }
+    }
+
     internal void SetPlayerCarIndex(byte playerCarIndex, DateTimeOffset updatedAt)
     {
         if (playerCarIndex >= _cars.Length)
