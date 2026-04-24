@@ -1,5 +1,5 @@
 #define MyAppName "F1Telemetry"
-#define MyAppVersion "1.0.1-beta1"
+#define MyAppVersion "1.0.1-beta2"
 #define MyAppExeName "F1Telemetry.App.exe"
 
 [Setup]
@@ -9,9 +9,10 @@ AppVersion={#MyAppVersion}
 AppPublisher=F1Telemetry
 DefaultDirName={autopf}\F1Telemetry
 DefaultGroupName=F1Telemetry
-DisableDirPage=yes
+DisableDirPage=no
+ShowLanguageDialog=yes
 OutputDir=output
-OutputBaseFilename=F1Telemetry-Setup-1.0.1-beta1
+OutputBaseFilename=F1Telemetry-Setup-1.0.1-beta2
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -20,8 +21,20 @@ ArchitecturesInstallIn64BitMode=x64
 CloseApplications=yes
 CloseApplicationsFilter=F1Telemetry.App.exe
 
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimp"; MessagesFile: "compiler:Default.isl,Languages\ChineseSimplified.isl"
+
+[CustomMessages]
+english.AdditionalShortcuts=Additional shortcuts:
+english.DesktopIconTask=Create a desktop shortcut
+english.LaunchAfterInstall=Launch F1Telemetry
+chinesesimp.AdditionalShortcuts=附加快捷方式:
+chinesesimp.DesktopIconTask=创建桌面快捷方式
+chinesesimp.LaunchAfterInstall=启动 F1Telemetry
+
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:DesktopIconTask}"; GroupDescription: "{cm:AdditionalShortcuts}"; Flags: unchecked
 
 [Files]
 Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -31,4 +44,4 @@ Name: "{group}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch F1Telemetry"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchAfterInstall}"; Flags: nowait postinstall skipifsilent
