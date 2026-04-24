@@ -7,5 +7,9 @@
              Text="F1Telemetry 强制规范：修改前先阅读项目结构与命名；尽量复用已有类型；仅修改当前里程碑范围；不要一次性重构无关模块；保持 WPF + MVVM 清晰；不要把业务逻辑写进 code-behind；公开类和方法添加简洁注释；新增代码必须可构建；新增依赖优先最少依赖方案；信息不足时先做最稳妥实现并标记待确认项。" />
     <Message Importance="high"
              Text="任务完成后必须输出：1. 修改了哪些文件 2. 为什么这样设计 3. 还有哪些风险。" />
+    <Message Importance="high"
+             Text="版本控制约束：每个里程碑完成后必须提交并推送；仅提交当前里程碑相关文件；提交信息需清晰；必要时先设置 upstream；禁止 git reset --hard、git push --force 和改写已发布历史；禁止提交 obj/bin、wpftmp、临时 csproj、本地数据库文件和任何敏感信息；push 失败时仅报告错误，不做破坏性操作。" />
+    <Message Importance="high"
+             Text="如任务涉及版本控制，最终输出还必须包含：当前分支名、提交 hash、提交信息、推送目标（remote/branch）、是否存在未提交文件。" />
   </Target>
 </Project>

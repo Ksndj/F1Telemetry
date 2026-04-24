@@ -1,5 +1,10 @@
 <Project>
   <PropertyGroup>
+    <Version>1.0.1</Version>
+    <VersionPrefix>1.0.1</VersionPrefix>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <InformationalVersion>v1.0.1</InformationalVersion>
     <F1TelemetryArtifactsRoot Condition="'$(F1TelemetryArtifactsRoot)' == ''">$(MSBuildThisFileDirectory).artifacts\</F1TelemetryArtifactsRoot>
     <BaseIntermediateOutputPath>$(F1TelemetryArtifactsRoot)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
     <BaseOutputPath>$(F1TelemetryArtifactsRoot)bin\$(MSBuildProjectName)\</BaseOutputPath>
