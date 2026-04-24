@@ -14,7 +14,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v1.0.1", VersionInfo.DisplayVersion);
+        Assert.Equal("v1.0.1-beta1", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
