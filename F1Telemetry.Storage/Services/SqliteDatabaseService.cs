@@ -1,3 +1,4 @@
+using F1Telemetry.Core;
 using F1Telemetry.Storage.Interfaces;
 using Microsoft.Data.Sqlite;
 
@@ -17,14 +18,12 @@ public sealed class SqliteDatabaseService : IDatabaseService
     /// <summary>
     /// Initializes a new SQLite database service.
     /// </summary>
-    /// <param name="localAppDataRootOverride">Optional LocalAppData root override used by tests.</param>
-    public SqliteDatabaseService(string? localAppDataRootOverride = null)
+    /// <param name="appDataRootOverride">Optional application data root override used by tests.</param>
+    public SqliteDatabaseService(string? appDataRootOverride = null)
     {
-        var localAppDataRoot = string.IsNullOrWhiteSpace(localAppDataRootOverride)
-            ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-            : localAppDataRootOverride;
-
-        DatabasePath = Path.Combine(localAppDataRoot, "F1Telemetry", "f1telemetry.db");
+        DatabasePath = string.IsNullOrWhiteSpace(appDataRootOverride)
+            ? AppPaths.GetDatabasePath()
+            : Path.Combine(appDataRootOverride, "F1Telemetry", "f1telemetry.db");
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = DatabasePath,

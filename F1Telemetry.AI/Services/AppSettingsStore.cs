@@ -3,12 +3,13 @@ using System.Text;
 using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
+using F1Telemetry.Core;
 using F1Telemetry.TTS.Models;
 
 namespace F1Telemetry.AI.Services;
 
 /// <summary>
-/// Persists AI and TTS settings to a single JSON document under the user's LocalAppData profile.
+/// Persists AI and TTS settings to a single JSON document under the user's application data profile.
 /// </summary>
 public sealed class AppSettingsStore : IAppSettingsStore
 {
@@ -25,14 +26,12 @@ public sealed class AppSettingsStore : IAppSettingsStore
     /// <summary>
     /// Initializes a new settings store.
     /// </summary>
-    /// <param name="localAppDataRootOverride">Optional LocalAppData root override used by tests.</param>
-    public AppSettingsStore(string? localAppDataRootOverride = null)
+    /// <param name="appDataRootOverride">Optional application data root override used by tests.</param>
+    public AppSettingsStore(string? appDataRootOverride = null)
     {
-        var localAppDataRoot = string.IsNullOrWhiteSpace(localAppDataRootOverride)
-            ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-            : localAppDataRootOverride;
-
-        _settingsPath = Path.Combine(localAppDataRoot, "F1Telemetry", "settings.json");
+        _settingsPath = string.IsNullOrWhiteSpace(appDataRootOverride)
+            ? AppPaths.GetSettingsPath()
+            : Path.Combine(appDataRootOverride, "F1Telemetry", "settings.json");
     }
 
     /// <inheritdoc />

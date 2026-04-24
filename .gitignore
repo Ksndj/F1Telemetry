@@ -4,6 +4,8 @@ bin/
 obj/
 TestResults/
 *wpftmp*.csproj
+publish/
+build/output/
 
 # Local caches and tooling state
 .dotnet_cli/
@@ -21,6 +23,8 @@ TestResults/
 *.log
 *.db
 *.sqlite*
+logs/
+settings.json
 .env*
 
 # User-specific files

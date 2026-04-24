@@ -5,6 +5,7 @@ using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
+using F1Telemetry.Core;
 using F1Telemetry.Storage.Repositories;
 using F1Telemetry.Storage.Services;
 using F1Telemetry.TTS.Models;
@@ -26,6 +27,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        AppPaths.InitializeUserData();
 
         var udpListener = new UdpListener();
         var packetDispatcher = new PacketDispatcher(new PacketHeaderParser());

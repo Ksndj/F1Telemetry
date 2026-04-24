@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -52,6 +53,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
+    private readonly RelayCommand _downloadLatestVersionCommand;
     private bool _isBusy;
     private bool _isListening;
     private bool _isConnected;
@@ -163,6 +165,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
+        _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -187,6 +190,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the window subtitle.
     /// </summary>
     public string Subtitle => "Milestone 10 · 实时图表";
+
+    /// <summary>
+    /// Gets the application version text displayed in the shell.
+    /// </summary>
+    public string ApplicationVersionText => VersionInfo.DisplayVersion;
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
@@ -407,6 +415,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the stop-listening command.
     /// </summary>
     public ICommand StopListeningCommand => _stopListeningCommand;
+
+    /// <summary>
+    /// Gets the command that opens the GitHub Releases download page.
+    /// </summary>
+    public ICommand DownloadLatestVersionCommand => _downloadLatestVersionCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
@@ -694,6 +707,22 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private bool CanStopListening()
     {
         return !_isBusy && IsListening;
+    }
+
+    private void OpenGitHubReleases()
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = VersionInfo.GitHubReleasesUrl,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"打开发布页失败：{ex.Message}");
+        }
     }
 
     private async Task StartListeningAsync()
