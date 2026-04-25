@@ -14,12 +14,13 @@ dotnet publish $projectPath `
     -c Release `
     -r win-x64 `
     --self-contained true `
-    /p:PublishSingleFile=false `
-    /p:PublishReadyToRun=true `
-    /p:Version=1.0.2 `
+    -m:1 `
+    /p:PublishSingleFile=true `
+    /p:IncludeNativeLibrariesForSelfExtract=true `
+    /p:Version=1.0.2-beta1 `
     /p:AssemblyVersion=1.0.2.0 `
     /p:FileVersion=1.0.2.0 `
-    /p:InformationalVersion=1.0.2 `
+    /p:InformationalVersion=1.0.2-beta1 `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
