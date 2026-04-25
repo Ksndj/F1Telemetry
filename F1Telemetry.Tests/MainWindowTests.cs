@@ -1,10 +1,13 @@
+using System.ComponentModel;
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Threading;
 using F1Telemetry.App;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Windowing;
+using F1Telemetry.App.Views;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -93,6 +96,99 @@ public sealed class MainWindowTests
         });
     }
 
+    /// <summary>
+    /// Verifies that the overview page can load and owns its own scroll surface.
+    /// </summary>
+    [Fact]
+    public void OverviewView_LoadsWithScrollViewer()
+    {
+        RunOnStaThread(() =>
+        {
+            var view = new OverviewView();
+            try
+            {
+                view.UpdateLayout();
+
+                Assert.IsType<ScrollViewer>(view.Content);
+            }
+            finally
+            {
+                view.Content = null;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that the content host shows overview by default and placeholders for future pages.
+    /// </summary>
+    [Fact]
+    public void MainWindow_ContentHostSwitchesBetweenOverviewPlaceholderAndLegacy()
+    {
+        RunOnStaThread(() =>
+        {
+            var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
+            var viewModel = new ShellNavigationTestViewModel(navigationItems);
+            var window = new MainWindow
+            {
+                DataContext = viewModel
+            };
+
+            try
+            {
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.UpdateLayout();
+
+                Assert.Equal(7, navigationItems.Count);
+                AssertVisible(window.FindName("OverviewContent"));
+                AssertCollapsed(window.FindName("NavigationPlaceholder"));
+                AssertCollapsed(window.FindName("LegacyDashboardContent"));
+
+                viewModel.SelectedShellNavigationItem = navigationItems[1];
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.UpdateLayout();
+
+                AssertCollapsed(window.FindName("OverviewContent"));
+                AssertVisible(window.FindName("NavigationPlaceholder"));
+                AssertCollapsed(window.FindName("LegacyDashboardContent"));
+
+                viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("legacy-dashboard", "Legacy dashboard");
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.UpdateLayout();
+
+                AssertCollapsed(window.FindName("OverviewContent"));
+                AssertCollapsed(window.FindName("NavigationPlaceholder"));
+                AssertVisible(window.FindName("LegacyDashboardContent"));
+                Assert.Equal(7, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that the legacy dashboard view can still load while migration continues.
+    /// </summary>
+    [Fact]
+    public void LegacyDashboardView_LoadsForMigrationFallback()
+    {
+        RunOnStaThread(() =>
+        {
+            var view = new LegacyDashboardView();
+            try
+            {
+                view.UpdateLayout();
+
+                Assert.NotNull(view.Content);
+            }
+            finally
+            {
+                view.Content = null;
+            }
+        });
+    }
+
     private static void RunOnStaThread(Action action)
     {
         Exception? capturedException = null;
@@ -118,7 +214,7 @@ public sealed class MainWindowTests
         }
     }
 
-    public sealed class ShellNavigationTestViewModel
+    public sealed class ShellNavigationTestViewModel : INotifyPropertyChanged
     {
         public ShellNavigationTestViewModel(IReadOnlyList<ShellNavigationItemViewModel> shellNavigationItems)
         {
@@ -128,6 +224,70 @@ public sealed class MainWindowTests
 
         public IReadOnlyList<ShellNavigationItemViewModel> ShellNavigationItems { get; }
 
-        public ShellNavigationItemViewModel SelectedShellNavigationItem { get; set; }
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        public ShellNavigationItemViewModel SelectedShellNavigationItem
+        {
+            get => _selectedShellNavigationItem;
+            set
+            {
+                if (ReferenceEquals(_selectedShellNavigationItem, value))
+                {
+                    return;
+                }
+
+                _selectedShellNavigationItem = value;
+                IsOverviewSelected = string.Equals(value.Key, "overview", StringComparison.Ordinal);
+                IsLegacyDashboardSelected = string.Equals(value.Key, "legacy-dashboard", StringComparison.Ordinal);
+                IsPlaceholderNavigationSelected = !IsOverviewSelected && !IsLegacyDashboardSelected;
+                SelectedShellNavigationTitle = value.Name;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationItem)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOverviewSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLegacyDashboardSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPlaceholderNavigationSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationTitle)));
+            }
+        }
+
+        public bool IsOverviewSelected { get; private set; }
+
+        public bool IsPlaceholderNavigationSelected { get; private set; }
+
+        public bool IsLegacyDashboardSelected { get; private set; }
+
+        public string SelectedShellNavigationTitle { get; private set; } = string.Empty;
+
+        private ShellNavigationItemViewModel _selectedShellNavigationItem = null!;
+    }
+
+    private static void AssertVisible(object element)
+    {
+        Assert.Equal(Visibility.Visible, Assert.IsAssignableFrom<FrameworkElement>(element).Visibility);
+    }
+
+    private static void AssertCollapsed(object element)
+    {
+        Assert.Equal(Visibility.Collapsed, Assert.IsAssignableFrom<FrameworkElement>(element).Visibility);
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T typedChild)
+            {
+                return typedChild;
+            }
+
+            var match = FindDescendant<T>(child);
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        return null;
     }
 }

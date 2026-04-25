@@ -78,6 +78,15 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private string _playerTyreAgeText = "-";
     private string _bestLapSummaryText = "-";
     private string _lastLapSummaryText = "-";
+    private string _overviewSpeedText = "-";
+    private string _overviewGearText = "-";
+    private string _overviewThrottleText = "-";
+    private string _overviewBrakeText = "-";
+    private string _overviewDrsText = "-";
+    private string _overviewTyreWearText = "-";
+    private string _overviewKeyOpponentText = "-";
+    private string _overviewRecentAiSuggestionText = "-";
+    private string _overviewRecentTtsStatusText = "-";
     private long _receivedPacketCount;
     private long _lastPacketReceivedUnixMs = -1;
     private long _lastPacketsPerSecondSampleCount;
@@ -211,8 +220,37 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     public ShellNavigationItemViewModel? SelectedShellNavigationItem
     {
         get => _selectedShellNavigationItem;
-        set => SetProperty(ref _selectedShellNavigationItem, value);
+        set
+        {
+            if (SetProperty(ref _selectedShellNavigationItem, value))
+            {
+                OnPropertyChanged(nameof(IsOverviewSelected));
+                OnPropertyChanged(nameof(IsPlaceholderNavigationSelected));
+                OnPropertyChanged(nameof(IsLegacyDashboardSelected));
+                OnPropertyChanged(nameof(SelectedShellNavigationTitle));
+            }
+        }
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the overview page is selected.
+    /// </summary>
+    public bool IsOverviewSelected => string.Equals(SelectedShellNavigationItem?.Key, "overview", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Gets a value indicating whether a future shell page placeholder should be shown.
+    /// </summary>
+    public bool IsPlaceholderNavigationSelected => !IsOverviewSelected && !IsLegacyDashboardSelected;
+
+    /// <summary>
+    /// Gets a value indicating whether the temporary legacy dashboard fallback is selected.
+    /// </summary>
+    public bool IsLegacyDashboardSelected => string.Equals(SelectedShellNavigationItem?.Key, "legacy-dashboard", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Gets the selected shell navigation title.
+    /// </summary>
+    public string SelectedShellNavigationTitle => SelectedShellNavigationItem?.Name ?? "实时概览";
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
@@ -657,6 +695,97 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Gets the overview speed summary.
+    /// </summary>
+    public string OverviewSpeedText
+    {
+        get => _overviewSpeedText;
+        private set => SetProperty(ref _overviewSpeedText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview gear summary.
+    /// </summary>
+    public string OverviewGearText
+    {
+        get => _overviewGearText;
+        private set => SetProperty(ref _overviewGearText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview throttle summary.
+    /// </summary>
+    public string OverviewThrottleText
+    {
+        get => _overviewThrottleText;
+        private set => SetProperty(ref _overviewThrottleText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview brake summary.
+    /// </summary>
+    public string OverviewBrakeText
+    {
+        get => _overviewBrakeText;
+        private set => SetProperty(ref _overviewBrakeText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview DRS summary.
+    /// </summary>
+    public string OverviewDrsText
+    {
+        get => _overviewDrsText;
+        private set => SetProperty(ref _overviewDrsText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview tyre wear summary.
+    /// </summary>
+    public string OverviewTyreWearText
+    {
+        get => _overviewTyreWearText;
+        private set => SetProperty(ref _overviewTyreWearText, value);
+    }
+
+    /// <summary>
+    /// Gets the overview tyre temperature placeholder.
+    /// </summary>
+    public string OverviewTyreTemperatureText => "暂未接入";
+
+    /// <summary>
+    /// Gets the overview tyre pressure placeholder.
+    /// </summary>
+    public string OverviewTyrePressureText => "暂未接入";
+
+    /// <summary>
+    /// Gets the overview key opponent summary.
+    /// </summary>
+    public string OverviewKeyOpponentText
+    {
+        get => _overviewKeyOpponentText;
+        private set => SetProperty(ref _overviewKeyOpponentText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest AI suggestion summary for the overview page.
+    /// </summary>
+    public string OverviewRecentAiSuggestionText
+    {
+        get => _overviewRecentAiSuggestionText;
+        private set => SetProperty(ref _overviewRecentAiSuggestionText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest TTS playback summary for the overview page.
+    /// </summary>
+    public string OverviewRecentTtsStatusText
+    {
+        get => _overviewRecentTtsStatusText;
+        private set => SetProperty(ref _overviewRecentTtsStatusText, value);
+    }
+
+    /// <summary>
     /// Gets the highlighted best-lap summary text.
     /// </summary>
     public string BestLapSummaryText
@@ -1005,6 +1134,12 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             PlayerErsText = "-";
             PlayerTyreText = "-";
             PlayerTyreAgeText = "-";
+            OverviewSpeedText = "-";
+            OverviewGearText = "-";
+            OverviewThrottleText = "-";
+            OverviewBrakeText = "-";
+            OverviewDrsText = "-";
+            OverviewTyreWearText = "-";
             return;
         }
 
@@ -1019,7 +1154,13 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         PlayerFuelText = BuildFuelText(playerCar);
         PlayerErsText = BuildErsText(playerCar);
         PlayerTyreText = BuildTyreText(playerCar);
-        PlayerTyreAgeText = playerCar.TyresAgeLaps is null ? "-" : $"{playerCar.TyresAgeLaps} 圈";
+        PlayerTyreAgeText = playerCar.TyresAgeLaps is null ? "-" : $"{playerCar.TyresAgeLaps} laps";
+        OverviewSpeedText = playerCar.Telemetry is null ? "-" : $"{playerCar.Telemetry.SpeedKph:0} km/h";
+        OverviewGearText = FormatGear(playerCar.Gear);
+        OverviewThrottleText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Throttle.ToString("P0", CultureInfo.InvariantCulture);
+        OverviewBrakeText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Brake.ToString("P0", CultureInfo.InvariantCulture);
+        OverviewDrsText = playerCar.IsDrsEnabled is null ? "-" : playerCar.IsDrsEnabled.Value ? "On" : "Off";
+        OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"Average {playerCar.TyreWear.Value:0.0}%";
     }
 
     private void RebuildOpponentCars(IReadOnlyList<CarSnapshot> opponents, CarSnapshot? playerCar)
@@ -1030,6 +1171,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             OpponentCars.Add(CarStateItemViewModel.FromSnapshot(opponent, playerCar));
         }
+
+        OverviewKeyOpponentText = OpponentCars.Count == 0
+            ? "-"
+            : $"{OpponentCars[0].DisplayName} - {OpponentCars[0].PositionText} - {OpponentCars[0].GapToPlayerText}";
     }
 
     private void RefreshLapHistory()
@@ -1117,6 +1262,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
                 }
             }
 
+            UpdateOverviewAiTtsSummary(logEntry);
             AiTtsLogs.Insert(0, logEntry);
 
             while (AiTtsLogs.Count > MaxLogEntries)
@@ -1135,6 +1281,20 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             {
                 _pendingAiTtsLogs.Dequeue();
             }
+        }
+    }
+
+    private void UpdateOverviewAiTtsSummary(LogEntryViewModel logEntry)
+    {
+        if (string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase))
+        {
+            OverviewRecentAiSuggestionText = logEntry.Message;
+        }
+
+        if (string.Equals(logEntry.Category, "TTS", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase))
+        {
+            OverviewRecentTtsStatusText = logEntry.Message;
         }
     }
 
@@ -1494,6 +1654,17 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         return time.TotalMinutes >= 1
             ? $"{(int)time.TotalMinutes}:{time.Seconds:00}.{time.Milliseconds:000}"
             : $"{time.Seconds}.{time.Milliseconds:000}s";
+    }
+
+    private static string FormatGear(sbyte? gear)
+    {
+        return gear switch
+        {
+            null => "-",
+            < 0 => "R",
+            0 => "N",
+            _ => gear.Value.ToString(CultureInfo.InvariantCulture)
+        };
     }
 
     private static string FormatGapMs(ushort? gapMs)

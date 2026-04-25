@@ -1,0 +1,305 @@
+<UserControl x:Class="F1Telemetry.App.Views.OverviewView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="680"
+             d:DesignWidth="1120">
+    <UserControl.Resources>
+        <Style x:Key="OverviewCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="CornerRadius" Value="18" />
+            <Setter Property="Background" Value="#0F1B2E" />
+        </Style>
+        <Style x:Key="MetricCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#132743" />
+        </Style>
+        <Style x:Key="LabelTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#7FA5D8" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style x:Key="ValueTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer x:Name="OverviewScrollViewer"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="16" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1.1*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="1.2*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource OverviewCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="玩家状态" />
+                        <Border Margin="0,16,0,0"
+                                Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="车手" />
+                                <TextBlock FontSize="22"
+                                           FontWeight="SemiBold"
+                                           Style="{StaticResource ValueTextStyle}"
+                                           Text="{Binding PlayerName}" />
+                            </StackPanel>
+                        </Border>
+                        <UniformGrid Margin="0,12,0,0" Columns="2">
+                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="位置" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerPositionText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="当前圈" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerCurrentLapText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="0,6,6,0" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="上一圈" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerLastLapText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,6,0,0" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="最佳圈" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerBestLapText}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource OverviewCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="车辆输入" />
+                        <UniformGrid Margin="0,16,0,0" Columns="3">
+                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="速度" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewSpeedText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,0,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="档位" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewGearText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="DRS" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewDrsText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="0,6,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="油门" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewThrottleText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,6,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="刹车" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewBrakeText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,6,0,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="ERS" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerErsText}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <Border Margin="0,6,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="燃油" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerFuelText}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource OverviewCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="胎况摘要" />
+                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="当前胎" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerTyreText}" />
+                            </StackPanel>
+                        </Border>
+                        <UniformGrid Margin="0,12,0,0" Columns="2">
+                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="胎龄" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerTyreAgeText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="四轮磨损" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyreWearText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="0,6,6,0" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="温度" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyreTemperatureText}" />
+                                </StackPanel>
+                            </Border>
+                            <Border Margin="6,6,0,0" Style="{StaticResource MetricCardStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="压力" />
+                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyrePressureText}" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="1*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource OverviewCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="对手摘要" />
+                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="前后车差距" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerGapText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="关键对手状态" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewKeyOpponentText}" />
+                            </StackPanel>
+                        </Border>
+                        <ItemsControl Margin="0,12,0,0"
+                                      ItemsSource="{Binding OpponentCars}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8" Style="{StaticResource MetricCardStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="72" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="96" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Foreground="White" Text="{Binding DisplayName}" />
+                                            <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding PositionText}" />
+                                            <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
+                                            <TextBlock Grid.Column="3" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource OverviewCardStyle}">
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="事件摘要" />
+                        <ItemsControl Margin="0,16,0,0"
+                                      ItemsSource="{Binding EventLogs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,8" Style="{StaticResource MetricCardStyle}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="76" />
+                                                <ColumnDefinition Width="60" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
+                                            <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding Category}" />
+                                            <TextBlock Grid.Column="2" Foreground="White" Text="{Binding Message}" TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="4" Style="{StaticResource OverviewCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1*" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="1*" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="AI 建议" />
+                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                            <TextBlock Foreground="White"
+                                       Text="{Binding OverviewRecentAiSuggestionText}"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2">
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="TTS 播报" />
+                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                            <TextBlock Foreground="White"
+                                       Text="{Binding OverviewRecentTtsStatusText}"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
