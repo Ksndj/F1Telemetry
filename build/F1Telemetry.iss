@@ -1,5 +1,5 @@
 #define MyAppName "F1Telemetry"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.2-beta1"
 #define MyAppExeName "F1Telemetry.App.exe"
 
 [Setup]
@@ -12,7 +12,7 @@ DefaultGroupName=F1Telemetry
 DisableDirPage=no
 ShowLanguageDialog=yes
 OutputDir=output
-OutputBaseFilename=F1Telemetry-Setup-1.0.2
+OutputBaseFilename=F1Telemetry-1.0.2-beta1-win-x64-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -37,7 +37,7 @@ chinesesimp.LaunchAfterInstall=启动 F1Telemetry
 Name: "desktopicon"; Description: "{cm:DesktopIconTask}"; GroupDescription: "{cm:AdditionalShortcuts}"; Flags: unchecked
 
 [Files]
-Source: "..\publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\publish\*"; DestDir: "{app}"; Excludes: "settings.json,*.db,*.sqlite,*.sqlite3,logs\*,*.log,*.tmp,.env*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"
