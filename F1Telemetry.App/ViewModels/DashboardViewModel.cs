@@ -43,6 +43,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly IAppSettingsStore _appSettingsStore;
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
+    private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
@@ -101,13 +102,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private string _aiBaseUrl = "https://api.deepseek.com";
     private string _aiModel = "deepseek-chat";
     private string _aiApiKey = string.Empty;
+    private string _aiSettingsSaveStatusText = "等待保存";
     private int _aiRequestTimeoutSeconds = 10;
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
+    private string _ttsVoiceStatusText = "正在读取 Windows 语音...";
+    private string _defaultTtsVoiceName = string.Empty;
     private int _ttsVolume = 100;
     private int _ttsRate;
     private int _ttsCooldownSeconds = 8;
     private bool _isApplyingSettings;
+    private int _aiSettingsSaveVersion;
+    private int _ttsSettingsSaveVersion;
     private bool _isAiAnalysisRunning;
     private ulong? _activeSessionUid;
     private string? _lastAnalyzedLapKey;
@@ -129,6 +135,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <param name="ttsQueue">The TTS queue that plays race events and AI guidance.</param>
     /// <param name="storagePersistenceService">The background SQLite persistence coordinator.</param>
     /// <param name="dispatcher">The UI dispatcher.</param>
+    /// <param name="windowsVoiceCatalog">The optional Windows voice catalog used by the settings UI.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -140,7 +147,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         TtsMessageFactory ttsMessageFactory,
         TtsQueue ttsQueue,
         IStoragePersistenceService storagePersistenceService,
-        Dispatcher dispatcher)
+        Dispatcher dispatcher,
+        WindowsVoiceCatalog? windowsVoiceCatalog = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -151,6 +159,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _appSettingsStore = appSettingsStore ?? throw new ArgumentNullException(nameof(appSettingsStore));
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
+        _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
         _trendChartBuilder = new TrendChartBuilder();
@@ -163,6 +172,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
         AiTtsLogs = new ObservableCollection<LogEntryViewModel>();
+        AvailableVoices = new ObservableCollection<string>();
         SpeedChartPanel = new ChartPanelViewModel();
         InputsChartPanel = new ChartPanelViewModel();
         FuelTrendChartPanel = new ChartPanelViewModel();
@@ -180,6 +190,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(Array.Empty<LapSummary>()));
 
         AiTtsLogs.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
+        LoadAvailableVoices();
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
@@ -348,7 +359,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _aiEnabled, value))
             {
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                _ = PersistAiSettingsAsync();
+                QueuePersistAiSettings();
             }
         }
     }
@@ -363,7 +374,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _aiBaseUrl, value))
             {
-                _ = PersistAiSettingsAsync();
+                QueuePersistAiSettings();
             }
         }
     }
@@ -378,7 +389,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _aiModel, value))
             {
-                _ = PersistAiSettingsAsync();
+                QueuePersistAiSettings();
             }
         }
     }
@@ -394,7 +405,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _aiApiKey, value))
             {
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                _ = PersistAiSettingsAsync();
+                QueuePersistAiSettings();
             }
         }
     }
@@ -403,6 +414,15 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets a safe API key status label for the UI.
     /// </summary>
     public string AiApiKeyStatusText => string.IsNullOrWhiteSpace(AiApiKey) ? "未配置" : "已配置";
+
+    /// <summary>
+    /// Gets the current AI settings save status.
+    /// </summary>
+    public string AiSettingsSaveStatusText
+    {
+        get => _aiSettingsSaveStatusText;
+        private set => SetProperty(ref _aiSettingsSaveStatusText, value);
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether TTS playback is enabled.
@@ -415,9 +435,28 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _ttsEnabled, value))
             {
                 _ttsQueue.UpdateOptions(BuildTtsOptions());
-                _ = PersistTtsSettingsAsync();
+                QueuePersistTtsSettings();
             }
         }
+    }
+
+    /// <summary>
+    /// Gets the Windows speech voices available for TTS selection.
+    /// </summary>
+    public ObservableCollection<string> AvailableVoices { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether Windows voices were discovered.
+    /// </summary>
+    public bool HasAvailableVoices => AvailableVoices.Count > 0;
+
+    /// <summary>
+    /// Gets the current Windows voice discovery status.
+    /// </summary>
+    public string TtsVoiceStatusText
+    {
+        get => _ttsVoiceStatusText;
+        private set => SetProperty(ref _ttsVoiceStatusText, value);
     }
 
     /// <summary>
@@ -431,7 +470,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _ttsVoiceName, value))
             {
                 _ttsQueue.UpdateOptions(BuildTtsOptions());
-                _ = PersistTtsSettingsAsync();
+                QueuePersistTtsSettings();
             }
         }
     }
@@ -448,7 +487,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _ttsVolume, normalizedValue))
             {
                 _ttsQueue.UpdateOptions(BuildTtsOptions());
-                _ = PersistTtsSettingsAsync();
+                QueuePersistTtsSettings();
             }
         }
     }
@@ -465,7 +504,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _ttsRate, normalizedValue))
             {
                 _ttsQueue.UpdateOptions(BuildTtsOptions());
-                _ = PersistTtsSettingsAsync();
+                QueuePersistTtsSettings();
             }
         }
     }
@@ -577,6 +616,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _portText, value))
             {
+                OnPropertyChanged(nameof(SidebarUdpPortText));
+                OnPropertyChanged(nameof(SidebarUdpStatusTooltip));
                 _startListeningCommand.RaiseCanExecuteChanged();
             }
         }
@@ -593,6 +634,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _isListening, value))
             {
                 OnPropertyChanged(nameof(ConnectionStateText));
+                OnPropertyChanged(nameof(SidebarUdpStatusTooltip));
                 _startListeningCommand.RaiseCanExecuteChanged();
                 _stopListeningCommand.RaiseCanExecuteChanged();
             }
@@ -610,6 +652,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _isConnected, value))
             {
                 OnPropertyChanged(nameof(ConnectionStateText));
+                OnPropertyChanged(nameof(SidebarUdpStatusTooltip));
             }
         }
     }
@@ -619,6 +662,16 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string ConnectionStateText =>
         IsConnected ? "已连接" : IsListening ? "等待数据" : "未启动";
+
+    /// <summary>
+    /// Gets the compact UDP port text shown in the sidebar.
+    /// </summary>
+    public string SidebarUdpPortText => $"使用中: {(ListeningPort?.ToString(CultureInfo.InvariantCulture) ?? PortText)} UDP";
+
+    /// <summary>
+    /// Gets the full UDP sidebar tooltip.
+    /// </summary>
+    public string SidebarUdpStatusTooltip => $"{ConnectionStateText}，{SidebarUdpPortText}";
 
     /// <summary>
     /// Gets the active UDP listening port.
@@ -631,6 +684,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _listeningPort, value))
             {
                 OnPropertyChanged(nameof(ListeningPortText));
+                OnPropertyChanged(nameof(SidebarUdpPortText));
+                OnPropertyChanged(nameof(SidebarUdpStatusTooltip));
             }
         }
     }
@@ -1400,13 +1455,20 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             AiApiKey = settings.Ai.ApiKey;
             _aiRequestTimeoutSeconds = settings.Ai.RequestTimeoutSeconds <= 0 ? 10 : settings.Ai.RequestTimeoutSeconds;
             TtsEnabled = settings.Tts.TtsEnabled;
-            TtsVoiceName = settings.Tts.VoiceName;
+            var loadedVoiceName = settings.Tts.VoiceName;
+            TtsVoiceName = ResolveTtsVoiceName(loadedVoiceName);
             TtsVolume = settings.Tts.Volume;
             TtsRate = settings.Tts.Rate;
             _ttsCooldownSeconds = settings.Tts.CooldownSeconds <= 0 ? 8 : settings.Tts.CooldownSeconds;
             _isApplyingSettings = false;
 
             _ttsQueue.UpdateOptions(BuildTtsOptions());
+            AiSettingsSaveStatusText = "设置已加载";
+            if (string.IsNullOrWhiteSpace(loadedVoiceName) && !string.IsNullOrWhiteSpace(TtsVoiceName))
+            {
+                QueuePersistTtsSettings();
+            }
+
             EnqueueAiTtsLog("System", $"设置已加载 · AI API Key {AiApiKeyStatusText} · TTS {(TtsEnabled ? "已启用" : "未启用")}");
         }
         catch (OperationCanceledException)
@@ -1422,34 +1484,44 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private async Task PersistAiSettingsAsync()
+    private void QueuePersistAiSettings()
     {
         if (_isApplyingSettings)
         {
             return;
         }
 
+        var saveVersion = Interlocked.Increment(ref _aiSettingsSaveVersion);
+        var settings = BuildAiSettings();
+        AiSettingsSaveStatusText = "正在保存...";
+        _ = PersistAiSettingsAsync(settings, saveVersion);
+    }
+
+    private async Task PersistAiSettingsAsync(AISettings settings, int saveVersion)
+    {
         var gateHeld = false;
         try
         {
-            await _settingsGate.WaitAsync(_lifecycleCts.Token);
+            await _settingsGate.WaitAsync();
             gateHeld = true;
-            await _appSettingsStore.SaveAiSettingsAsync(
-                new AISettings
-                {
-                    ApiKey = AiApiKey,
-                    BaseUrl = AiBaseUrl,
-                    Model = AiModel,
-                    AiEnabled = AiEnabled,
-                    RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
-                },
-                _lifecycleCts.Token);
+            if (saveVersion < Volatile.Read(ref _aiSettingsSaveVersion))
+            {
+                return;
+            }
+
+            await _appSettingsStore.SaveAiSettingsAsync(settings, CancellationToken.None);
+            if (saveVersion == Volatile.Read(ref _aiSettingsSaveVersion))
+            {
+                AiSettingsSaveStatusText = "AI 设置已保存";
+                EnqueueAiTtsLog("System", "AI 设置已保存。");
+            }
         }
         catch (OperationCanceledException)
         {
         }
         catch (Exception ex)
         {
+            AiSettingsSaveStatusText = "AI 设置保存失败";
             EnqueueAiTtsLog("System", $"AI 设置保存失败：{ex.Message}");
         }
         finally
@@ -1461,19 +1533,35 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private async Task PersistTtsSettingsAsync()
+    private void QueuePersistTtsSettings()
     {
         if (_isApplyingSettings)
         {
             return;
         }
 
+        var saveVersion = Interlocked.Increment(ref _ttsSettingsSaveVersion);
+        var options = BuildTtsOptions();
+        _ = PersistTtsSettingsAsync(options, saveVersion);
+    }
+
+    private async Task PersistTtsSettingsAsync(TtsOptions options, int saveVersion)
+    {
         var gateHeld = false;
         try
         {
-            await _settingsGate.WaitAsync(_lifecycleCts.Token);
+            await _settingsGate.WaitAsync();
             gateHeld = true;
-            await _appSettingsStore.SaveTtsSettingsAsync(BuildTtsOptions(), _lifecycleCts.Token);
+            if (saveVersion < Volatile.Read(ref _ttsSettingsSaveVersion))
+            {
+                return;
+            }
+
+            await _appSettingsStore.SaveTtsSettingsAsync(options, CancellationToken.None);
+            if (saveVersion == Volatile.Read(ref _ttsSettingsSaveVersion))
+            {
+                EnqueueAiTtsLog("System", "TTS 设置已保存。");
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1489,6 +1577,40 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
                 _settingsGate.Release();
             }
         }
+    }
+
+    private void LoadAvailableVoices()
+    {
+        var result = _windowsVoiceCatalog.LoadVoices();
+        AvailableVoices.Clear();
+        foreach (var voiceName in result.VoiceNames)
+        {
+            AvailableVoices.Add(voiceName);
+        }
+
+        _defaultTtsVoiceName = result.DefaultVoiceName;
+        TtsVoiceStatusText = result.StatusMessage;
+        OnPropertyChanged(nameof(HasAvailableVoices));
+
+        if (AvailableVoices.Count == 0)
+        {
+            EnqueueAiTtsLog("System", result.StatusMessage);
+        }
+    }
+
+    private string ResolveTtsVoiceName(string voiceName)
+    {
+        if (!string.IsNullOrWhiteSpace(voiceName))
+        {
+            return voiceName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_defaultTtsVoiceName))
+        {
+            return _defaultTtsVoiceName;
+        }
+
+        return AvailableVoices.FirstOrDefault() ?? string.Empty;
     }
 
     private async Task TriggerAiAnalysisIfNeededAsync(SessionState sessionState, CarSnapshot? playerCar)
@@ -1616,6 +1738,18 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             Volume = TtsVolume,
             Rate = TtsRate,
             CooldownSeconds = _ttsCooldownSeconds
+        };
+    }
+
+    private AISettings BuildAiSettings()
+    {
+        return new AISettings
+        {
+            ApiKey = AiApiKey,
+            BaseUrl = AiBaseUrl,
+            Model = AiModel,
+            AiEnabled = AiEnabled,
+            RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
         };
     }
 

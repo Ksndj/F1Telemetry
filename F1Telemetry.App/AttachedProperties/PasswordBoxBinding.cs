@@ -13,7 +13,7 @@ public static class PasswordBoxBinding
     /// </summary>
     public static string GetBoundPassword(DependencyObject dependencyObject)
     {
-        return (string)dependencyObject.GetValue(BoundPasswordProperty);
+        return (string?)dependencyObject.GetValue(BoundPasswordProperty) ?? string.Empty;
     }
 
     /// <summary>
@@ -48,7 +48,7 @@ public static class PasswordBoxBinding
             "BoundPassword",
             typeof(string),
             typeof(PasswordBoxBinding),
-            new PropertyMetadata(string.Empty, OnBoundPasswordChanged));
+            new PropertyMetadata(null, OnBoundPasswordChanged));
 
     /// <summary>
     /// Gets or sets the internal update guard property.
