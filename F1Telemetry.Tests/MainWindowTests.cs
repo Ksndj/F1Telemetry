@@ -126,6 +126,8 @@ public sealed class MainWindowTests
     [InlineData(typeof(LapHistoryView))]
     [InlineData(typeof(OpponentsView))]
     [InlineData(typeof(LogsView))]
+    [InlineData(typeof(AiTtsView))]
+    [InlineData(typeof(SettingsView))]
     public void DetailViews_LoadWithScrollViewer(Type viewType)
     {
         RunOnStaThread(() =>
@@ -179,10 +181,10 @@ public sealed class MainWindowTests
                 AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[5];
-                AssertContentHostUsesPlaceholder(window);
+                AssertContentHostShows<AiTtsView>(window, "AiTtsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[6];
-                AssertContentHostUsesPlaceholder(window);
+                AssertContentHostShows<SettingsView>(window, "SettingsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("laps", "Laps alias");
                 AssertContentHostShows<LapHistoryView>(window, "LapHistoryContentTemplate");
@@ -193,7 +195,42 @@ public sealed class MainWindowTests
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("legacy-dashboard", "Legacy dashboard");
                 AssertContentHostShows<LegacyDashboardView>(window, "LegacyDashboardContentTemplate");
 
+                viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("future-page", "Future page");
+                AssertContentHostUsesPlaceholder(window);
+
                 Assert.Equal(7, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that the shell title is fed by the dynamic application version text.
+    /// </summary>
+    [Fact]
+    public void MainWindow_TitleUsesDynamicApplicationVersion()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = new ShellNavigationTestViewModel(ShellNavigationItemViewModel.CreateDefaultItems());
+            var window = new MainWindow
+            {
+                DataContext = viewModel
+            };
+
+            try
+            {
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.UpdateLayout();
+
+                var titleText = Assert.IsType<TextBlock>(window.FindName("ShellTitleText"));
+                Assert.Equal(viewModel.AppTitleText, window.Title);
+                Assert.Equal(viewModel.AppTitleText, titleText.Text);
+                Assert.Contains(VersionInfo.CurrentVersion, titleText.Text, StringComparison.Ordinal);
+                Assert.NotEqual("F1 25 遥测软件 V1", titleText.Text);
             }
             finally
             {
@@ -281,6 +318,8 @@ public sealed class MainWindowTests
                 IsLogsSelected =
                     string.Equals(value.Key, "event-logs", StringComparison.Ordinal) ||
                     string.Equals(value.Key, "logs", StringComparison.Ordinal);
+                IsAiTtsSelected = string.Equals(value.Key, "ai-tts", StringComparison.Ordinal);
+                IsSettingsSelected = string.Equals(value.Key, "settings", StringComparison.Ordinal);
                 IsLegacyDashboardSelected = string.Equals(value.Key, "legacy-dashboard", StringComparison.Ordinal);
                 IsPlaceholderNavigationSelected =
                     !IsOverviewSelected &&
@@ -288,6 +327,8 @@ public sealed class MainWindowTests
                     !IsLapHistorySelected &&
                     !IsOpponentsSelected &&
                     !IsLogsSelected &&
+                    !IsAiTtsSelected &&
+                    !IsSettingsSelected &&
                     !IsLegacyDashboardSelected;
                 SelectedShellNavigationTitle = value.Name;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationItem)));
@@ -296,6 +337,8 @@ public sealed class MainWindowTests
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLapHistorySelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOpponentsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLogsSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAiTtsSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSettingsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLegacyDashboardSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPlaceholderNavigationSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationTitle)));
@@ -312,9 +355,15 @@ public sealed class MainWindowTests
 
         public bool IsLogsSelected { get; private set; }
 
+        public bool IsAiTtsSelected { get; private set; }
+
+        public bool IsSettingsSelected { get; private set; }
+
         public bool IsPlaceholderNavigationSelected { get; private set; }
 
         public bool IsLegacyDashboardSelected { get; private set; }
+
+        public string AppTitleText => $"F1 Telemetry {VersionInfo.CurrentVersion}";
 
         public string SelectedShellNavigationTitle { get; private set; } = string.Empty;
 
@@ -376,7 +425,7 @@ public sealed class MainWindowTests
 
     private static bool IsShellPage(object value)
     {
-        return value is OverviewView or ChartsView or LapHistoryView or OpponentsView or LogsView or LegacyDashboardView;
+        return value is OverviewView or ChartsView or LapHistoryView or OpponentsView or LogsView or AiTtsView or SettingsView or LegacyDashboardView;
     }
 
     private static T? FindDescendant<T>(DependencyObject root)

@@ -197,7 +197,12 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets the window title.
     /// </summary>
-    public string Title => "F1 25 遥测软件 V1";
+    public string Title => AppTitleText;
+
+    /// <summary>
+    /// Gets the application title text with the dynamic assembly version.
+    /// </summary>
+    public string AppTitleText => $"F1 Telemetry {VersionInfo.CurrentVersion}";
 
     /// <summary>
     /// Gets the window subtitle.
@@ -229,6 +234,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(IsLapHistorySelected));
                 OnPropertyChanged(nameof(IsOpponentsSelected));
                 OnPropertyChanged(nameof(IsLogsSelected));
+                OnPropertyChanged(nameof(IsAiTtsSelected));
+                OnPropertyChanged(nameof(IsSettingsSelected));
                 OnPropertyChanged(nameof(IsPlaceholderNavigationSelected));
                 OnPropertyChanged(nameof(IsLegacyDashboardSelected));
                 OnPropertyChanged(nameof(SelectedShellNavigationTitle));
@@ -262,6 +269,16 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     public bool IsLogsSelected => IsSelectedShellNavigationKey("event-logs") || IsSelectedShellNavigationKey("logs");
 
     /// <summary>
+    /// Gets a value indicating whether the AI and TTS page is selected.
+    /// </summary>
+    public bool IsAiTtsSelected => IsSelectedShellNavigationKey("ai-tts");
+
+    /// <summary>
+    /// Gets a value indicating whether the settings page is selected.
+    /// </summary>
+    public bool IsSettingsSelected => IsSelectedShellNavigationKey("settings");
+
+    /// <summary>
     /// Gets a value indicating whether a future shell page placeholder should be shown.
     /// </summary>
     public bool IsPlaceholderNavigationSelected =>
@@ -270,6 +287,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         !IsLapHistorySelected &&
         !IsOpponentsSelected &&
         !IsLogsSelected &&
+        !IsAiTtsSelected &&
+        !IsSettingsSelected &&
         !IsLegacyDashboardSelected;
 
     /// <summary>

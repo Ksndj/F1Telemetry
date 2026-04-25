@@ -1,0 +1,225 @@
+<UserControl x:Class="F1Telemetry.App.Views.AiTtsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:attached="clr-namespace:F1Telemetry.App.AttachedProperties"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="720"
+             d:DesignWidth="1100">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
+                <StackPanel>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="AI 设置" />
+                    <TextBlock Margin="0,6,0,0"
+                               Foreground="#9AB0C9"
+                               Text="DeepSeek 分析配置与连接状态"
+                               TextWrapping="Wrap" />
+
+                    <Grid Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="90" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Foreground="#7FA5D8" Text="AI 开关" />
+                        <CheckBox Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  IsChecked="{Binding AiEnabled}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="Base URL" />
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,14,0,0"
+                                 Padding="8,5"
+                                 Text="{Binding AiBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="Model" />
+                        <TextBox Grid.Row="2"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,14,0,0"
+                                 Padding="8,5"
+                                 Text="{Binding AiModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="3"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="API Key" />
+                        <PasswordBox Grid.Row="3"
+                                     Grid.Column="1"
+                                     Margin="0,14,10,0"
+                                     Padding="8,5"
+                                     attached:PasswordBoxBinding.BoundPassword="{Binding AiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="2"
+                                   Margin="0,14,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#9AB0C9"
+                                   Text="{Binding AiApiKeyStatusText}" />
+
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Column="1"
+                    Margin="16,0,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
+                <StackPanel>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="TTS 语音播报" />
+                    <TextBlock Margin="0,6,0,0"
+                               Foreground="#9AB0C9"
+                               Text="语音播报开关、音色、音量与语速"
+                               TextWrapping="Wrap" />
+
+                    <Grid Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="70" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Foreground="#7FA5D8" Text="TTS 开关" />
+                        <CheckBox Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  IsChecked="{Binding TtsEnabled}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="Voice" />
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,14,0,0"
+                                 Padding="8,5"
+                                 Text="{Binding TtsVoiceName, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="Volume" />
+                        <Slider Grid.Row="2"
+                                Grid.Column="1"
+                                Margin="0,14,12,0"
+                                Minimum="0"
+                                Maximum="100"
+                                TickFrequency="5"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding TtsVolume}" />
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="2"
+                                   Margin="0,14,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding TtsVolume, StringFormat={}{0}%}" />
+
+                        <TextBlock Grid.Row="3"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="Rate" />
+                        <Slider Grid.Row="3"
+                                Grid.Column="1"
+                                Margin="0,14,12,0"
+                                Minimum="-10"
+                                Maximum="10"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding TtsRate}" />
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="2"
+                                   Margin="0,14,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding TtsRate}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="AI / TTS 日志" />
+                    <ItemsControl Grid.Row="1"
+                                  Margin="0,16,0,0"
+                                  ItemsSource="{Binding AiTtsLogs}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Margin="0,0,0,8"
+                                        Padding="12"
+                                        CornerRadius="12"
+                                        Background="#132743">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
+                                        <TextBlock Grid.Column="1"
+                                                   Foreground="#D7E4F3"
+                                                   Text="{Binding Category}" />
+                                        <TextBlock Grid.Column="2"
+                                                   Foreground="White"
+                                                   Text="{Binding Message}"
+                                                   TextWrapping="Wrap" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</UserControl>
