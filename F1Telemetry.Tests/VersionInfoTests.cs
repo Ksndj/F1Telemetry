@@ -1,4 +1,6 @@
+using System.Runtime.CompilerServices;
 using F1Telemetry.App;
+using F1Telemetry.App.ViewModels;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -9,12 +11,35 @@ namespace F1Telemetry.Tests;
 public sealed class VersionInfoTests
 {
     /// <summary>
+    /// Verifies the raw current version is pinned to the current release version.
+    /// </summary>
+    [Fact]
+    public void CurrentVersion_ReturnsCurrentReleaseVersion()
+    {
+        Assert.Equal("1.0.2", VersionInfo.CurrentVersion);
+    }
+
+    /// <summary>
     /// Verifies the UI version text is pinned to the current release version.
     /// </summary>
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v1.0.1-beta2", VersionInfo.DisplayVersion);
+        Assert.Equal("v1.0.2", VersionInfo.DisplayVersion);
+    }
+
+    /// <summary>
+    /// Verifies the dashboard title reflects the current release version.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_AppTitleText_ContainsCurrentReleaseVersion()
+    {
+        var viewModel = Assert.IsType<DashboardViewModel>(
+            RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
+
+        Assert.Contains("1.0.2", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.DoesNotContain("1.0.1-beta2", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
     /// <summary>

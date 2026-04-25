@@ -16,10 +16,10 @@ dotnet publish $projectPath `
     --self-contained true `
     /p:PublishSingleFile=false `
     /p:PublishReadyToRun=true `
-    /p:Version=1.0.1-beta2 `
-    /p:AssemblyVersion=1.0.1.0 `
-    /p:FileVersion=1.0.1.0 `
-    /p:InformationalVersion=1.0.1-beta2 `
+    /p:Version=1.0.2 `
+    /p:AssemblyVersion=1.0.2.0 `
+    /p:FileVersion=1.0.2.0 `
+    /p:InformationalVersion=1.0.2 `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {
