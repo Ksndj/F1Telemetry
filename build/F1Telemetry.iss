@@ -1,5 +1,5 @@
 #define MyAppName "F1Telemetry"
-#define MyAppVersion "1.0.2-beta1"
+#define MyAppVersion "1.0.2-beta2"
 #define MyAppExeName "F1Telemetry.App.exe"
 
 [Setup]
@@ -12,7 +12,7 @@ DefaultGroupName=F1Telemetry
 DisableDirPage=no
 ShowLanguageDialog=yes
 OutputDir=output
-OutputBaseFilename=F1Telemetry-1.0.2-beta1-win-x64-setup
+OutputBaseFilename=F1Telemetry-1.0.2-beta2-win-x64-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -20,6 +20,7 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 CloseApplications=yes
 CloseApplicationsFilter=F1Telemetry.App.exe
+SetupIconFile=..\F1Telemetry.App\Assets\AppIcon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -40,8 +41,8 @@ Name: "desktopicon"; Description: "{cm:DesktopIconTask}"; GroupDescription: "{cm
 Source: "..\publish\*"; DestDir: "{app}"; Excludes: "settings.json,*.db,*.sqlite,*.sqlite3,logs\*,*.log,*.tmp,.env*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\F1Telemetry"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchAfterInstall}"; Flags: nowait postinstall skipifsilent

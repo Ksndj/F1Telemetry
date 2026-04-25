@@ -160,12 +160,14 @@
                                    Text="&#xE700;" />
                     </Button>
 
-                    <Grid x:Name="SidebarLogo"
-                          Width="120"
-                          Height="96"
-                          HorizontalAlignment="Center">
-                        <Grid.Style>
-                            <Style TargetType="{x:Type Grid}">
+                    <Border x:Name="SidebarLogo"
+                            Width="120"
+                            Height="96"
+                            HorizontalAlignment="Center"
+                            Background="#08111F"
+                            CornerRadius="20">
+                        <Border.Style>
+                            <Style TargetType="{x:Type Border}">
                                 <Setter Property="Visibility" Value="Visible" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
@@ -173,47 +175,20 @@
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </Grid.Style>
-                        <Ellipse Width="56"
-                                 Height="56"
-                                 Margin="8,8,0,0"
-                                 HorizontalAlignment="Left"
-                                 VerticalAlignment="Top"
-                                 Fill="#102A45"
-                                 Stroke="#20A8FF"
-                                 StrokeThickness="2" />
-                        <Path Data="M33,26 C18,31 16,52 28,64 L45,75"
-                              Stroke="#20A8FF"
-                              StrokeThickness="3"
-                              StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" />
-                        <Path Data="M38,24 L70,24 L82,36 L70,45 L43,45 C38,39 36,31 38,24 Z"
-                              Fill="#0B1628"
-                              Stroke="#D7E4F3"
-                              StrokeThickness="2" />
-                        <Path Data="M48,45 L68,64 L93,64"
-                              Stroke="#20A8FF"
-                              StrokeThickness="3"
-                              StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" />
-                        <Path Data="M74,25 L98,46 L112,26"
-                              Stroke="#20A8FF"
-                              StrokeThickness="3"
-                              StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" />
-                        <Path Data="M86,70 L104,52 M99,52 L107,44"
-                              Stroke="#D7E4F3"
-                              StrokeThickness="2"
-                              StrokeStartLineCap="Round"
-                              StrokeEndLineCap="Round" />
-                    </Grid>
+                        </Border.Style>
+                        <Image Margin="10"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Source="Assets/AppIcon.png"
+                               Stretch="Uniform" />
+                    </Border>
 
-                    <TextBlock Margin="0,4,0,0"
+                    <TextBlock x:Name="SidebarProductName"
+                               Margin="0,4,0,0"
                                HorizontalAlignment="Center"
                                FontSize="18"
                                FontWeight="SemiBold"
                                Foreground="White"
-                               Text="{Binding ApplicationVersionText, StringFormat=遥测软件 {0}}">
+                               Text="F1 Telemetry">
                         <TextBlock.Style>
                             <Style TargetType="{x:Type TextBlock}">
                                 <Setter Property="Visibility" Value="Visible" />
@@ -232,6 +207,7 @@
                          Margin="0,22,0,0"
                          Background="Transparent"
                          BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                          ItemContainerStyle="{StaticResource ShellNavigationItemStyle}"
                          ItemsSource="{Binding ShellNavigationItems}"
                          SelectedItem="{Binding SelectedShellNavigationItem, Mode=TwoWay}">
@@ -276,7 +252,7 @@
                         Padding="12,14"
                         CornerRadius="14"
                         Background="#0B1728"
-                        ToolTip="使用中: 20777 UDP">
+                        ToolTip="{Binding SidebarUdpStatusTooltip}">
                     <StackPanel>
                         <TextBlock Foreground="#2DE274"
                                    Text="{Binding ConnectionStateText}">
@@ -293,7 +269,7 @@
                         </TextBlock>
                         <TextBlock Margin="0,12,0,0"
                                    Foreground="#9AB0C9"
-                                   Text="使用中: 20777 UDP">
+                                   Text="{Binding SidebarUdpPortText}">
                             <TextBlock.Style>
                                 <Style TargetType="{x:Type TextBlock}">
                                     <Setter Property="Visibility" Value="Visible" />

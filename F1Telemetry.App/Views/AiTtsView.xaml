@@ -36,7 +36,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="100" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="90" />
+                            <ColumnDefinition Width="150" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -81,12 +81,17 @@
                                      Margin="0,14,10,0"
                                      Padding="8,5"
                                      attached:PasswordBoxBinding.BoundPassword="{Binding AiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Grid.Row="3"
-                                   Grid.Column="2"
-                                   Margin="0,14,0,0"
-                                   VerticalAlignment="Center"
-                                   Foreground="#9AB0C9"
-                                   Text="{Binding AiApiKeyStatusText}" />
+                        <StackPanel Grid.Row="3"
+                                    Grid.Column="2"
+                                    Margin="0,14,0,0"
+                                    VerticalAlignment="Center">
+                            <TextBlock Foreground="#9AB0C9"
+                                       Text="{Binding AiApiKeyStatusText}" />
+                            <TextBlock Margin="0,3,0,0"
+                                       Foreground="#7FA5D8"
+                                       Text="{Binding AiSettingsSaveStatusText}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
 
                     </Grid>
                 </StackPanel>
@@ -111,7 +116,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="100" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="70" />
+                            <ColumnDefinition Width="150" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -129,12 +134,20 @@
                                    Margin="0,14,0,0"
                                    Foreground="#7FA5D8"
                                    Text="Voice" />
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="1"
-                                 Grid.ColumnSpan="2"
-                                 Margin="0,14,0,0"
-                                 Padding="8,5"
-                                 Text="{Binding TtsVoiceName, UpdateSourceTrigger=PropertyChanged}" />
+                        <ComboBox Grid.Row="1"
+                                  Grid.Column="1"
+                                  Margin="0,14,12,0"
+                                  Padding="8,5"
+                                  IsEnabled="{Binding HasAvailableVoices}"
+                                  ItemsSource="{Binding AvailableVoices}"
+                                  SelectedItem="{Binding TtsVoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Margin="0,14,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#9AB0C9"
+                                   Text="{Binding TtsVoiceStatusText}"
+                                   TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,14,0,0"

@@ -131,10 +131,14 @@ public sealed class MainWindowTests
 
                 var sidebarColumn = Assert.IsType<ColumnDefinition>(window.FindName("SidebarColumnDefinition"));
                 var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
+                var productName = Assert.IsType<TextBlock>(window.FindName("SidebarProductName"));
 
                 Assert.True(viewModel.IsSidebarExpanded);
                 Assert.Equal(220d, sidebarColumn.Width.Value);
                 Assert.Equal(GridUnitType.Pixel, sidebarColumn.Width.GridUnitType);
+                Assert.Equal("F1 Telemetry", productName.Text);
+                Assert.DoesNotContain(VersionInfo.CurrentVersion, productName.Text, StringComparison.Ordinal);
+                Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(navigationList));
                 AssertNavigationTextVisibility(navigationList, "实时概览", Visibility.Visible);
                 AssertNavigationItemsHaveTooltips(navigationList);
 
