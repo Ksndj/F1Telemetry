@@ -10,10 +10,12 @@ public sealed class ShellNavigationItemViewModel
     /// </summary>
     /// <param name="key">Stable navigation key for future page routing.</param>
     /// <param name="name">Display name shown in the sidebar.</param>
-    public ShellNavigationItemViewModel(string key, string name)
+    /// <param name="iconGlyph">Icon glyph shown in the collapsed sidebar.</param>
+    public ShellNavigationItemViewModel(string key, string name, string iconGlyph = "\uE10F")
     {
         Key = string.IsNullOrWhiteSpace(key) ? throw new ArgumentException("Navigation key is required.", nameof(key)) : key;
         Name = string.IsNullOrWhiteSpace(name) ? throw new ArgumentException("Navigation name is required.", nameof(name)) : name;
+        IconGlyph = string.IsNullOrWhiteSpace(iconGlyph) ? throw new ArgumentException("Navigation icon is required.", nameof(iconGlyph)) : iconGlyph;
     }
 
     /// <summary>
@@ -27,19 +29,24 @@ public sealed class ShellNavigationItemViewModel
     public string Name { get; }
 
     /// <summary>
+    /// Gets the Segoe MDL2 glyph shown when the sidebar is collapsed.
+    /// </summary>
+    public string IconGlyph { get; }
+
+    /// <summary>
     /// Creates the default V1.0.2-M1 shell navigation set.
     /// </summary>
     public static IReadOnlyList<ShellNavigationItemViewModel> CreateDefaultItems()
     {
         return
         [
-            new("overview", "实时概览"),
-            new("charts", "图表"),
-            new("lap-history", "单圈历史"),
-            new("opponents", "对手"),
-            new("event-logs", "事件日志"),
-            new("ai-tts", "AI / TTS"),
-            new("settings", "设置")
+            new("overview", "实时概览", "\uE80F"),
+            new("charts", "图表", "\uE9D2"),
+            new("lap-history", "单圈历史", "\uE81C"),
+            new("opponents", "对手", "\uE716"),
+            new("event-logs", "事件日志", "\uE787"),
+            new("ai-tts", "AI / TTS", "\uE8BD"),
+            new("settings", "设置", "\uE713")
         ];
     }
 }

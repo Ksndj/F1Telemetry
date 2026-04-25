@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="720"
              d:DesignWidth="1100">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+    <ScrollViewer HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Auto">
         <StackPanel>
             <Border Padding="20"
