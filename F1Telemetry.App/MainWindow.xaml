@@ -10,8 +10,8 @@
         Title="{Binding AppTitleText}"
         Width="1380"
         Height="860"
-        MinWidth="1160"
-        MinHeight="720"
+        MinWidth="920"
+        MinHeight="620"
         MaxWidth="1920"
         MaxHeight="1080"
         WindowState="Normal"
@@ -116,7 +116,8 @@
                             ScaleY="1" />
         </Grid.RenderTransform>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220" />
+            <ColumnDefinition x:Name="SidebarColumnDefinition"
+                              Width="{Binding DataContext.SidebarColumnWidth, ElementName=WindowRoot}" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -126,10 +127,20 @@
 
         <Border x:Name="Sidebar"
                 Grid.RowSpan="2"
-                Margin="16,16,0,16"
-                Padding="14"
                 CornerRadius="18"
                 Background="#0F1B2E">
+            <Border.Style>
+                <Style TargetType="{x:Type Border}">
+                    <Setter Property="Margin" Value="16,16,0,16" />
+                    <Setter Property="Padding" Value="14" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                            <Setter Property="Margin" Value="10,16,0,16" />
+                            <Setter Property="Padding" Value="8" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -138,9 +149,31 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel>
-                    <Grid Width="120"
+                    <Button x:Name="SidebarToggleButton"
+                            Width="34"
+                            Height="34"
+                            HorizontalAlignment="Right"
+                            Command="{Binding ToggleSidebarCommand}"
+                            ToolTip="展开 / 收起侧边栏">
+                        <TextBlock FontFamily="Segoe MDL2 Assets"
+                                   FontSize="15"
+                                   Text="&#xE700;" />
+                    </Button>
+
+                    <Grid x:Name="SidebarLogo"
+                          Width="120"
                           Height="96"
                           HorizontalAlignment="Center">
+                        <Grid.Style>
+                            <Style TargetType="{x:Type Grid}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
                         <Ellipse Width="56"
                                  Height="56"
                                  Margin="8,8,0,0"
@@ -180,7 +213,18 @@
                                FontSize="18"
                                FontWeight="SemiBold"
                                Foreground="White"
-                               Text="{Binding ApplicationVersionText, StringFormat=遥测软件 {0}}" />
+                               Text="{Binding ApplicationVersionText, StringFormat=遥测软件 {0}}">
+                        <TextBlock.Style>
+                            <Style TargetType="{x:Type TextBlock}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
                 </StackPanel>
 
                 <ListBox x:Name="ShellNavigationList"
@@ -193,10 +237,37 @@
                          SelectedItem="{Binding SelectedShellNavigationItem, Mode=TwoWay}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=Foreground}"
-                                       Text="{Binding Name}" />
+                            <Grid ToolTip="{Binding Name}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="17"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=Foreground}"
+                                           Text="{Binding IconGlyph}" />
+                                <TextBlock Grid.Column="2"
+                                           VerticalAlignment="Center"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=Foreground}"
+                                           Text="{Binding Name}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -204,13 +275,52 @@
                 <Border Grid.Row="2"
                         Padding="12,14"
                         CornerRadius="14"
-                        Background="#0B1728">
+                        Background="#0B1728"
+                        ToolTip="使用中: 20777 UDP">
                     <StackPanel>
                         <TextBlock Foreground="#2DE274"
-                                   Text="{Binding ConnectionStateText}" />
+                                   Text="{Binding ConnectionStateText}">
+                            <TextBlock.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <TextBlock Margin="0,12,0,0"
                                    Foreground="#9AB0C9"
-                                   Text="使用中: 20777 UDP" />
+                                   Text="使用中: 20777 UDP">
+                            <TextBlock.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock HorizontalAlignment="Center"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   Foreground="#9AB0C9"
+                                   Text="UDP">
+                            <TextBlock.Style>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -222,80 +332,76 @@
                 Padding="22"
                 CornerRadius="22"
                 Background="#0F1B2E">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="ShellTitleText"
+                           FontSize="30"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           Text="{Binding AppTitleText}" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="#9AB0C9"
+                           Text="{Binding Subtitle}"
+                           TextWrapping="Wrap" />
 
-                <StackPanel>
-                    <TextBlock x:Name="ShellTitleText"
-                               FontSize="30"
-                               FontWeight="SemiBold"
-                               Foreground="White"
-                               Text="{Binding AppTitleText}" />
-                    <TextBlock Margin="0,6,0,0"
-                               Foreground="#9AB0C9"
-                               Text="{Binding Subtitle}" />
+                <WrapPanel Margin="0,18,0,0">
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="连接状态" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding ConnectionStateText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="赛道" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding TrackText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="圈数" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding LapText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="天气" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding WeatherText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="UDP PPS" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding PacketsPerSecond}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <WrapPanel VerticalAlignment="Center">
+                            <TextBlock Margin="0,0,10,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="#7FA5D8"
+                                       Text="监听端口" />
+                            <TextBox Width="120"
+                                     Margin="0,0,10,0"
+                                     Padding="10,6"
+                                     Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Width="108"
+                                    Height="36"
+                                    Margin="0,0,10,0"
+                                    Command="{Binding StartListeningCommand}"
+                                    Content="开始监听" />
+                            <Button Width="108"
+                                    Height="36"
+                                    Command="{Binding StopListeningCommand}"
+                                    Content="停止监听" />
+                        </WrapPanel>
+                    </Border>
+                </WrapPanel>
 
-                    <WrapPanel Margin="0,18,0,0">
-                        <Border Margin="0,0,12,0" Padding="12,8" CornerRadius="14" Background="#132743">
-                            <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="连接状态" />
-                                <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding ConnectionStateText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Margin="0,0,12,0" Padding="12,8" CornerRadius="14" Background="#132743">
-                            <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="赛道" />
-                                <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding TrackText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Margin="0,0,12,0" Padding="12,8" CornerRadius="14" Background="#132743">
-                            <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="圈数" />
-                                <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding LapText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Margin="0,0,12,0" Padding="12,8" CornerRadius="14" Background="#132743">
-                            <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="天气" />
-                                <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding WeatherText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Padding="12,8" CornerRadius="14" Background="#132743">
-                            <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="UDP PPS" />
-                                <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding PacketsPerSecond}" />
-                            </StackPanel>
-                        </Border>
-                    </WrapPanel>
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
-                    <TextBlock Foreground="#7FA5D8" Text="监听端口" />
-                    <TextBox Width="120"
-                             Margin="0,8,0,0"
-                             Padding="10,6"
-                             Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}" />
-                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                        <Button Width="108"
-                                Height="36"
-                                Margin="0,0,10,0"
-                                Command="{Binding StartListeningCommand}"
-                                Content="开始监听" />
-                        <Button Width="108"
-                                Height="36"
-                                Command="{Binding StopListeningCommand}"
-                                Content="停止监听" />
-                    </StackPanel>
-                    <TextBlock Width="240"
-                               Margin="0,14,0,0"
-                               Foreground="#B5C7DC"
-                               Text="{Binding StatusMessage}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Grid>
+                <TextBlock Margin="0,4,0,0"
+                           Foreground="#B5C7DC"
+                           Text="{Binding StatusMessage}"
+                           TextWrapping="Wrap" />
+            </StackPanel>
         </Border>
 
         <ContentControl x:Name="ContentHost"

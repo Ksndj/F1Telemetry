@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using F1Telemetry.AI.Interfaces;
@@ -31,6 +32,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private const int MaxLogEntries = 50;
     private const int MaxPendingEventLogs = 200;
     private const int MaxPendingAiTtsLogs = 200;
+    private const double ExpandedSidebarWidth = 220d;
+    private const double CollapsedSidebarWidth = 80d;
     private readonly IUdpListener _udpListener;
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
     private readonly SessionStateStore _sessionStateStore;
@@ -54,7 +57,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
     private readonly RelayCommand _downloadLatestVersionCommand;
+    private readonly RelayCommand _toggleSidebarCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
+    private bool _isSidebarExpanded = true;
     private bool _isBusy;
     private bool _isListening;
     private bool _isConnected;
@@ -179,6 +184,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
         _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
+        _toggleSidebarCommand = new RelayCommand(ToggleSidebar);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -218,6 +224,26 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the fixed V1.0.2-M1 shell navigation items.
     /// </summary>
     public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the sidebar is expanded.
+    /// </summary>
+    public bool IsSidebarExpanded
+    {
+        get => _isSidebarExpanded;
+        private set
+        {
+            if (SetProperty(ref _isSidebarExpanded, value))
+            {
+                OnPropertyChanged(nameof(SidebarColumnWidth));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the shell sidebar column width.
+    /// </summary>
+    public GridLength SidebarColumnWidth => new(IsSidebarExpanded ? ExpandedSidebarWidth : CollapsedSidebarWidth);
 
     /// <summary>
     /// Gets or sets the currently selected shell navigation item.
@@ -304,6 +330,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private bool IsSelectedShellNavigationKey(string key)
     {
         return string.Equals(SelectedShellNavigationItem?.Key, key, StringComparison.Ordinal);
+    }
+
+    private void ToggleSidebar()
+    {
+        IsSidebarExpanded = !IsSidebarExpanded;
     }
 
     /// <summary>
@@ -530,6 +561,11 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the command that opens the GitHub Releases download page.
     /// </summary>
     public ICommand DownloadLatestVersionCommand => _downloadLatestVersionCommand;
+
+    /// <summary>
+    /// Gets the command that expands or collapses the sidebar.
+    /// </summary>
+    public ICommand ToggleSidebarCommand => _toggleSidebarCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
