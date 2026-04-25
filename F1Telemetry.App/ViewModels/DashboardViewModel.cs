@@ -54,6 +54,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
     private readonly RelayCommand _downloadLatestVersionCommand;
+    private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private bool _isBusy;
     private bool _isListening;
     private bool _isConnected;
@@ -141,6 +142,9 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         _trendChartBuilder = new TrendChartBuilder();
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
+        ShellNavigationItems = new ObservableCollection<ShellNavigationItemViewModel>(
+            ShellNavigationItemViewModel.CreateDefaultItems());
+        _selectedShellNavigationItem = ShellNavigationItems[0];
         OpponentCars = new ObservableCollection<CarStateItemViewModel>();
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
@@ -195,6 +199,20 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// Gets the application version text displayed in the shell.
     /// </summary>
     public string ApplicationVersionText => VersionInfo.DisplayVersion;
+
+    /// <summary>
+    /// Gets the fixed V1.0.2-M1 shell navigation items.
+    /// </summary>
+    public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; }
+
+    /// <summary>
+    /// Gets or sets the currently selected shell navigation item.
+    /// </summary>
+    public ShellNavigationItemViewModel? SelectedShellNavigationItem
+    {
+        get => _selectedShellNavigationItem;
+        set => SetProperty(ref _selectedShellNavigationItem, value);
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.

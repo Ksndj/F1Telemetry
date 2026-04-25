@@ -20,6 +20,38 @@
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
         StateChanged="Window_StateChanged">
+    <Window.Resources>
+        <Style x:Key="ShellNavigationItemStyle" TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="#D7E4F3" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="ItemBorder"
+                                Padding="14,11"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="12">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#132743" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#1D3558" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1557A9" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#2387F8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid x:Name="WindowRoot"
           Background="#08111F"
           RenderTransformOrigin="0.5,0.5">
@@ -28,13 +60,110 @@
                             ScaleX="1"
                             ScaleY="1" />
         </Grid.RenderTransform>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="220" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="220" />
         </Grid.RowDefinitions>
 
-        <Border Margin="24,24,24,16"
+        <Border x:Name="Sidebar"
+                Grid.RowSpan="2"
+                Margin="16,16,0,16"
+                Padding="14"
+                CornerRadius="18"
+                Background="#0F1B2E">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel>
+                    <Grid Width="120"
+                          Height="96"
+                          HorizontalAlignment="Center">
+                        <Ellipse Width="56"
+                                 Height="56"
+                                 Margin="8,8,0,0"
+                                 HorizontalAlignment="Left"
+                                 VerticalAlignment="Top"
+                                 Fill="#102A45"
+                                 Stroke="#20A8FF"
+                                 StrokeThickness="2" />
+                        <Path Data="M33,26 C18,31 16,52 28,64 L45,75"
+                              Stroke="#20A8FF"
+                              StrokeThickness="3"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                        <Path Data="M38,24 L70,24 L82,36 L70,45 L43,45 C38,39 36,31 38,24 Z"
+                              Fill="#0B1628"
+                              Stroke="#D7E4F3"
+                              StrokeThickness="2" />
+                        <Path Data="M48,45 L68,64 L93,64"
+                              Stroke="#20A8FF"
+                              StrokeThickness="3"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                        <Path Data="M74,25 L98,46 L112,26"
+                              Stroke="#20A8FF"
+                              StrokeThickness="3"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                        <Path Data="M86,70 L104,52 M99,52 L107,44"
+                              Stroke="#D7E4F3"
+                              StrokeThickness="2"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                    </Grid>
+
+                    <TextBlock Margin="0,4,0,0"
+                               HorizontalAlignment="Center"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="遥测软件 V1" />
+                </StackPanel>
+
+                <ListBox x:Name="ShellNavigationList"
+                         Grid.Row="1"
+                         Margin="0,22,0,0"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         ItemContainerStyle="{StaticResource ShellNavigationItemStyle}"
+                         ItemsSource="{Binding ShellNavigationItems}"
+                         SelectedItem="{Binding SelectedShellNavigationItem, Mode=TwoWay}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=Foreground}"
+                                       Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <Border Grid.Row="2"
+                        Padding="12,14"
+                        CornerRadius="14"
+                        Background="#0B1728">
+                    <StackPanel>
+                        <TextBlock Foreground="#2DE274"
+                                   Text="{Binding ConnectionStateText}" />
+                        <TextBlock Margin="0,12,0,0"
+                                   Foreground="#9AB0C9"
+                                   Text="使用中: 20777 UDP" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Border x:Name="TopStatusBar"
+                Grid.Column="1"
+                Margin="16,16,20,16"
                 Padding="22"
                 CornerRadius="22"
                 Background="#0F1B2E">
@@ -113,7 +242,16 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Row="1" Margin="24,0,24,16">
+        <Grid x:Name="ContentHost"
+              Grid.Row="1"
+              Grid.Column="1"
+              Margin="16,0,20,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="220" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0,0,0,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="320" />
                 <ColumnDefinition Width="16" />
@@ -367,7 +505,7 @@
             </Border>
         </Grid>
 
-        <Grid Grid.Row="2" Margin="24,0,24,24">
+            <Grid Grid.Row="1" Margin="0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="16" />
@@ -602,9 +740,11 @@
                 </Grid>
             </Border>
         </Grid>
+        </Grid>
 
         <Border x:Name="WindowStateToast"
-                Grid.RowSpan="3"
+                Grid.ColumnSpan="2"
+                Grid.RowSpan="2"
                 Margin="0,24,24,0"
                 Padding="14,10"
                 HorizontalAlignment="Right"

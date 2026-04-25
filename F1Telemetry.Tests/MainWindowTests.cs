@@ -1,6 +1,9 @@
 using System.Runtime.ExceptionServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Threading;
 using F1Telemetry.App;
+using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Windowing;
 using Xunit;
 
@@ -55,6 +58,41 @@ public sealed class MainWindowTests
         Assert.True(normalProfile.InitialScale < 1d);
     }
 
+    /// <summary>
+    /// Verifies that the shell exposes the primary regions and default sidebar selection.
+    /// </summary>
+    [Fact]
+    public void MainWindow_DefinesShellRegionsAndDefaultNavigationSelection()
+    {
+        RunOnStaThread(() =>
+        {
+            var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
+            var window = new MainWindow
+            {
+                DataContext = new ShellNavigationTestViewModel(navigationItems)
+            };
+
+            try
+            {
+                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+                window.UpdateLayout();
+
+                Assert.NotNull(window.FindName("Sidebar"));
+                Assert.NotNull(window.FindName("TopStatusBar"));
+                Assert.NotNull(window.FindName("ContentHost"));
+
+                var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
+                Assert.Equal(7, navigationList.Items.Count);
+                Assert.Same(navigationItems[0], navigationList.SelectedItem);
+                Assert.Equal("实时概览", navigationItems[0].Name);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
     private static void RunOnStaThread(Action action)
     {
         Exception? capturedException = null;
@@ -78,5 +116,18 @@ public sealed class MainWindowTests
         {
             ExceptionDispatchInfo.Capture(capturedException).Throw();
         }
+    }
+
+    public sealed class ShellNavigationTestViewModel
+    {
+        public ShellNavigationTestViewModel(IReadOnlyList<ShellNavigationItemViewModel> shellNavigationItems)
+        {
+            ShellNavigationItems = shellNavigationItems;
+            SelectedShellNavigationItem = shellNavigationItems[0];
+        }
+
+        public IReadOnlyList<ShellNavigationItemViewModel> ShellNavigationItems { get; }
+
+        public ShellNavigationItemViewModel SelectedShellNavigationItem { get; set; }
     }
 }
