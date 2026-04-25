@@ -8,6 +8,7 @@ using F1Telemetry.App;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.App.Views;
+using F1Telemetry.Core.Abstractions;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -88,6 +89,63 @@ public sealed class MainWindowTests
                 Assert.Equal(7, navigationList.Items.Count);
                 Assert.Same(navigationItems[0], navigationList.SelectedItem);
                 Assert.Equal("实时概览", navigationItems[0].Name);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that shell navigation items expose stable icon glyphs for the collapsed sidebar.
+    /// </summary>
+    [Fact]
+    public void ShellNavigationItems_ExposeStableIconGlyphs()
+    {
+        var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
+
+        Assert.Equal(7, navigationItems.Count);
+        Assert.All(navigationItems, item => Assert.False(string.IsNullOrWhiteSpace(item.IconGlyph)));
+    }
+
+    /// <summary>
+    /// Verifies that the sidebar defaults to expanded and collapses to a tooltip-backed icon rail.
+    /// </summary>
+    [Fact]
+    public void MainWindow_SidebarDefaultsExpandedAndCollapsesToIconRail()
+    {
+        RunOnStaThread(() =>
+        {
+            var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
+            var viewModel = new ShellNavigationTestViewModel(navigationItems);
+            var window = new MainWindow
+            {
+                DataContext = viewModel
+            };
+
+            try
+            {
+                window.Show();
+                ApplyContentHostLayout(window);
+
+                var sidebarColumn = Assert.IsType<ColumnDefinition>(window.FindName("SidebarColumnDefinition"));
+                var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
+
+                Assert.True(viewModel.IsSidebarExpanded);
+                Assert.Equal(220d, sidebarColumn.Width.Value);
+                Assert.Equal(GridUnitType.Pixel, sidebarColumn.Width.GridUnitType);
+                AssertNavigationTextVisibility(navigationList, "实时概览", Visibility.Visible);
+                AssertNavigationItemsHaveTooltips(navigationList);
+
+                viewModel.ToggleSidebarCommand.Execute(null);
+                ApplyContentHostLayout(window);
+
+                Assert.False(viewModel.IsSidebarExpanded);
+                Assert.Equal(80d, sidebarColumn.Width.Value);
+                Assert.Equal(GridUnitType.Pixel, sidebarColumn.Width.GridUnitType);
+                AssertNavigationTextVisibility(navigationList, "实时概览", Visibility.Collapsed);
+                AssertNavigationItemsHaveTooltips(navigationList);
             }
             finally
             {
@@ -291,12 +349,19 @@ public sealed class MainWindowTests
         public ShellNavigationTestViewModel(IReadOnlyList<ShellNavigationItemViewModel> shellNavigationItems)
         {
             ShellNavigationItems = shellNavigationItems;
+            ToggleSidebarCommand = new RelayCommand(ToggleSidebar);
             SelectedShellNavigationItem = shellNavigationItems[0];
         }
 
         public IReadOnlyList<ShellNavigationItemViewModel> ShellNavigationItems { get; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public RelayCommand ToggleSidebarCommand { get; }
+
+        public bool IsSidebarExpanded { get; private set; } = true;
+
+        public GridLength SidebarColumnWidth => new(IsSidebarExpanded ? 220d : 80d);
 
         public ShellNavigationItemViewModel SelectedShellNavigationItem
         {
@@ -368,6 +433,13 @@ public sealed class MainWindowTests
         public string SelectedShellNavigationTitle { get; private set; } = string.Empty;
 
         private ShellNavigationItemViewModel _selectedShellNavigationItem = null!;
+
+        private void ToggleSidebar()
+        {
+            IsSidebarExpanded = !IsSidebarExpanded;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSidebarExpanded)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SidebarColumnWidth)));
+        }
     }
 
     private static void AssertVisible(object element)
@@ -412,6 +484,33 @@ public sealed class MainWindowTests
         return host;
     }
 
+    private static void AssertNavigationTextVisibility(ListBox navigationList, string text, Visibility expectedVisibility)
+    {
+        navigationList.UpdateLayout();
+        var container = Assert.IsAssignableFrom<ListBoxItem>(
+            navigationList.ItemContainerGenerator.ContainerFromIndex(0));
+        var textBlock = FindDescendant<TextBlock>(container, block => string.Equals(block.Text, text, StringComparison.Ordinal));
+
+        Assert.NotNull(textBlock);
+        Assert.Equal(expectedVisibility, textBlock.Visibility);
+    }
+
+    private static void AssertNavigationItemsHaveTooltips(ListBox navigationList)
+    {
+        navigationList.UpdateLayout();
+        for (var i = 0; i < navigationList.Items.Count; i++)
+        {
+            var item = Assert.IsType<ShellNavigationItemViewModel>(navigationList.Items[i]);
+            var container = Assert.IsAssignableFrom<ListBoxItem>(
+                navigationList.ItemContainerGenerator.ContainerFromIndex(i));
+            var elementWithTooltip = FindDescendant<FrameworkElement>(
+                container,
+                element => string.Equals(element.ToolTip as string, item.Name, StringComparison.Ordinal));
+
+            Assert.NotNull(elementWithTooltip);
+        }
+    }
+
     private static int CountActiveShellPages(DependencyObject root)
     {
         var count = IsShellPage(root) ? 1 : 0;
@@ -431,15 +530,21 @@ public sealed class MainWindowTests
     private static T? FindDescendant<T>(DependencyObject root)
         where T : DependencyObject
     {
+        return FindDescendant<T>(root, _ => true);
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root, Predicate<T> predicate)
+        where T : DependencyObject
+    {
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
         {
             var child = VisualTreeHelper.GetChild(root, i);
-            if (child is T typedChild)
+            if (child is T typedChild && predicate(typedChild))
             {
                 return typedChild;
             }
 
-            var match = FindDescendant<T>(child);
+            var match = FindDescendant<T>(child, predicate);
             if (match is not null)
             {
                 return match;
