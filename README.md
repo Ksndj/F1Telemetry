@@ -1,6 +1,6 @@
 # F1Telemetry
 
-当前版本：`v1.0.1`
+当前版本：`v1.0.2`
 
 F1Telemetry 是一个基于 .NET 10 的 Windows WPF 遥测桌面应用，用于接收、解析和展示 F1 25 UDP 遥测数据，并为实时分析、AI 建议、Windows TTS 播报、SQLite 持久化和后续复盘能力提供基础。
 
@@ -101,7 +101,7 @@ dotnet run --project .\F1Telemetry.App\F1Telemetry.App.csproj
 
 开发者发布流程：
 
-1. 修改集中版本号，目前版本为 `1.0.1`。
+1. 修改集中版本号，目前版本为 `1.0.2`。
 2. 在仓库根目录运行：
 
    ```powershell
@@ -117,7 +117,7 @@ dotnet run --project .\F1Telemetry.App\F1Telemetry.App.csproj
 4. 生成安装包：
 
    ```text
-   build/output/F1Telemetry-Setup-1.0.1.exe
+   build/output/F1Telemetry-Setup-1.0.2.exe
    ```
 
 5. 将安装包上传到 GitHub Releases。
