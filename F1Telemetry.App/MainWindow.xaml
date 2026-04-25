@@ -23,6 +23,51 @@
         StateChanged="Window_StateChanged">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <DataTemplate x:Key="OverviewContentTemplate">
+            <views:OverviewView />
+        </DataTemplate>
+
+        <DataTemplate x:Key="ChartsContentTemplate">
+            <views:ChartsView />
+        </DataTemplate>
+
+        <DataTemplate x:Key="LapHistoryContentTemplate">
+            <views:LapHistoryView />
+        </DataTemplate>
+
+        <DataTemplate x:Key="OpponentsContentTemplate">
+            <views:OpponentsView />
+        </DataTemplate>
+
+        <DataTemplate x:Key="LogsContentTemplate">
+            <views:LogsView />
+        </DataTemplate>
+
+        <DataTemplate x:Key="PlaceholderContentTemplate">
+            <Border Padding="24"
+                    CornerRadius="20"
+                    Background="#0F1B2E">
+                <StackPanel HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                    <TextBlock FontSize="24"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="{Binding SelectedShellNavigationTitle}"
+                               TextAlignment="Center" />
+                    <TextBlock Margin="0,12,0,0"
+                               FontSize="16"
+                               Foreground="#9AB0C9"
+                               Text="将在后续里程碑拆分"
+                               TextAlignment="Center" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="LegacyDashboardContentTemplate">
+            <views:LegacyDashboardView />
+        </DataTemplate>
+
         <Style x:Key="ShellNavigationItemStyle" TargetType="{x:Type ListBoxItem}">
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="Padding" Value="0" />
@@ -244,37 +289,38 @@
             </Grid>
         </Border>
 
-        <Grid x:Name="ContentHost"
-              Grid.Row="1"
-              Grid.Column="1"
-              Margin="16,0,20,20"
-              ClipToBounds="True">
-            <views:OverviewView x:Name="OverviewContent"
-                                Visibility="{Binding IsOverviewSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-
-            <Border x:Name="NavigationPlaceholder"
-                    Padding="24"
-                    CornerRadius="20"
-                    Background="#0F1B2E"
-                    Visibility="{Binding IsPlaceholderNavigationSelected, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel VerticalAlignment="Center"
-                            HorizontalAlignment="Center">
-                    <TextBlock FontSize="24"
-                               FontWeight="SemiBold"
-                               Foreground="White"
-                               Text="{Binding SelectedShellNavigationTitle}"
-                               TextAlignment="Center" />
-                    <TextBlock Margin="0,12,0,0"
-                               FontSize="16"
-                               Foreground="#9AB0C9"
-                               Text="将在后续里程碑拆分"
-                               TextAlignment="Center" />
-                </StackPanel>
-            </Border>
-
-            <views:LegacyDashboardView x:Name="LegacyDashboardContent"
-                                       Visibility="{Binding IsLegacyDashboardSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
-        </Grid>
+        <ContentControl x:Name="ContentHost"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Margin="16,0,20,20"
+                        ClipToBounds="True"
+                        Content="{Binding}">
+            <ContentControl.Style>
+                <Style TargetType="{x:Type ContentControl}">
+                    <Setter Property="ContentTemplate" Value="{StaticResource OverviewContentTemplate}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsChartsSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource ChartsContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsLapHistorySelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource LapHistoryContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsOpponentsSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource OpponentsContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsLogsSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource LogsContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsPlaceholderNavigationSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource PlaceholderContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsLegacyDashboardSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource LegacyDashboardContentTemplate}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ContentControl.Style>
+        </ContentControl>
 
         <Border x:Name="WindowStateToast"
                 Grid.ColumnSpan="2"

@@ -119,10 +119,36 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
-    /// Verifies that the content host shows overview by default and placeholders for future pages.
+    /// Verifies that each detail page can load and owns its own scroll surface.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(ChartsView))]
+    [InlineData(typeof(LapHistoryView))]
+    [InlineData(typeof(OpponentsView))]
+    [InlineData(typeof(LogsView))]
+    public void DetailViews_LoadWithScrollViewer(Type viewType)
+    {
+        RunOnStaThread(() =>
+        {
+            var view = Assert.IsAssignableFrom<UserControl>(Activator.CreateInstance(viewType));
+            try
+            {
+                view.UpdateLayout();
+
+                Assert.IsType<ScrollViewer>(view.Content);
+            }
+            finally
+            {
+                view.Content = null;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that the content host switches between one active shell page at a time.
     /// </summary>
     [Fact]
-    public void MainWindow_ContentHostSwitchesBetweenOverviewPlaceholderAndLegacy()
+    public void MainWindow_ContentHostSwitchesBetweenDetailPagesPlaceholdersAndLegacy()
     {
         RunOnStaThread(() =>
         {
@@ -135,29 +161,38 @@ public sealed class MainWindowTests
 
             try
             {
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                window.UpdateLayout();
+                window.Show();
 
                 Assert.Equal(7, navigationItems.Count);
-                AssertVisible(window.FindName("OverviewContent"));
-                AssertCollapsed(window.FindName("NavigationPlaceholder"));
-                AssertCollapsed(window.FindName("LegacyDashboardContent"));
+                AssertContentHostShows<OverviewView>(window, "OverviewContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[1];
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                window.UpdateLayout();
+                AssertContentHostShows<ChartsView>(window, "ChartsContentTemplate");
 
-                AssertCollapsed(window.FindName("OverviewContent"));
-                AssertVisible(window.FindName("NavigationPlaceholder"));
-                AssertCollapsed(window.FindName("LegacyDashboardContent"));
+                viewModel.SelectedShellNavigationItem = navigationItems[2];
+                AssertContentHostShows<LapHistoryView>(window, "LapHistoryContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = navigationItems[3];
+                AssertContentHostShows<OpponentsView>(window, "OpponentsContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = navigationItems[4];
+                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = navigationItems[5];
+                AssertContentHostUsesPlaceholder(window);
+
+                viewModel.SelectedShellNavigationItem = navigationItems[6];
+                AssertContentHostUsesPlaceholder(window);
+
+                viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("laps", "Laps alias");
+                AssertContentHostShows<LapHistoryView>(window, "LapHistoryContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("logs", "Logs alias");
+                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("legacy-dashboard", "Legacy dashboard");
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                window.UpdateLayout();
+                AssertContentHostShows<LegacyDashboardView>(window, "LegacyDashboardContentTemplate");
 
-                AssertCollapsed(window.FindName("OverviewContent"));
-                AssertCollapsed(window.FindName("NavigationPlaceholder"));
-                AssertVisible(window.FindName("LegacyDashboardContent"));
                 Assert.Equal(7, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
             }
             finally
@@ -238,11 +273,29 @@ public sealed class MainWindowTests
 
                 _selectedShellNavigationItem = value;
                 IsOverviewSelected = string.Equals(value.Key, "overview", StringComparison.Ordinal);
+                IsChartsSelected = string.Equals(value.Key, "charts", StringComparison.Ordinal);
+                IsLapHistorySelected =
+                    string.Equals(value.Key, "lap-history", StringComparison.Ordinal) ||
+                    string.Equals(value.Key, "laps", StringComparison.Ordinal);
+                IsOpponentsSelected = string.Equals(value.Key, "opponents", StringComparison.Ordinal);
+                IsLogsSelected =
+                    string.Equals(value.Key, "event-logs", StringComparison.Ordinal) ||
+                    string.Equals(value.Key, "logs", StringComparison.Ordinal);
                 IsLegacyDashboardSelected = string.Equals(value.Key, "legacy-dashboard", StringComparison.Ordinal);
-                IsPlaceholderNavigationSelected = !IsOverviewSelected && !IsLegacyDashboardSelected;
+                IsPlaceholderNavigationSelected =
+                    !IsOverviewSelected &&
+                    !IsChartsSelected &&
+                    !IsLapHistorySelected &&
+                    !IsOpponentsSelected &&
+                    !IsLogsSelected &&
+                    !IsLegacyDashboardSelected;
                 SelectedShellNavigationTitle = value.Name;
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationItem)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOverviewSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChartsSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLapHistorySelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOpponentsSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLogsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLegacyDashboardSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPlaceholderNavigationSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedShellNavigationTitle)));
@@ -250,6 +303,14 @@ public sealed class MainWindowTests
         }
 
         public bool IsOverviewSelected { get; private set; }
+
+        public bool IsChartsSelected { get; private set; }
+
+        public bool IsLapHistorySelected { get; private set; }
+
+        public bool IsOpponentsSelected { get; private set; }
+
+        public bool IsLogsSelected { get; private set; }
 
         public bool IsPlaceholderNavigationSelected { get; private set; }
 
@@ -268,6 +329,54 @@ public sealed class MainWindowTests
     private static void AssertCollapsed(object element)
     {
         Assert.Equal(Visibility.Collapsed, Assert.IsAssignableFrom<FrameworkElement>(element).Visibility);
+    }
+
+    private static void AssertContentHostShows<TPage>(MainWindow window, string templateKey)
+        where TPage : UserControl
+    {
+        var host = ApplyContentHostLayout(window);
+
+        Assert.Same(window.FindResource(templateKey), host.ContentTemplate);
+        Assert.NotNull(FindDescendant<TPage>(host));
+        Assert.Equal(1, CountActiveShellPages(host));
+    }
+
+    private static void AssertContentHostUsesPlaceholder(MainWindow window)
+    {
+        var host = ApplyContentHostLayout(window);
+
+        Assert.Same(window.FindResource("PlaceholderContentTemplate"), host.ContentTemplate);
+        Assert.Equal(0, CountActiveShellPages(host));
+    }
+
+    private static ContentControl ApplyContentHostLayout(MainWindow window)
+    {
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
+        window.UpdateLayout();
+
+        var host = Assert.IsType<ContentControl>(window.FindName("ContentHost"));
+        host.ApplyTemplate();
+        host.UpdateLayout();
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
+        host.UpdateLayout();
+
+        return host;
+    }
+
+    private static int CountActiveShellPages(DependencyObject root)
+    {
+        var count = IsShellPage(root) ? 1 : 0;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            count += CountActiveShellPages(VisualTreeHelper.GetChild(root, i));
+        }
+
+        return count;
+    }
+
+    private static bool IsShellPage(object value)
+    {
+        return value is OverviewView or ChartsView or LapHistoryView or OpponentsView or LogsView or LegacyDashboardView;
     }
 
     private static T? FindDescendant<T>(DependencyObject root)

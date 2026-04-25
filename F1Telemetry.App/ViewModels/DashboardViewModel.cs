@@ -225,6 +225,10 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref _selectedShellNavigationItem, value))
             {
                 OnPropertyChanged(nameof(IsOverviewSelected));
+                OnPropertyChanged(nameof(IsChartsSelected));
+                OnPropertyChanged(nameof(IsLapHistorySelected));
+                OnPropertyChanged(nameof(IsOpponentsSelected));
+                OnPropertyChanged(nameof(IsLogsSelected));
                 OnPropertyChanged(nameof(IsPlaceholderNavigationSelected));
                 OnPropertyChanged(nameof(IsLegacyDashboardSelected));
                 OnPropertyChanged(nameof(SelectedShellNavigationTitle));
@@ -235,22 +239,53 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Gets a value indicating whether the overview page is selected.
     /// </summary>
-    public bool IsOverviewSelected => string.Equals(SelectedShellNavigationItem?.Key, "overview", StringComparison.Ordinal);
+    public bool IsOverviewSelected => IsSelectedShellNavigationKey("overview");
+
+    /// <summary>
+    /// Gets a value indicating whether the charts page is selected.
+    /// </summary>
+    public bool IsChartsSelected => IsSelectedShellNavigationKey("charts");
+
+    /// <summary>
+    /// Gets a value indicating whether the lap history page is selected.
+    /// </summary>
+    public bool IsLapHistorySelected => IsSelectedShellNavigationKey("lap-history") || IsSelectedShellNavigationKey("laps");
+
+    /// <summary>
+    /// Gets a value indicating whether the opponents page is selected.
+    /// </summary>
+    public bool IsOpponentsSelected => IsSelectedShellNavigationKey("opponents");
+
+    /// <summary>
+    /// Gets a value indicating whether the event logs page is selected.
+    /// </summary>
+    public bool IsLogsSelected => IsSelectedShellNavigationKey("event-logs") || IsSelectedShellNavigationKey("logs");
 
     /// <summary>
     /// Gets a value indicating whether a future shell page placeholder should be shown.
     /// </summary>
-    public bool IsPlaceholderNavigationSelected => !IsOverviewSelected && !IsLegacyDashboardSelected;
+    public bool IsPlaceholderNavigationSelected =>
+        !IsOverviewSelected &&
+        !IsChartsSelected &&
+        !IsLapHistorySelected &&
+        !IsOpponentsSelected &&
+        !IsLogsSelected &&
+        !IsLegacyDashboardSelected;
 
     /// <summary>
     /// Gets a value indicating whether the temporary legacy dashboard fallback is selected.
     /// </summary>
-    public bool IsLegacyDashboardSelected => string.Equals(SelectedShellNavigationItem?.Key, "legacy-dashboard", StringComparison.Ordinal);
+    public bool IsLegacyDashboardSelected => IsSelectedShellNavigationKey("legacy-dashboard");
 
     /// <summary>
     /// Gets the selected shell navigation title.
     /// </summary>
     public string SelectedShellNavigationTitle => SelectedShellNavigationItem?.Name ?? "实时概览";
+
+    private bool IsSelectedShellNavigationKey(string key)
+    {
+        return string.Equals(SelectedShellNavigationItem?.Key, key, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
