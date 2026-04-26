@@ -16,7 +16,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void CurrentVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("1.0.2-beta2", VersionInfo.CurrentVersion);
+        Assert.Equal("1.0.2", VersionInfo.CurrentVersion);
     }
 
     /// <summary>
@@ -25,7 +25,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v1.0.2-beta2", VersionInfo.DisplayVersion);
+        Assert.Equal("v1.0.2", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
@@ -37,8 +37,8 @@ public sealed class VersionInfoTests
         var viewModel = Assert.IsType<DashboardViewModel>(
             RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
 
-        Assert.Contains("1.0.2-beta2", viewModel.AppTitleText, StringComparison.Ordinal);
-        Assert.DoesNotContain("1.0.1-beta2", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.Contains("1.0.2", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.DoesNotContain("-beta", viewModel.AppTitleText, StringComparison.Ordinal);
         Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
