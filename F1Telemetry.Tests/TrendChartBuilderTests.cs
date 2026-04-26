@@ -24,6 +24,7 @@ public sealed class TrendChartBuilderTests
             new LapSummary { LapNumber = 6, FuelUsedLitres = 1.93f }
         ]);
 
+        Assert.True(panel.HasData);
         Assert.False(panel.IsEmpty);
         Assert.Equal("多圈燃油趋势", panel.Title);
         Assert.Equal("L", panel.YAxisLabel);
@@ -50,6 +51,7 @@ public sealed class TrendChartBuilderTests
             }
         ]);
 
+        Assert.True(panel.HasData);
         Assert.False(panel.IsEmpty);
         Assert.Equal(4, panel.Series.Count);
         Assert.All(panel.Series, series => Assert.Single(series.Points));
@@ -69,8 +71,25 @@ public sealed class TrendChartBuilderTests
             new LapSummary { LapNumber = 8, TyreWearDeltaPerWheel = null }
         ]);
 
+        Assert.False(panel.HasData);
         Assert.True(panel.IsEmpty);
-        Assert.Equal("暂无历史圈数据", panel.EmptyMessage);
+        Assert.Equal("等待轮胎磨损数据", panel.EmptyStateText);
+        Assert.Empty(panel.Series);
+    }
+
+    /// <summary>
+    /// Verifies that missing completed fuel laps reports the fuel-specific empty state.
+    /// </summary>
+    [Fact]
+    public void BuildFuelTrendPanel_WithoutFuelPoints_ReturnsFuelEmptyState()
+    {
+        var builder = new TrendChartBuilder();
+
+        var panel = builder.BuildFuelTrendPanel(Array.Empty<LapSummary>());
+
+        Assert.False(panel.HasData);
+        Assert.True(panel.IsEmpty);
+        Assert.Equal("完成至少一圈后显示", panel.EmptyStateText);
         Assert.Empty(panel.Series);
     }
 }

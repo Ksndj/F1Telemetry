@@ -5,7 +5,6 @@ using System.Windows.Media;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.ViewModels;
 using ScottPlot;
-using ScottPlot.DataSources;
 using ScottPlot.Plottables;
 using ScottPlot.WPF;
 
@@ -17,8 +16,6 @@ namespace F1Telemetry.App.Views.Controls;
 public partial class TelemetryChartControl : UserControl
 {
     private ChartPanelViewModel? _chartPanel;
-    private Scatter[] _scatterSeries = Array.Empty<Scatter>();
-    private List<Coordinates>[] _seriesBuffers = Array.Empty<List<Coordinates>>();
     private readonly WpfPlot _plotHost;
 
     /// <summary>
@@ -80,11 +77,11 @@ public partial class TelemetryChartControl : UserControl
     private void OnChartPanelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(ChartPanelViewModel.Series)
-            or nameof(ChartPanelViewModel.IsEmpty)
+            or nameof(ChartPanelViewModel.HasData)
             or nameof(ChartPanelViewModel.Title)
             or nameof(ChartPanelViewModel.XAxisLabel)
             or nameof(ChartPanelViewModel.YAxisLabel)
-            or nameof(ChartPanelViewModel.EmptyMessage))
+            or nameof(ChartPanelViewModel.EmptyStateText))
         {
             RefreshChart();
         }
@@ -98,65 +95,46 @@ public partial class TelemetryChartControl : UserControl
             EmptyStateTextBlock.Text = "等待图表数据";
             EmptyStateBorder.Visibility = Visibility.Visible;
             PlotBorder.Visibility = Visibility.Collapsed;
+            _plotHost.Plot.Clear();
+            _plotHost.Refresh();
             return;
         }
 
-        EmptyStateTextBlock.Text = panel.EmptyMessage;
-        EmptyStateBorder.Visibility = panel.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
-        PlotBorder.Visibility = panel.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
+        var plottableSeries = panel.Series
+            .Select(series => new
+            {
+                Series = series,
+                Points = ToCoordinates(series.Points).ToList()
+            })
+            .Where(series => series.Points.Count > 0)
+            .ToArray();
 
-        if (panel.IsEmpty)
-        {
-            return;
-        }
+        EmptyStateTextBlock.Text = panel.EmptyStateText;
+        var hasData = panel.HasData && plottableSeries.Length > 0;
+        EmptyStateBorder.Visibility = hasData ? Visibility.Collapsed : Visibility.Visible;
+        PlotBorder.Visibility = hasData ? Visibility.Visible : Visibility.Collapsed;
 
         var plot = _plotHost.Plot;
+        plot.Clear();
+
+        if (!hasData)
+        {
+            _plotHost.Refresh();
+            return;
+        }
+
         plot.Axes.Bottom.Label.Text = panel.XAxisLabel;
         plot.Axes.Left.Label.Text = panel.YAxisLabel;
         plot.Axes.Title.Label.Text = panel.Title;
 
-        if (ShouldRebuildSeries(panel.Series))
+        foreach (var series in plottableSeries)
         {
-            plot.Clear();
-            _seriesBuffers = panel.Series
-                .Select(series => ToCoordinates(series.Points).ToList())
-                .ToArray();
-            _scatterSeries = panel.Series
-                .Zip(_seriesBuffers, (series, buffer) => CreateScatter(series, buffer))
-                .ToArray();
-            plot.ShowLegend();
-        }
-        else
-        {
-            for (var index = 0; index < _seriesBuffers.Length; index++)
-            {
-                var points = ToCoordinates(panel.Series[index].Points);
-                var buffer = _seriesBuffers[index];
-                buffer.Clear();
-                buffer.AddRange(points);
-            }
+            CreateScatter(series.Series, series.Points);
         }
 
+        plot.ShowLegend();
         plot.Axes.AutoScale();
         _plotHost.Refresh();
-    }
-
-    private bool ShouldRebuildSeries(IReadOnlyList<ChartSeriesModel> series)
-    {
-        if (_scatterSeries.Length != series.Count)
-        {
-            return true;
-        }
-
-        for (var index = 0; index < series.Count; index++)
-        {
-            if (!string.Equals(_scatterSeries[index].LegendText, series[index].Name, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private Scatter CreateScatter(ChartSeriesModel series, List<Coordinates> points)
@@ -164,13 +142,14 @@ public partial class TelemetryChartControl : UserControl
         var scatter = _plotHost.Plot.Add.Scatter(points, ToScottPlotColor(series.StrokeBrush));
         scatter.LegendText = series.Name;
         scatter.LineWidth = 2f;
-        scatter.MarkerSize = 0f;
+        scatter.MarkerSize = points.Count == 1 ? 6f : 0f;
         return scatter;
     }
 
     private static Coordinates[] ToCoordinates(IReadOnlyList<ChartPointModel> points)
     {
         return points
+            .Where(point => double.IsFinite(point.X) && double.IsFinite(point.Y))
             .Select(point => new Coordinates(point.X, point.Y))
             .ToArray();
     }

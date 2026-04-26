@@ -11,8 +11,7 @@ public sealed class ChartPanelViewModel : ViewModelBase
     private string _title = string.Empty;
     private string _xAxisLabel = string.Empty;
     private string _yAxisLabel = string.Empty;
-    private string _emptyMessage = string.Empty;
-    private bool _isEmpty;
+    private string _emptyStateText = string.Empty;
     private IReadOnlyList<ChartSeriesModel> _series = Array.Empty<ChartSeriesModel>();
 
     /// <summary>
@@ -42,8 +41,9 @@ public sealed class ChartPanelViewModel : ViewModelBase
         _title = title;
         _xAxisLabel = xAxisLabel;
         _yAxisLabel = yAxisLabel;
-        _emptyMessage = emptyMessage;
-        _isEmpty = isEmpty;
+        _emptyStateText = string.IsNullOrWhiteSpace(emptyMessage)
+            ? "等待图表数据"
+            : emptyMessage;
         _series = series ?? Array.Empty<ChartSeriesModel>();
     }
 
@@ -77,20 +77,29 @@ public sealed class ChartPanelViewModel : ViewModelBase
     /// <summary>
     /// Gets the empty-state message.
     /// </summary>
+    public string EmptyStateText
+    {
+        get => _emptyStateText;
+        private set => SetProperty(ref _emptyStateText, string.IsNullOrWhiteSpace(value) ? "等待图表数据" : value);
+    }
+
+    /// <summary>
+    /// Gets the legacy empty-state message alias.
+    /// </summary>
     public string EmptyMessage
     {
-        get => _emptyMessage;
-        private set => SetProperty(ref _emptyMessage, value);
+        get => EmptyStateText;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the chart contains at least one finite plottable point.
+    /// </summary>
+    public bool HasData => HasPlottablePoints(_series);
 
     /// <summary>
     /// Gets a value indicating whether the chart currently has no plottable data.
     /// </summary>
-    public bool IsEmpty
-    {
-        get => _isEmpty;
-        private set => SetProperty(ref _isEmpty, value);
-    }
+    public bool IsEmpty => !HasData;
 
     /// <summary>
     /// Gets the current chart series.
@@ -112,14 +121,20 @@ public sealed class ChartPanelViewModel : ViewModelBase
         Title = source.Title;
         XAxisLabel = source.XAxisLabel;
         YAxisLabel = source.YAxisLabel;
-        EmptyMessage = source.EmptyMessage;
-        IsEmpty = source.IsEmpty;
+        EmptyStateText = source.EmptyStateText;
         Series = source.Series;
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(XAxisLabel));
         OnPropertyChanged(nameof(YAxisLabel));
+        OnPropertyChanged(nameof(EmptyStateText));
         OnPropertyChanged(nameof(EmptyMessage));
+        OnPropertyChanged(nameof(HasData));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(Series));
+    }
+
+    private static bool HasPlottablePoints(IReadOnlyList<ChartSeriesModel> series)
+    {
+        return series.Any(chartSeries => chartSeries.Points.Any(point => double.IsFinite(point.X) && double.IsFinite(point.Y)));
     }
 }
