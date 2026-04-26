@@ -245,7 +245,7 @@
                                    Foreground="White"
                                    Text="事件摘要" />
                         <ItemsControl Margin="0,16,0,0"
-                                      ItemsSource="{Binding EventLogs}">
+                                      ItemsSource="{Binding OverviewEventSummaries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Border Margin="0,0,0,8" Style="{StaticResource MetricCardStyle}">

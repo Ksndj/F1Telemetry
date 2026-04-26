@@ -19,11 +19,11 @@
                            Text="事件日志" />
                 <TextBlock Margin="0,6,0,0"
                            Foreground="#9AB0C9"
-                           Text="系统连接、数据接收和比赛事件摘要。"
+                           Text="完整日志按 System / UDP / RaceEvent / AI / TTS / Storage 分类显示。"
                            TextWrapping="Wrap" />
 
                 <ItemsControl Margin="0,18,0,0"
-                              ItemsSource="{Binding EventLogs}">
+                              ItemsSource="{Binding LogEntries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <Border Margin="0,0,0,8"
