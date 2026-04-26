@@ -235,7 +235,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "Milestone 10 · 实时图表";
+    public string Subtitle => "v1.1 · 实时遥测助手";
 
     /// <summary>
     /// Gets the application version text displayed in the shell.
@@ -243,7 +243,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public string ApplicationVersionText => VersionInfo.DisplayVersion;
 
     /// <summary>
-    /// Gets the fixed V1.0.2-M1 shell navigation items.
+    /// Gets the fixed shell navigation items.
     /// </summary>
     public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; }
 
