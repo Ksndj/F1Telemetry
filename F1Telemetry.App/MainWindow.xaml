@@ -20,7 +20,9 @@
         UseLayoutRounding="True"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
-        StateChanged="Window_StateChanged">
+        StateChanged="Window_StateChanged"
+        Closing="Window_Closing"
+        Closed="Window_Closed">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
