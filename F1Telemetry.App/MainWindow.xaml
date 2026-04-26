@@ -336,6 +336,12 @@
                     </Border>
                     <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
                         <StackPanel>
+                            <TextBlock Foreground="#7FA5D8" Text="赛制" />
+                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding SessionTypeText}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                        <StackPanel>
                             <TextBlock Foreground="#7FA5D8" Text="圈数" />
                             <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding LapText}" />
                         </StackPanel>

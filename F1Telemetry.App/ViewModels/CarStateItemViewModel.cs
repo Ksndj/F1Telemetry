@@ -1,3 +1,4 @@
+using F1Telemetry.App.Formatting;
 using F1Telemetry.Core.Models;
 
 namespace F1Telemetry.App.ViewModels;
@@ -60,49 +61,21 @@ public sealed class CarStateItemViewModel
             PositionText = snapshot.Position is null ? "-" : $"P{snapshot.Position}",
             TyreText = FormatTyre(snapshot),
             TyreAgeText = snapshot.TyresAgeLaps is null ? "-" : $"{snapshot.TyresAgeLaps} 圈",
-            PitStatusText = FormatPitStatus(snapshot.PitStatus),
+            PitStatusText = PitStatusFormatter.Format(snapshot.PitStatus, snapshot.NumPitStops),
             GapToPlayerText = FormatGapToPlayer(snapshot, playerCar)
         };
     }
 
     private static string FormatTyre(CarSnapshot snapshot)
     {
-        return snapshot.VisualTyreCompound is null && snapshot.ActualTyreCompound is null
-            ? snapshot.HasTelemetryAccess ? "-" : "不可见"
-            : $"V{snapshot.VisualTyreCompound?.ToString() ?? "-"} / A{snapshot.ActualTyreCompound?.ToString() ?? "-"}";
-    }
-
-    private static string FormatPitStatus(byte? pitStatus)
-    {
-        return pitStatus switch
-        {
-            0 => "赛道",
-            1 => "进站",
-            2 => "Pit 内",
-            null => "-",
-            _ => $"未知({pitStatus})"
-        };
+        return TyreCompoundFormatter.Format(
+            snapshot.VisualTyreCompound,
+            snapshot.ActualTyreCompound,
+            snapshot.HasTelemetryAccess);
     }
 
     private static string FormatGapToPlayer(CarSnapshot snapshot, CarSnapshot? playerCar)
     {
-        if (playerCar?.Position is null || snapshot.Position is null)
-        {
-            return "-";
-        }
-
-        if (snapshot.Position == playerCar.Position)
-        {
-            return "同位置";
-        }
-
-        if (snapshot.DeltaToRaceLeaderInMs is null || playerCar.DeltaToRaceLeaderInMs is null)
-        {
-            return snapshot.Position < playerCar.Position ? "前 -" : "后 -";
-        }
-
-        var gapSeconds = Math.Abs(snapshot.DeltaToRaceLeaderInMs.Value - playerCar.DeltaToRaceLeaderInMs.Value) / 1000d;
-        var prefix = snapshot.Position < playerCar.Position ? "前" : "后";
-        return $"{prefix} {gapSeconds:0.000}s";
+        return OpponentStatusFormatter.FormatGapToPlayer(snapshot, playerCar);
     }
 }

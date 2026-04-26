@@ -1,4 +1,5 @@
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.Formatting;
 
 namespace F1Telemetry.App.ViewModels;
 
@@ -75,7 +76,7 @@ public sealed class LapSummaryItemViewModel
             ErsUsedText = summary.ErsUsed is null ? "-" : $"{summary.ErsUsed.Value / 1_000_000f:0.00} MJ",
             TyreWearDeltaText = summary.TyreWearDelta is null ? "-" : $"{summary.TyreWearDelta:0.0}%",
             ValidityText = summary.IsValid ? "有效" : "无效",
-            TyreWindowText = $"{summary.StartTyre} -> {summary.EndTyre}",
+            TyreWindowText = $"{TyreCompoundFormatter.FormatRawCompoundText(summary.StartTyre)} -> {TyreCompoundFormatter.FormatRawCompoundText(summary.EndTyre)}",
             PitWindowText = $"{FormatPitState(summary.StartedInPit)} -> {FormatPitState(summary.EndedInPit)}"
         };
     }
