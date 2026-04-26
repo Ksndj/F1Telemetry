@@ -13,6 +13,7 @@ using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.Formatting;
+using F1Telemetry.App.Logging;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
@@ -34,6 +35,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxLogEntries = 50;
     private const int MaxPendingEventLogs = 200;
     private const int MaxPendingAiTtsLogs = 200;
+    private const int MaxOverviewEventSummaries = 4;
+    private const int MaxOverviewEventSummaryChars = 40;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
     private readonly IUdpListener _udpListener;
@@ -177,6 +180,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
         AiTtsLogs = new ObservableCollection<LogEntryViewModel>();
+        LogEntries = new ObservableCollection<LogEntryViewModel>();
+        OverviewEventSummaries = new ObservableCollection<LogEntryViewModel>();
         AvailableVoices = new ObservableCollection<string>();
         SpeedChartPanel = new ChartPanelViewModel();
         InputsChartPanel = new ChartPanelViewModel();
@@ -191,7 +196,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
         ResetChartPanels();
 
-        AiTtsLogs.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
+        var initialLogEntry = CreateLogEntry("System", "AI / TTS 日志已准备就绪。");
+        AiTtsLogs.Add(initialLogEntry);
+        LogEntries.Add(initialLogEntry);
         LoadAvailableVoices();
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
@@ -557,6 +564,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the event log entries.
     /// </summary>
     public ObservableCollection<LogEntryViewModel> EventLogs { get; }
+
+    /// <summary>
+    /// Gets the full unified log entries shown in LogsView.
+    /// </summary>
+    public ObservableCollection<LogEntryViewModel> LogEntries { get; }
+
+    /// <summary>
+    /// Gets the compressed, prioritized event summaries shown on the Overview page.
+    /// </summary>
+    public ObservableCollection<LogEntryViewModel> OverviewEventSummaries { get; }
 
     /// <summary>
     /// Gets the unified AI, TTS, and system log entries.
@@ -1283,11 +1300,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
 
             EventLogs.Insert(0, logEntry);
+            LogEntries.Insert(0, logEntry);
 
             while (EventLogs.Count > MaxLogEntries)
             {
                 EventLogs.RemoveAt(EventLogs.Count - 1);
             }
+
+            TrimUnifiedLogEntries();
+            RebuildOverviewEventSummaries();
         }
     }
 
@@ -1466,7 +1487,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         _lastEventCode = eventCode;
-        EnqueueEventLog("事件", $"收到赛道事件：{eventCode}");
+        EnqueueEventLog("UDP", $"收到原始事件：{eventCode}");
     }
 
     private void EnqueueEventLog(string category, string message)
@@ -1496,11 +1517,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
             UpdateOverviewAiTtsSummary(logEntry);
             AiTtsLogs.Insert(0, logEntry);
+            LogEntries.Insert(0, logEntry);
 
             while (AiTtsLogs.Count > MaxLogEntries)
             {
                 AiTtsLogs.RemoveAt(AiTtsLogs.Count - 1);
             }
+
+            TrimUnifiedLogEntries();
+            RebuildOverviewEventSummaries();
         }
     }
 
@@ -1527,6 +1552,26 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase))
         {
             OverviewRecentTtsStatusText = logEntry.Message;
+        }
+    }
+
+    private void TrimUnifiedLogEntries()
+    {
+        while (LogEntries.Count > MaxLogEntries)
+        {
+            LogEntries.RemoveAt(LogEntries.Count - 1);
+        }
+    }
+
+    private void RebuildOverviewEventSummaries()
+    {
+        OverviewEventSummaries.Clear();
+        foreach (var summary in OverviewEventSummaryFormatter.BuildSummaries(
+                     LogEntries,
+                     MaxOverviewEventSummaries,
+                     MaxOverviewEventSummaryChars))
+        {
+            OverviewEventSummaries.Add(summary);
         }
     }
 
@@ -1842,17 +1887,18 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static LogEntryViewModel CreateLogEntry(string category, string message)
     {
+        var normalizedCategory = LogCategoryFormatter.Normalize(category, message);
         return new LogEntryViewModel
         {
             Timestamp = DateTimeOffset.Now.ToString("HH:mm:ss"),
-            Category = category,
+            Category = normalizedCategory,
             Message = message
         };
     }
 
     private static string BuildEventCategory(RaceEvent raceEvent)
     {
-        return raceEvent.Severity == EventSeverity.Warning ? "告警" : "事件";
+        return "RaceEvent";
     }
 
     private static string BuildTrackText(sbyte? trackId)
