@@ -384,6 +384,11 @@ public sealed class AppShutdownTests
         {
             return Task.CompletedTask;
         }
+
+        public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class BlockingSettingsStore : IAppSettingsStore
@@ -411,6 +416,11 @@ public sealed class AppShutdownTests
         }
 
         public Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

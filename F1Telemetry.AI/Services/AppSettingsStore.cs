@@ -70,6 +70,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
         await WriteDocumentAsync(existing with { UdpRawLog = NormalizeUdpRawLogOptions(options) }, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var existing = await LoadDocumentCoreAsync(cancellationToken);
+        await WriteDocumentAsync(existing with { Udp = NormalizeUdpSettings(settings) }, cancellationToken);
+    }
+
     private async Task<AppSettingsDocument> LoadDocumentCoreAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_settingsPath))
@@ -87,7 +96,8 @@ public sealed class AppSettingsStore : IAppSettingsStore
             {
                 Ai = ReadAiSettings(root),
                 Tts = ReadTtsSettings(root),
-                UdpRawLog = ReadUdpRawLogOptions(root)
+                UdpRawLog = ReadUdpRawLogOptions(root),
+                Udp = ReadUdpSettings(root)
             };
         }
         catch
@@ -209,6 +219,34 @@ public sealed class AppSettingsStore : IAppSettingsStore
             DirectoryPath = options.DirectoryPath?.Trim() ?? string.Empty,
             QueueCapacity = Math.Clamp(options.QueueCapacity, 0, 100_000)
         };
+    }
+
+    private static UdpSettings ReadUdpSettings(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("udp", out var udpElement))
+        {
+            return new UdpSettings();
+        }
+
+        try
+        {
+            return NormalizeUdpSettings(
+                new UdpSettings
+                {
+                    ListenPort = ReadInt(udpElement, "listenPort", UdpSettings.DefaultListenPort)
+                });
+        }
+        catch
+        {
+            return new UdpSettings();
+        }
+    }
+
+    private static UdpSettings NormalizeUdpSettings(UdpSettings settings)
+    {
+        return settings.ListenPort is >= UdpSettings.MinListenPort and <= UdpSettings.MaxListenPort
+            ? settings
+            : new UdpSettings();
     }
 
     private static bool TryGetAiElement(JsonElement rootElement, out JsonElement aiElement)

@@ -236,6 +236,11 @@ public sealed class DashboardChartStateTests
         {
             return Task.CompletedTask;
         }
+
+        public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeUdpRawLogWriter : IUdpRawLogWriter

@@ -40,6 +40,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxOverviewEventSummaryChars = 40;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
+    private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
     private readonly IUdpListener _udpListener;
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
     private readonly SessionStateStore _sessionStateStore;
@@ -55,6 +56,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
     private readonly DispatcherTimer _uiTimer;
+    private readonly DispatcherTimer _udpPortSaveTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly Queue<LogEntryViewModel> _pendingEventLogs = new();
     private readonly Queue<LogEntryViewModel> _pendingAiTtsLogs = new();
@@ -133,6 +135,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _aiSettingsSaveVersion;
     private int _ttsSettingsSaveVersion;
     private bool _isAiAnalysisRunning;
+    private int _lastValidUdpListenPort = UdpSettings.DefaultListenPort;
+    private int _lastSavedUdpListenPort = UdpSettings.DefaultListenPort;
+    private int _udpSettingsSaveVersion;
     private ulong? _activeSessionUid;
     private string? _lastAnalyzedLapKey;
     private string? _lastPersistedLapKey;
@@ -233,6 +238,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
         _uiTimer.Tick += OnUiTimerTick;
         _uiTimer.Start();
+
+        _udpPortSaveTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+        {
+            Interval = UdpPortSaveDebounceInterval
+        };
+        _udpPortSaveTimer.Tick += OnUdpPortSaveTimerTick;
+
         _ = LoadSettingsAsync();
     }
 
@@ -724,6 +736,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(SidebarUdpPortText));
                 OnPropertyChanged(nameof(SidebarUdpStatusTooltip));
                 _startListeningCommand.RaiseCanExecuteChanged();
+                QueuePersistUdpSettingsIfValid();
             }
         }
     }
@@ -771,7 +784,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <summary>
     /// Gets the compact UDP port text shown in the sidebar.
     /// </summary>
-    public string SidebarUdpPortText => $"使用中: {(ListeningPort?.ToString(CultureInfo.InvariantCulture) ?? PortText)} UDP";
+    public string SidebarUdpPortText => $"使用中: {GetSidebarUdpPortText()} UDP";
 
     /// <summary>
     /// Gets the full UDP sidebar tooltip.
@@ -1098,9 +1111,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        StopUdpPortSaveTimer();
+        await PersistCurrentUdpSettingsIfNeededAsync(force: true, CancellationToken.None);
+
         _disposed = true;
         TryCancelLifecycle();
         StopUiTimer();
+        StopUdpPortSaveTimer(unsubscribe: true);
 
         _udpListener.DatagramReceived -= OnDatagramReceived;
         _udpListener.ReceiveFaulted -= OnReceiveFaulted;
@@ -1186,6 +1203,170 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _uiTimer.Dispatcher.Invoke(StopTimer);
     }
 
+    private void StopUdpPortSaveTimer(bool unsubscribe = false)
+    {
+        void StopTimer()
+        {
+            _udpPortSaveTimer.Stop();
+            if (unsubscribe)
+            {
+                _udpPortSaveTimer.Tick -= OnUdpPortSaveTimerTick;
+            }
+        }
+
+        if (_udpPortSaveTimer.Dispatcher.CheckAccess())
+        {
+            StopTimer();
+            return;
+        }
+
+        _udpPortSaveTimer.Dispatcher.Invoke(StopTimer);
+    }
+
+    private void QueuePersistUdpSettingsIfValid()
+    {
+        if (_isApplyingSettings || _disposed)
+        {
+            return;
+        }
+
+        if (!TryParseUdpListenPort(PortText, out var port))
+        {
+            StopUdpPortSaveTimer();
+            StatusMessage = "监听端口无效，请输入 1 到 65535 之间的端口。";
+            return;
+        }
+
+        _lastValidUdpListenPort = port;
+        if (port == _lastSavedUdpListenPort)
+        {
+            StopUdpPortSaveTimer();
+            return;
+        }
+
+        RestartUdpPortSaveTimer();
+    }
+
+    private void RestartUdpPortSaveTimer()
+    {
+        void RestartTimer()
+        {
+            _udpPortSaveTimer.Stop();
+            _udpPortSaveTimer.Start();
+        }
+
+        if (_udpPortSaveTimer.Dispatcher.CheckAccess())
+        {
+            RestartTimer();
+            return;
+        }
+
+        _udpPortSaveTimer.Dispatcher.Invoke(RestartTimer);
+    }
+
+    private void OnUdpPortSaveTimerTick(object? sender, EventArgs e)
+    {
+        StopUdpPortSaveTimer();
+        _ = PersistCurrentUdpSettingsIfNeededAsync(force: false, CancellationToken.None);
+    }
+
+    private async Task<bool> PersistCurrentUdpSettingsIfNeededAsync(bool force, CancellationToken cancellationToken)
+    {
+        if (!TryParseUdpListenPort(PortText, out var port))
+        {
+            return false;
+        }
+
+        return await PersistUdpSettingsAsync(port, force, cancellationToken);
+    }
+
+    private async Task<bool> PersistUdpSettingsAsync(int port, bool force, CancellationToken cancellationToken)
+    {
+        if (port is < UdpSettings.MinListenPort or > UdpSettings.MaxListenPort)
+        {
+            return false;
+        }
+
+        if (!force && _disposed)
+        {
+            return false;
+        }
+
+        if (port == _lastSavedUdpListenPort)
+        {
+            _lastValidUdpListenPort = port;
+            return true;
+        }
+
+        var saveVersion = Interlocked.Increment(ref _udpSettingsSaveVersion);
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync(cancellationToken);
+            gateHeld = true;
+            if (!force && (saveVersion < Volatile.Read(ref _udpSettingsSaveVersion) || _disposed))
+            {
+                return false;
+            }
+
+            if (port == _lastSavedUdpListenPort)
+            {
+                _lastValidUdpListenPort = port;
+                return true;
+            }
+
+            await _appSettingsStore.SaveUdpSettingsAsync(new UdpSettings { ListenPort = port }, CancellationToken.None);
+            if (force || saveVersion == Volatile.Read(ref _udpSettingsSaveVersion))
+            {
+                _lastSavedUdpListenPort = port;
+                _lastValidUdpListenPort = port;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"UDP 端口设置保存失败：{ex.Message}");
+            return false;
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private static bool TryParseUdpListenPort(string? value, out int port)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out port) &&
+               port is >= UdpSettings.MinListenPort and <= UdpSettings.MaxListenPort;
+    }
+
+    private static int NormalizeUdpListenPort(int listenPort)
+    {
+        return listenPort is >= UdpSettings.MinListenPort and <= UdpSettings.MaxListenPort
+            ? listenPort
+            : UdpSettings.DefaultListenPort;
+    }
+
+    private string GetSidebarUdpPortText()
+    {
+        if (ListeningPort is { } listeningPort)
+        {
+            return listeningPort.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return TryParseUdpListenPort(PortText, out var port)
+            ? port.ToString(CultureInfo.InvariantCulture)
+            : _lastValidUdpListenPort.ToString(CultureInfo.InvariantCulture);
+    }
+
     private bool CanStartListening()
     {
         return !_isBusy && !IsListening;
@@ -1214,7 +1395,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private async Task StartListeningAsync()
     {
-        if (!int.TryParse(PortText, out var port) || port is < 1 or > 65535)
+        if (!TryParseUdpListenPort(PortText, out var port))
         {
             StatusMessage = "监听端口无效，请输入 1 到 65535 之间的端口。";
             EnqueueEventLog("系统", StatusMessage);
@@ -1227,6 +1408,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         try
         {
+            StopUdpPortSaveTimer();
+            await PersistUdpSettingsAsync(port, force: true, CancellationToken.None);
             await _udpListener.StartAsync(port, _lifecycleCts.Token);
             ListeningPort = _udpListener.ListeningPort;
             IsListening = _udpListener.IsListening;
@@ -1689,6 +1872,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             var settings = await _appSettingsStore.LoadAsync(_lifecycleCts.Token);
             _isApplyingSettings = true;
+            var udpListenPort = NormalizeUdpListenPort(settings.Udp.ListenPort);
+            _lastValidUdpListenPort = udpListenPort;
+            _lastSavedUdpListenPort = udpListenPort;
+            PortText = udpListenPort.ToString(CultureInfo.InvariantCulture);
             AiEnabled = settings.Ai.AiEnabled;
             AiBaseUrl = settings.Ai.BaseUrl;
             AiModel = settings.Ai.Model;
