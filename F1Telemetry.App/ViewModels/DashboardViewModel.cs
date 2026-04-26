@@ -12,6 +12,7 @@ using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Charts;
+using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Interfaces;
@@ -27,7 +28,7 @@ namespace F1Telemetry.App.ViewModels;
 /// <summary>
 /// Drives the real-time dashboard and coordinates UI-safe access to analytics, AI, TTS, and storage outputs.
 /// </summary>
-public sealed class DashboardViewModel : ViewModelBase, IDisposable
+public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoordinator, IDisposable
 {
     private const int MaxLogEntries = 50;
     private const int MaxPendingEventLogs = 200;
@@ -119,6 +120,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     private string? _lastAnalyzedLapKey;
     private string? _lastPersistedLapKey;
     private int? _lastTrendRefreshLapNumber;
+    private readonly object _shutdownGate = new();
+    private Task? _shutdownTask;
     private bool _disposed;
 
     /// <summary>
@@ -949,9 +952,26 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Releases background workers and subscriptions before the shell exits.
+    /// </summary>
+    public Task ShutdownAsync()
+    {
+        lock (_shutdownGate)
+        {
+            _shutdownTask ??= ShutdownCoreAsync();
+            return _shutdownTask;
+        }
+    }
+
+    /// <summary>
     /// Releases the UDP subscriptions and timer resources owned by the view model.
     /// </summary>
     public void Dispose()
+    {
+        ShutdownAsync().GetAwaiter().GetResult();
+    }
+
+    private async Task ShutdownCoreAsync()
     {
         if (_disposed)
         {
@@ -959,8 +979,8 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
         }
 
         _disposed = true;
-        _uiTimer.Stop();
-        _uiTimer.Tick -= OnUiTimerTick;
+        TryCancelLifecycle();
+        StopUiTimer();
 
         _udpListener.DatagramReceived -= OnDatagramReceived;
         _udpListener.ReceiveFaulted -= OnReceiveFaulted;
@@ -969,7 +989,7 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         try
         {
-            _storagePersistenceService.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            await _udpListener.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         catch
         {
@@ -977,18 +997,65 @@ public sealed class DashboardViewModel : ViewModelBase, IDisposable
 
         try
         {
-            _udpListener.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            _ttsQueue.Dispose();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await _storagePersistenceService.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         catch
         {
         }
         finally
         {
-            _lifecycleCts.Cancel();
-            _ttsQueue.Dispose();
-            _lifecycleCts.Dispose();
-            _settingsGate.Dispose();
+            try
+            {
+                _lifecycleCts.Dispose();
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                _settingsGate.Dispose();
+            }
+            catch
+            {
+            }
         }
+    }
+
+    private void TryCancelLifecycle()
+    {
+        try
+        {
+            _lifecycleCts.Cancel();
+        }
+        catch
+        {
+        }
+    }
+
+    private void StopUiTimer()
+    {
+        void StopTimer()
+        {
+            _uiTimer.Stop();
+            _uiTimer.Tick -= OnUiTimerTick;
+        }
+
+        if (_uiTimer.Dispatcher.CheckAccess())
+        {
+            StopTimer();
+            return;
+        }
+
+        _uiTimer.Dispatcher.Invoke(StopTimer);
     }
 
     private bool CanStartListening()

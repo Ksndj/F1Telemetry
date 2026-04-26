@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -12,6 +13,8 @@ namespace F1Telemetry.App;
 public partial class MainWindow : Window
 {
     private Storyboard? _windowStateToastStoryboard;
+    private bool _shutdownStarted;
+    private bool _shutdownCompleted;
 
     /// <summary>
     /// Initializes the main window shell.
@@ -31,6 +34,64 @@ public partial class MainWindow : Window
         _ = Dispatcher.BeginInvoke(
             DispatcherPriority.Render,
             new Action(() => ApplyWindowStateVisuals(WindowState, animate: WindowState != WindowState.Minimized)));
+    }
+
+    private async void Window_Closing(object sender, CancelEventArgs e)
+    {
+        if (_shutdownCompleted)
+        {
+            return;
+        }
+
+        if (DataContext is not IApplicationShutdownCoordinator shutdownCoordinator)
+        {
+            _shutdownCompleted = true;
+            return;
+        }
+
+        e.Cancel = true;
+        if (_shutdownStarted)
+        {
+            return;
+        }
+
+        _shutdownStarted = true;
+        try
+        {
+            await shutdownCoordinator.ShutdownAsync();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _shutdownCompleted = true;
+            CloseAfterShutdown();
+        }
+    }
+
+    private void Window_Closed(object sender, EventArgs e)
+    {
+        if (_shutdownCompleted)
+        {
+            Application.Current?.Shutdown();
+        }
+    }
+
+    private void CloseAfterShutdown()
+    {
+        _ = Dispatcher.BeginInvoke(
+            DispatcherPriority.Send,
+            new Action(() =>
+            {
+                try
+                {
+                    Close();
+                }
+                catch (InvalidOperationException)
+                {
+                }
+            }));
     }
 
     private void ApplyWindowStateVisuals(WindowState windowState, bool animate)
