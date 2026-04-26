@@ -12,6 +12,7 @@ using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Charts;
+using F1Telemetry.App.Formatting;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
@@ -71,6 +72,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _portText = "20777";
     private string _statusMessage = "准备监听 F1 25 UDP。";
     private string _trackText = "等待 Session 包。";
+    private string _sessionTypeText = "未知赛制";
     private string _lapText = "-";
     private string _weatherText = "-";
     private string _playerName = "等待玩家车辆状态。";
@@ -735,6 +737,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the current session type summary.
+    /// </summary>
+    public string SessionTypeText
+    {
+        get => _sessionTypeText;
+        private set => SetProperty(ref _sessionTypeText, value);
+    }
+
+    /// <summary>
     /// Gets the current lap summary.
     /// </summary>
     public string LapText
@@ -1321,6 +1332,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var playerCar = sessionState.PlayerCar;
 
         TrackText = BuildTrackText(sessionState.TrackId);
+        SessionTypeText = SessionTypeFormatter.Format(sessionState.SessionType);
         WeatherText = BuildWeatherText(sessionState);
         LapText = BuildLapText(sessionState, playerCar);
         UpdatePlayerCard(sessionState, playerCar);
@@ -1366,13 +1378,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         PlayerFuelText = BuildFuelText(playerCar);
         PlayerErsText = BuildErsText(playerCar);
         PlayerTyreText = BuildTyreText(playerCar);
-        PlayerTyreAgeText = playerCar.TyresAgeLaps is null ? "-" : $"{playerCar.TyresAgeLaps} laps";
+        PlayerTyreAgeText = playerCar.TyresAgeLaps is null ? "-" : $"{playerCar.TyresAgeLaps} 圈";
         OverviewSpeedText = playerCar.Telemetry is null ? "-" : $"{playerCar.Telemetry.SpeedKph:0} km/h";
         OverviewGearText = FormatGear(playerCar.Gear);
         OverviewThrottleText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Throttle.ToString("P0", CultureInfo.InvariantCulture);
         OverviewBrakeText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Brake.ToString("P0", CultureInfo.InvariantCulture);
         OverviewDrsText = playerCar.IsDrsEnabled is null ? "-" : playerCar.IsDrsEnabled.Value ? "On" : "Off";
-        OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"Average {playerCar.TyreWear.Value:0.0}%";
+        OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"平均 {playerCar.TyreWear.Value:0.0}%";
     }
 
     private void RebuildOpponentCars(IReadOnlyList<CarSnapshot> opponents, CarSnapshot? playerCar)
@@ -1837,7 +1849,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string BuildTrackText(sbyte? trackId)
     {
-        return trackId is null ? "等待 Session 包。" : $"赛道 ID {trackId}";
+        return TrackNameFormatter.Format(trackId);
     }
 
     private static string BuildWeatherText(SessionState sessionState)
@@ -1916,12 +1928,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string BuildTyreText(CarSnapshot playerCar)
     {
-        if (playerCar.VisualTyreCompound is null && playerCar.ActualTyreCompound is null)
-        {
-            return playerCar.HasTelemetryAccess ? "-" : "不可见";
-        }
-
-        return $"V{playerCar.VisualTyreCompound?.ToString() ?? "-"} / A{playerCar.ActualTyreCompound?.ToString() ?? "-"}";
+        return TyreCompoundFormatter.Format(
+            playerCar.VisualTyreCompound,
+            playerCar.ActualTyreCompound,
+            playerCar.HasTelemetryAccess);
     }
 
     private static string BuildHighlightedLapText(string label, LapSummary? summary)

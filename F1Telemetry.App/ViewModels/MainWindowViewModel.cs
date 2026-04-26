@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
+using F1Telemetry.App.Formatting;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Interfaces;
@@ -505,7 +506,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
         PlayerInputs = playerCar.Telemetry is null
             ? "输入不可见"
             : $"Throttle {playerCar.Telemetry.Throttle:P0} · Brake {playerCar.Telemetry.Brake:P0}";
-        PlayerStatus = $"Fuel {FormatNullable(playerCar.FuelInTank, "0.0")} · Tyre {playerCar.VisualTyreCompound?.ToString() ?? "-"} · Age {playerCar.TyresAgeLaps?.ToString() ?? "-"}";
+        PlayerStatus = $"Fuel {FormatNullable(playerCar.FuelInTank, "0.0")} · Tyre {TyreCompoundFormatter.Format(playerCar.VisualTyreCompound, playerCar.ActualTyreCompound, playerCar.HasTelemetryAccess)} · Age {playerCar.TyresAgeLaps?.ToString() ?? "-"}";
         PlayerTelemetryAccess = playerCar.HasTelemetryAccess ? "玩家车遥测完整可见" : "玩家车遥测受限";
     }
 
@@ -526,7 +527,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return "等待 Session 包。";
         }
 
-        return $"Track {sessionState.TrackId?.ToString() ?? "-"} · Session {sessionState.SessionType?.ToString() ?? "-"}";
+        return $"{TrackNameFormatter.Format(sessionState.TrackId)} · {SessionTypeFormatter.Format(sessionState.SessionType)}";
     }
 
     private static string BuildSessionConditions(SessionState sessionState)
