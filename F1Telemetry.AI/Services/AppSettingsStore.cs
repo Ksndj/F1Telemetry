@@ -4,12 +4,13 @@ using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Core;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Models;
 
 namespace F1Telemetry.AI.Services;
 
 /// <summary>
-/// Persists AI and TTS settings to a single JSON document under the user's application data profile.
+/// Persists app settings to a single JSON document under the user's application data profile.
 /// </summary>
 public sealed class AppSettingsStore : IAppSettingsStore
 {
@@ -60,6 +61,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
         await WriteDocumentAsync(existing with { Tts = options }, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public async Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var existing = await LoadDocumentCoreAsync(cancellationToken);
+        await WriteDocumentAsync(existing with { UdpRawLog = NormalizeUdpRawLogOptions(options) }, cancellationToken);
+    }
+
     private async Task<AppSettingsDocument> LoadDocumentCoreAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_settingsPath))
@@ -76,7 +86,8 @@ public sealed class AppSettingsStore : IAppSettingsStore
             return new AppSettingsDocument
             {
                 Ai = ReadAiSettings(root),
-                Tts = ReadTtsSettings(root)
+                Tts = ReadTtsSettings(root),
+                UdpRawLog = ReadUdpRawLogOptions(root)
             };
         }
         catch
@@ -166,6 +177,38 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             return new TtsOptions();
         }
+    }
+
+    private static UdpRawLogOptions ReadUdpRawLogOptions(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("udpRawLog", out var rawLogElement))
+        {
+            return new UdpRawLogOptions();
+        }
+
+        try
+        {
+            return NormalizeUdpRawLogOptions(
+                new UdpRawLogOptions
+                {
+                    Enabled = ReadBool(rawLogElement, "enabled"),
+                    DirectoryPath = ReadString(rawLogElement, "directoryPath"),
+                    QueueCapacity = ReadInt(rawLogElement, "queueCapacity", 4096)
+                });
+        }
+        catch
+        {
+            return new UdpRawLogOptions();
+        }
+    }
+
+    private static UdpRawLogOptions NormalizeUdpRawLogOptions(UdpRawLogOptions options)
+    {
+        return options with
+        {
+            DirectoryPath = options.DirectoryPath?.Trim() ?? string.Empty,
+            QueueCapacity = Math.Clamp(options.QueueCapacity, 0, 100_000)
+        };
     }
 
     private static bool TryGetAiElement(JsonElement rootElement, out JsonElement aiElement)

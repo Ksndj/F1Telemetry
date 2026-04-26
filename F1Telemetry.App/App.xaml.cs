@@ -30,6 +30,7 @@ public partial class App : Application
         AppPaths.InitializeUserData();
 
         var udpListener = new UdpListener();
+        var udpRawLogWriter = new UdpRawLogWriter();
         var packetDispatcher = new PacketDispatcher(new PacketHeaderParser());
         var lapAnalyzer = new LapAnalyzer();
         var eventDetectionService = new EventDetectionService();
@@ -62,6 +63,7 @@ public partial class App : Application
             eventDetectionService,
             aiAnalysisService,
             appSettingsStore,
+            udpRawLogWriter,
             ttsMessageFactory,
             ttsQueue,
             storagePersistenceService,

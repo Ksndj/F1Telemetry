@@ -84,6 +84,7 @@ public sealed class DashboardChartStateTests
             new EventDetectionService(),
             new FakeAiAnalysisService(),
             new FakeAppSettingsStore(),
+            new FakeUdpRawLogWriter(),
             new TtsMessageFactory(),
             ttsQueue,
             new FakeStoragePersistenceService(),
@@ -229,6 +230,34 @@ public sealed class DashboardChartStateTests
         public Task SaveTtsSettingsAsync(TtsOptions options, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
+        }
+
+        public Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeUdpRawLogWriter : IUdpRawLogWriter
+    {
+        public UdpRawLogStatus Status { get; private set; } = new();
+
+        public void UpdateOptions(UdpRawLogOptions options)
+        {
+            Status = Status with
+            {
+                Enabled = options.Enabled,
+                DirectoryPath = options.DirectoryPath
+            };
+        }
+
+        public void TryEnqueue(UdpDatagram datagram)
+        {
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
         }
     }
 

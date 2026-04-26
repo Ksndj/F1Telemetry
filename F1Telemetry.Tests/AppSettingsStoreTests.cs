@@ -3,6 +3,7 @@ using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Models;
 using Xunit;
 
@@ -33,6 +34,9 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(100, settings.Tts.Volume);
         Assert.Equal(0, settings.Tts.Rate);
         Assert.Equal(8, settings.Tts.CooldownSeconds);
+        Assert.False(settings.UdpRawLog.Enabled);
+        Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
+        Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
     }
 
     /// <summary>
@@ -204,6 +208,58 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(72, persisted.Tts.Volume);
         Assert.Equal(-1, persisted.Tts.Rate);
         Assert.Equal(12, persisted.Tts.CooldownSeconds);
+    }
+
+    /// <summary>
+    /// Verifies saving raw UDP log settings preserves AI and TTS settings.
+    /// </summary>
+    [Fact]
+    public async Task SaveUdpRawLogOptionsAsync_PreservesExistingAiAndTtsBlocks()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "tts": {
+                "enabled": true,
+                "voiceName": "Voice A",
+                "volume": 80,
+                "rate": 1,
+                "cooldownSeconds": 9
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveUdpRawLogOptionsAsync(
+            new UdpRawLogOptions
+            {
+                Enabled = true,
+                DirectoryPath = "C:\\Logs\\Udp",
+                QueueCapacity = 64
+            });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.Tts.TtsEnabled);
+        Assert.True(persisted.UdpRawLog.Enabled);
+        Assert.Equal("C:\\Logs\\Udp", persisted.UdpRawLog.DirectoryPath);
+        Assert.Equal(64, persisted.UdpRawLog.QueueCapacity);
+        Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
+        Assert.Equal("C:\\Logs\\Udp", json.RootElement.GetProperty("udpRawLog").GetProperty("directoryPath").GetString());
     }
 
     /// <summary>
