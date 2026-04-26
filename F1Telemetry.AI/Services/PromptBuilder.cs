@@ -1,6 +1,7 @@
 using System.Text;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Core.Formatting;
 
 namespace F1Telemetry.AI.Services;
 
@@ -36,6 +37,18 @@ Each value must be a concise string.
         var builder = new StringBuilder();
         var recentLaps = context.RecentLaps ?? Array.Empty<LapSummary>();
         var recentEvents = context.RecentEvents ?? Array.Empty<string>();
+        var sessionTypeText = string.IsNullOrWhiteSpace(context.SessionTypeText)
+            ? SessionModeFormatter.FormatDisplayName(context.SessionMode)
+            : context.SessionTypeText.Trim();
+        var sessionFocusText = string.IsNullOrWhiteSpace(context.SessionFocusText)
+            ? SessionModeFormatter.FormatFocus(context.SessionMode)
+            : context.SessionFocusText.Trim();
+
+        builder.AppendLine($"Session mode: {context.SessionMode}");
+        builder.AppendLine($"赛制：{sessionTypeText}");
+        builder.AppendLine($"当前赛制重点：{sessionFocusText}");
+        builder.AppendLine($"赛制提示：{SessionModeFormatter.FormatPromptGuidance(context.SessionMode)}");
+        builder.AppendLine();
 
         AppendLapSection(builder, "Latest lap", context.LatestLap);
         AppendLapSection(builder, "Best lap", context.BestLap);

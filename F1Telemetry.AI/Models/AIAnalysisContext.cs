@@ -1,4 +1,5 @@
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Core.Models;
 
 namespace F1Telemetry.AI.Models;
 
@@ -7,6 +8,21 @@ namespace F1Telemetry.AI.Models;
 /// </summary>
 public sealed record AIAnalysisContext
 {
+    /// <summary>
+    /// Gets the high-level session mode for session-aware prompting.
+    /// </summary>
+    public SessionMode SessionMode { get; init; } = SessionMode.Unknown;
+
+    /// <summary>
+    /// Gets the user-facing Chinese session type text.
+    /// </summary>
+    public string SessionTypeText { get; init; } = "未知赛制";
+
+    /// <summary>
+    /// Gets the session-specific focus text shown to the AI.
+    /// </summary>
+    public string SessionFocusText { get; init; } = "关注基础状态、圈速、轮胎、燃油";
+
     /// <summary>
     /// Gets the latest completed lap summary.
     /// </summary>

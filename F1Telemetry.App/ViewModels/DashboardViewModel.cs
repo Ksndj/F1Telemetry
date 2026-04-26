@@ -17,6 +17,7 @@ using F1Telemetry.App.Logging;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
+using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
 using F1Telemetry.Storage.Interfaces;
@@ -97,6 +98,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _overviewDrsText = "-";
     private string _overviewTyreWearText = "-";
     private string _overviewKeyOpponentText = "-";
+    private string _overviewSessionFocusText = SessionModeFormatter.FormatFocus(SessionMode.Unknown);
     private string _overviewRecentAiSuggestionText = "-";
     private string _overviewRecentTtsStatusText = "-";
     private long _receivedPacketCount;
@@ -941,6 +943,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the current session-specific overview focus text.
+    /// </summary>
+    public string OverviewSessionFocusText
+    {
+        get => _overviewSessionFocusText;
+        private set => SetProperty(ref _overviewSessionFocusText, value);
+    }
+
+    /// <summary>
     /// Gets the latest AI suggestion summary for the overview page.
     /// </summary>
     public string OverviewRecentAiSuggestionText
@@ -1255,11 +1266,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void DrainDetectedRaceEvents()
     {
+        var sessionMode = SessionModeFormatter.Resolve(_sessionStateStore.CaptureState().SessionType);
         foreach (var raceEvent in _eventDetectionService.DrainPendingEvents())
         {
             EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
             AddRecentAiEvent(raceEvent.Message);
-            TryEnqueueRaceEventSpeech(raceEvent);
+            TryEnqueueRaceEventSpeech(raceEvent, sessionMode);
             _storagePersistenceService.EnqueueRaceEvent(raceEvent);
         }
     }
@@ -1351,9 +1363,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         var sessionState = _sessionStateStore.CaptureState();
         var playerCar = sessionState.PlayerCar;
+        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
 
         TrackText = BuildTrackText(sessionState.TrackId);
-        SessionTypeText = SessionTypeFormatter.Format(sessionState.SessionType);
+        SessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode);
+        OverviewSessionFocusText = SessionModeFormatter.FormatFocus(sessionMode);
         WeatherText = BuildWeatherText(sessionState);
         LapText = BuildLapText(sessionState, playerCar);
         UpdatePlayerCard(sessionState, playerCar);
@@ -1810,9 +1824,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
-    private void TryEnqueueRaceEventSpeech(RaceEvent raceEvent)
+    private void TryEnqueueRaceEventSpeech(RaceEvent raceEvent, SessionMode sessionMode)
     {
-        var ttsMessage = _ttsMessageFactory.CreateForRaceEvent(raceEvent, BuildTtsOptions());
+        var ttsMessage = _ttsMessageFactory.CreateForRaceEvent(raceEvent, BuildTtsOptions(), sessionMode);
         if (ttsMessage is null)
         {
             return;
@@ -1838,9 +1852,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var carBehind = playerCar?.Position is null
             ? null
             : sessionState.Cars.FirstOrDefault(car => car.Position == playerCar.Position + 1);
+        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
 
         return new AIAnalysisContext
         {
+            SessionMode = sessionMode,
+            SessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode),
+            SessionFocusText = SessionModeFormatter.FormatFocus(sessionMode),
             LatestLap = lastLap,
             BestLap = _lapAnalyzer.CaptureBestLap(),
             RecentLaps = recentLaps,

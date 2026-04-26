@@ -279,6 +279,16 @@
                         <TextBlock FontSize="20"
                                    FontWeight="SemiBold"
                                    Foreground="White"
+                                   Text="当前赛制重点" />
+                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                            <TextBlock Foreground="White"
+                                       Text="{Binding OverviewSessionFocusText}"
+                                       TextWrapping="Wrap" />
+                        </Border>
+                        <TextBlock FontSize="20"
+                                   Margin="0,16,0,0"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
                                    Text="AI 建议" />
                         <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
                             <TextBlock Foreground="White"

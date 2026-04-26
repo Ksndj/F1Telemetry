@@ -2,6 +2,8 @@ using System.Globalization;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Core.Formatting;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS;
 using F1Telemetry.TTS.Models;
 
@@ -17,13 +19,22 @@ public sealed class TtsMessageFactory
     /// </summary>
     /// <param name="raceEvent">The detected race event.</param>
     /// <param name="options">The current TTS options.</param>
+    /// <param name="sessionMode">The current high-level session mode.</param>
     /// <returns>The mapped TTS message when the event should be spoken; otherwise <see langword="null"/>.</returns>
-    public TtsMessage? CreateForRaceEvent(RaceEvent raceEvent, TtsOptions options)
+    public TtsMessage? CreateForRaceEvent(
+        RaceEvent raceEvent,
+        TtsOptions options,
+        SessionMode sessionMode = SessionMode.Unknown)
     {
         ArgumentNullException.ThrowIfNull(raceEvent);
         ArgumentNullException.ThrowIfNull(options);
 
         if (string.IsNullOrWhiteSpace(raceEvent.Message))
+        {
+            return null;
+        }
+
+        if (ShouldSuppressForSessionMode(raceEvent.EventType, sessionMode))
         {
             return null;
         }
@@ -69,6 +80,12 @@ public sealed class TtsMessageFactory
             Priority = TtsPriority.Low,
             Cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), 10))
         };
+    }
+
+    private static bool ShouldSuppressForSessionMode(EventType eventType, SessionMode sessionMode)
+    {
+        return eventType is EventType.FrontCarPitted or EventType.RearCarPitted
+            && !SessionModeFormatter.AllowsPitWindowSpeech(sessionMode);
     }
 
     private static string BuildEventIdentifier(RaceEvent raceEvent)
