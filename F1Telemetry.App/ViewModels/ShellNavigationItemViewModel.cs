@@ -34,7 +34,7 @@ public sealed class ShellNavigationItemViewModel
     public string IconGlyph { get; }
 
     /// <summary>
-    /// Creates the default V1.0.2-M1 shell navigation set.
+    /// Creates the default shell navigation set.
     /// </summary>
     public static IReadOnlyList<ShellNavigationItemViewModel> CreateDefaultItems()
     {
