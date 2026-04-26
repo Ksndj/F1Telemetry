@@ -1,6 +1,8 @@
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Core.Formatting;
+using F1Telemetry.Core.Models;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -73,10 +75,62 @@ public sealed class PromptBuilderTests
         Assert.DoesNotContain("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
     }
 
-    private static AIAnalysisContext CreateContext(bool includeRecentCollections = true)
+    /// <summary>
+    /// Verifies that the prompt explicitly asks for short, broadcast-ready output.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_RequestsShortTtsFriendlyConclusions()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext());
+        var combinedPrompt = prompt.SystemMessage + Environment.NewLine + prompt.UserMessage;
+
+        Assert.Contains("短结论", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("禁止长段分析", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("TTS", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("ttsText", combinedPrompt, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that qualifying prompts do not steer the AI toward race strategy calls.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_QualifyingPromptAvoidsRaceStrategyInstructions()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(sessionMode: SessionMode.Qualifying));
+
+        Assert.Contains("Session mode: Qualifying", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("排位赛", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("进站窗口", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("undercut", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("overcut", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("长距离策略", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies that race prompts keep the real-race priorities visible.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_RacePromptIncludesRealRacePriorities()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(sessionMode: SessionMode.Race));
+
+        Assert.Contains("轮胎", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("燃油", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("交通", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("进站", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("前后车风险", prompt.UserMessage, StringComparison.Ordinal);
+    }
+
+    private static AIAnalysisContext CreateContext(bool includeRecentCollections = true, SessionMode sessionMode = SessionMode.Race)
     {
         return new AIAnalysisContext
         {
+            SessionMode = sessionMode,
+            SessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode),
+            SessionFocusText = SessionModeFormatter.FormatFocus(sessionMode),
             LatestLap = new LapSummary { LapNumber = 14, LapTimeInMs = 91_000, FuelUsedLitres = 1.24f, IsValid = true },
             BestLap = new LapSummary { LapNumber = 10, LapTimeInMs = 90_300, FuelUsedLitres = 1.18f, IsValid = true },
             RecentLaps = includeRecentCollections
@@ -88,7 +142,7 @@ public sealed class PromptBuilderTests
             CurrentFuelInTank = 8.4f,
             CurrentFuelRemainingLaps = 5.1f,
             CurrentErsStoreEnergy = 2_250_000f,
-            CurrentTyre = "V16 / A19",
+            CurrentTyre = "红胎",
             CurrentTyreAgeLaps = 7,
             GapToFrontInMs = 1_250,
             GapToBehindInMs = 980,

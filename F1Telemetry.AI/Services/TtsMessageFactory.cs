@@ -14,6 +14,9 @@ namespace F1Telemetry.AI.Services;
 /// </summary>
 public sealed class TtsMessageFactory
 {
+    private const int MaxAiTtsTextLength = 48;
+    private const int MinimumAiCooldownSeconds = 20;
+
     /// <summary>
     /// Creates a queue-ready TTS message for a detected race event.
     /// </summary>
@@ -66,7 +69,8 @@ public sealed class TtsMessageFactory
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(options);
 
-        if (!result.IsSuccess || string.IsNullOrWhiteSpace(result.TtsText) || result.TtsText == "-")
+        var speechText = FormatAiSpeechText(result.TtsText);
+        if (!result.IsSuccess || string.IsNullOrWhiteSpace(speechText) || speechText == "-")
         {
             return null;
         }
@@ -75,10 +79,10 @@ public sealed class TtsMessageFactory
         {
             Source = "AI",
             Type = "lap",
-            Text = result.TtsText.Trim(),
+            Text = speechText,
             DedupKey = BuildDedupKey("ai", "lap", lastLap.LapNumber.ToString(CultureInfo.InvariantCulture)),
             Priority = TtsPriority.Low,
-            Cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), 10))
+            Cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), MinimumAiCooldownSeconds))
         };
     }
 
@@ -121,6 +125,22 @@ public sealed class TtsMessageFactory
     private static string BuildDedupKey(string source, string type, string id)
     {
         return $"{source}:{type}:{id}";
+    }
+
+    private static string FormatAiSpeechText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = text.Trim();
+        if (trimmed.Length <= MaxAiTtsTextLength)
+        {
+            return trimmed;
+        }
+
+        return trimmed[..(MaxAiTtsTextLength - 3)].TrimEnd() + "...";
     }
 
     private static string FormatOptionalInt(int? value)

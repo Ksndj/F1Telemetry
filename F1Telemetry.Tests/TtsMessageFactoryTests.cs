@@ -73,6 +73,36 @@ public sealed class TtsMessageFactoryTests
         Assert.Equal("lap", message.Type);
         Assert.Equal("ai:lap:12", message.DedupKey);
         Assert.Equal(TtsPriority.Low, message.Priority);
-        Assert.Equal(TimeSpan.FromSeconds(10), message.Cooldown);
+        Assert.Equal(TimeSpan.FromSeconds(20), message.Cooldown);
+    }
+
+    /// <summary>
+    /// Verifies that long AI speech is trimmed down to a short conclusion.
+    /// </summary>
+    [Fact]
+    public void CreateForAiResult_TruncatesLongAiSpeechText()
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForAiResult(
+            new LapSummary
+            {
+                LapNumber = 13
+            },
+            new AIAnalysisResult
+            {
+                IsSuccess = true,
+                TtsText = "这一圈整体节奏稳定，但接下来还需要继续观察燃油、轮胎、交通和前后车风险，不要展开长段分析，也不要把细节完整播报出来。"
+            },
+            new TtsOptions
+            {
+                TtsEnabled = true,
+                CooldownSeconds = 8
+            });
+
+        Assert.NotNull(message);
+        Assert.True(message!.Text.Length <= 48);
+        Assert.EndsWith("...", message.Text, StringComparison.Ordinal);
+        Assert.Equal(TtsPriority.Low, message.Priority);
     }
 }

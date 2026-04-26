@@ -1778,6 +1778,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(AiApiKey))
+        {
+            _lastAnalyzedLapKey = lapKey;
+            EnqueueAiTtsLog("AI", BuildAiFailureLogText(lastLap.LapNumber, AIErrorMessageFormatter.MissingApiKey));
+            return;
+        }
+
         _lastAnalyzedLapKey = lapKey;
         _isAiAnalysisRunning = true;
         var analysisSessionUid = _activeSessionUid;
@@ -1812,7 +1819,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
             else
             {
-                EnqueueAiTtsLog("AI", $"Lap {lastLap.LapNumber} 分析失败：{result.ErrorMessage}");
+                EnqueueAiTtsLog("AI", BuildAiFailureLogText(lastLap.LapNumber, result.ErrorMessage));
             }
         }
         catch (OperationCanceledException)
@@ -1877,6 +1884,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
         return $"{sessionToken}:{lapNumber}";
+    }
+
+    private static string BuildAiFailureLogText(int lapNumber, string? errorMessage)
+    {
+        var normalizedMessage = string.IsNullOrWhiteSpace(errorMessage)
+            ? AIErrorMessageFormatter.NetworkError
+            : errorMessage.Trim();
+
+        return $"Lap {lapNumber} · {normalizedMessage}";
     }
 
     private TtsOptions BuildTtsOptions()
