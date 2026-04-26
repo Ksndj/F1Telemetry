@@ -1,5 +1,12 @@
 # F1Telemetry UDP Raw Log 分析摘要
 
+## 使用原则
+
+- 本文件只保存轻量统计摘要，不保存原始 UDP payload。
+- 如果后续校准需要本摘要没有的字段，应回到原始 JSONL 读取。
+- 原始数据读取优先按 `sessionUid`、`packetId`、`timestampUtc`、`frameIdentifier` 缩小范围，避免一次性展开全量 1.6GB 文件。
+- 需要解码 tyre compound、sessionType、进站状态、事件代码、LapSummary 稳定性时，以原始 raw log 的 `payloadBase64` 为准。
+
 ## 样本
 
 - 原始日志：`C:\Users\10670\AppData\Roaming\F1Telemetry\.logs\udp\f1telemetry-udp-20260426-123424-session-unknown.jsonl`
