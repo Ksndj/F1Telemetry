@@ -26,6 +26,19 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("UdpRawLogDroppedPacketCount", xaml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies read-only raw UDP counters use one-way bindings so Settings can load without WPF source updates.
+    /// </summary>
+    [Fact]
+    public void SettingsView_UsesOneWayBindingsForReadOnlyRawUdpCounters()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("{Binding UdpRawLogWrittenPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
+        Assert.Contains("{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryFile(params string[] pathParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
