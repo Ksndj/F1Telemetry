@@ -1,4 +1,4 @@
-# F1Telemetry
+﻿# F1Telemetry
 
 当前版本：`v1.0.2`
 
