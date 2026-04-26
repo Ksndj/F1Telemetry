@@ -77,6 +77,88 @@
                     Padding="20"
                     CornerRadius="18"
                     Background="#0F1B2E">
+                <StackPanel>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="UDP Raw Log" />
+                    <CheckBox Margin="0,14,0,0"
+                              Foreground="#D7E4F3"
+                              Content="启用 UDP Raw Log"
+                              IsChecked="{Binding UdpRawLogEnabled, Mode=TwoWay}" />
+
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Foreground="#7FA5D8" Text="日志目录" />
+                        <TextBlock Grid.Column="1"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogDirectoryText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="最近文件" />
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogLastFilePathText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="状态" />
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogStatusText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="3"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="已记录 / 丢弃" />
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3">
+                            <Run Text="{Binding UdpRawLogWrittenPacketCount}" />
+                            <Run Text=" / " />
+                            <Run Text="{Binding UdpRawLogDroppedPacketCount}" />
+                        </TextBlock>
+
+                        <TextBlock Grid.Row="4"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="写入错误" />
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogLastErrorText}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

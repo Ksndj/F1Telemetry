@@ -47,6 +47,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly IEventDetectionService _eventDetectionService;
     private readonly IAIAnalysisService _aiAnalysisService;
     private readonly IAppSettingsStore _appSettingsStore;
+    private readonly IUdpRawLogWriter _udpRawLogWriter;
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
@@ -112,6 +113,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _aiApiKey = string.Empty;
     private string _aiSettingsSaveStatusText = "等待保存";
     private int _aiRequestTimeoutSeconds = 10;
+    private bool _udpRawLogEnabled;
+    private string _udpRawLogDirectoryText = string.Empty;
+    private string _udpRawLogLastFilePathText = "未生成 Raw Log";
+    private string _udpRawLogStatusText = "Raw Log 未启用";
+    private string _udpRawLogLastErrorText = string.Empty;
+    private long _udpRawLogWrittenPacketCount;
+    private long _udpRawLogDroppedPacketCount;
+    private int _udpRawLogQueueCapacity = 4096;
+    private int _udpRawLogSettingsSaveVersion;
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
     private string _ttsVoiceStatusText = "正在读取 Windows 语音...";
@@ -141,6 +151,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="eventDetectionService">The event detection service that exposes reusable race events.</param>
     /// <param name="aiAnalysisService">The AI analysis service used after completed laps.</param>
     /// <param name="appSettingsStore">The local application settings store.</param>
+    /// <param name="udpRawLogWriter">The optional raw UDP log writer.</param>
     /// <param name="ttsMessageFactory">The mapper that converts event and AI outputs into TTS queue messages.</param>
     /// <param name="ttsQueue">The TTS queue that plays race events and AI guidance.</param>
     /// <param name="storagePersistenceService">The background SQLite persistence coordinator.</param>
@@ -154,6 +165,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         IEventDetectionService eventDetectionService,
         IAIAnalysisService aiAnalysisService,
         IAppSettingsStore appSettingsStore,
+        IUdpRawLogWriter udpRawLogWriter,
         TtsMessageFactory ttsMessageFactory,
         TtsQueue ttsQueue,
         IStoragePersistenceService storagePersistenceService,
@@ -167,6 +179,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _eventDetectionService = eventDetectionService ?? throw new ArgumentNullException(nameof(eventDetectionService));
         _aiAnalysisService = aiAnalysisService ?? throw new ArgumentNullException(nameof(aiAnalysisService));
         _appSettingsStore = appSettingsStore ?? throw new ArgumentNullException(nameof(appSettingsStore));
+        _udpRawLogWriter = udpRawLogWriter ?? throw new ArgumentNullException(nameof(udpRawLogWriter));
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
@@ -202,6 +215,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         AiTtsLogs.Add(initialLogEntry);
         LogEntries.Add(initialLogEntry);
         LoadAvailableVoices();
+        RefreshUdpRawLogStatus();
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
@@ -433,6 +447,76 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _aiSettingsSaveStatusText;
         private set => SetProperty(ref _aiSettingsSaveStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether raw UDP JSONL logging is enabled.
+    /// </summary>
+    public bool UdpRawLogEnabled
+    {
+        get => _udpRawLogEnabled;
+        set
+        {
+            if (SetProperty(ref _udpRawLogEnabled, value))
+            {
+                ApplyUdpRawLogOptions();
+                QueuePersistUdpRawLogOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the raw UDP log directory shown in Settings.
+    /// </summary>
+    public string UdpRawLogDirectoryText
+    {
+        get => _udpRawLogDirectoryText;
+        private set => SetProperty(ref _udpRawLogDirectoryText, value);
+    }
+
+    /// <summary>
+    /// Gets the current or most recent raw UDP log file path.
+    /// </summary>
+    public string UdpRawLogLastFilePathText
+    {
+        get => _udpRawLogLastFilePathText;
+        private set => SetProperty(ref _udpRawLogLastFilePathText, value);
+    }
+
+    /// <summary>
+    /// Gets the raw UDP log state summary.
+    /// </summary>
+    public string UdpRawLogStatusText
+    {
+        get => _udpRawLogStatusText;
+        private set => SetProperty(ref _udpRawLogStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the raw UDP packet count written in this app session.
+    /// </summary>
+    public long UdpRawLogWrittenPacketCount
+    {
+        get => _udpRawLogWrittenPacketCount;
+        private set => SetProperty(ref _udpRawLogWrittenPacketCount, value);
+    }
+
+    /// <summary>
+    /// Gets the raw UDP packet count dropped in this app session.
+    /// </summary>
+    public long UdpRawLogDroppedPacketCount
+    {
+        get => _udpRawLogDroppedPacketCount;
+        private set => SetProperty(ref _udpRawLogDroppedPacketCount, value);
+    }
+
+    /// <summary>
+    /// Gets the latest raw UDP log write error.
+    /// </summary>
+    public string UdpRawLogLastErrorText
+    {
+        get => _udpRawLogLastErrorText;
+        private set => SetProperty(ref _udpRawLogLastErrorText, value);
     }
 
     /// <summary>
@@ -1033,6 +1117,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         try
         {
+            await _udpRawLogWriter.DisposeAsync().AsTask().ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+
+        try
+        {
             _ttsQueue.Dispose();
         }
         catch
@@ -1207,6 +1299,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         Interlocked.Increment(ref _receivedPacketCount);
         Interlocked.Exchange(ref _lastPacketReceivedUnixMs, datagram.ReceivedAt.ToUnixTimeMilliseconds());
+        _udpRawLogWriter.TryEnqueue(datagram);
 
         if (!_packetDispatcher.TryDispatch(datagram, out var error) && !string.IsNullOrWhiteSpace(error))
         {
@@ -1261,6 +1354,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         DrainPendingAiTtsLogs();
         RefreshConnectionState();
         RefreshCounters();
+        RefreshUdpRawLogStatus();
         RefreshCentralState();
     }
 
@@ -1600,6 +1694,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             AiModel = settings.Ai.Model;
             AiApiKey = settings.Ai.ApiKey;
             _aiRequestTimeoutSeconds = settings.Ai.RequestTimeoutSeconds <= 0 ? 10 : settings.Ai.RequestTimeoutSeconds;
+            _udpRawLogQueueCapacity = Math.Clamp(settings.UdpRawLog.QueueCapacity, 0, 100_000);
+            _udpRawLogWriter.UpdateOptions(BuildUdpRawLogOptions(settings.UdpRawLog.Enabled, settings.UdpRawLog.DirectoryPath, settings.UdpRawLog.QueueCapacity));
+            UdpRawLogEnabled = settings.UdpRawLog.Enabled;
+            RefreshUdpRawLogStatus();
             TtsEnabled = settings.Tts.TtsEnabled;
             var loadedVoiceName = settings.Tts.VoiceName;
             TtsVoiceName = ResolveTtsVoiceName(loadedVoiceName);
@@ -1715,6 +1813,52 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch (Exception ex)
         {
             EnqueueAiTtsLog("System", $"TTS 设置保存失败：{ex.Message}");
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private void QueuePersistUdpRawLogOptions()
+    {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
+        var saveVersion = Interlocked.Increment(ref _udpRawLogSettingsSaveVersion);
+        var options = BuildUdpRawLogOptions();
+        _ = PersistUdpRawLogOptionsAsync(options, saveVersion);
+    }
+
+    private async Task PersistUdpRawLogOptionsAsync(UdpRawLogOptions options, int saveVersion)
+    {
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync();
+            gateHeld = true;
+            if (saveVersion < Volatile.Read(ref _udpRawLogSettingsSaveVersion))
+            {
+                return;
+            }
+
+            await _appSettingsStore.SaveUdpRawLogOptionsAsync(options, CancellationToken.None);
+            if (saveVersion == Volatile.Read(ref _udpRawLogSettingsSaveVersion))
+            {
+                EnqueueAiTtsLog("System", options.Enabled ? "UDP Raw Log 已启用。" : "UDP Raw Log 已关闭。");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"UDP Raw Log 设置保存失败：{ex.Message}");
         }
         finally
         {
@@ -1917,6 +2061,43 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             AiEnabled = AiEnabled,
             RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
         };
+    }
+
+    private UdpRawLogOptions BuildUdpRawLogOptions()
+    {
+        var status = _udpRawLogWriter.Status;
+        return BuildUdpRawLogOptions(UdpRawLogEnabled, status.DirectoryPath, _udpRawLogQueueCapacity);
+    }
+
+    private static UdpRawLogOptions BuildUdpRawLogOptions(bool enabled, string directoryPath, int queueCapacity)
+    {
+        return new UdpRawLogOptions
+        {
+            Enabled = enabled,
+            DirectoryPath = directoryPath,
+            QueueCapacity = Math.Clamp(queueCapacity, 0, 100_000)
+        };
+    }
+
+    private void ApplyUdpRawLogOptions()
+    {
+        _udpRawLogWriter.UpdateOptions(BuildUdpRawLogOptions());
+        RefreshUdpRawLogStatus();
+    }
+
+    private void RefreshUdpRawLogStatus()
+    {
+        var status = _udpRawLogWriter.Status;
+        UdpRawLogDirectoryText = status.DirectoryPath;
+        UdpRawLogLastFilePathText = string.IsNullOrWhiteSpace(status.CurrentFilePath)
+            ? "未生成 Raw Log"
+            : status.CurrentFilePath;
+        UdpRawLogWrittenPacketCount = status.WrittenPacketCount;
+        UdpRawLogDroppedPacketCount = status.DroppedPacketCount;
+        UdpRawLogLastErrorText = string.IsNullOrWhiteSpace(status.LastError) ? "-" : status.LastError;
+        UdpRawLogStatusText = status.Enabled
+            ? $"Raw Log 已启用 · 已记录 {status.WrittenPacketCount} · 丢弃 {status.DroppedPacketCount}"
+            : "Raw Log 未启用";
     }
 
     private static LogEntryViewModel CreateLogEntry(string category, string message)
