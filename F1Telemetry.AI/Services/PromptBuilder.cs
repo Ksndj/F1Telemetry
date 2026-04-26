@@ -18,10 +18,13 @@ public sealed class PromptBuilder
         ArgumentNullException.ThrowIfNull(context);
 
         var systemMessage = """
-You are an F1 race engineer.
+You are an F1 race engineer for live F1 25 sessions.
 Return only valid JSON and no extra text.
 The JSON must contain exactly these keys: summary, tyreAdvice, fuelAdvice, trafficAdvice, ttsText.
-Each value must be a concise string.
+Use short Chinese conclusions only.
+禁止长段分析，避免解释推理过程。
+Each value must be concise and suitable for TTS.
+ttsText must contain one short broadcast-ready key conclusion.
 """;
 
         var userMessage = BuildUserMessage(context);
@@ -82,7 +85,8 @@ Each value must be a concise string.
             }
         }
 
-        builder.Append("Use only these summaries and state values. Do not mention raw telemetry or low-level details.");
+        builder.AppendLine("Use only these summaries and state values. Do not mention raw telemetry or low-level details.");
+        builder.Append("输出短结论，禁止长段分析；ttsText 只写适合 TTS 播报的一句关键结论。");
         return builder.ToString();
     }
 

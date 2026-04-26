@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
@@ -44,7 +45,7 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
             return new AIAnalysisResult
             {
                 IsSuccess = false,
-                ErrorMessage = "API Key is required."
+                ErrorMessage = AIErrorMessageFormatter.MissingApiKey
             };
         }
 
@@ -64,21 +65,13 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
             var content = await _deepSeekClient.CreateChatCompletionAsync(request, settings, cancellationToken);
             if (string.IsNullOrWhiteSpace(content))
             {
-                return new AIAnalysisResult
-                {
-                    IsSuccess = false,
-                    ErrorMessage = "AI response content was empty."
-                };
+                return CreateFailure(AIErrorMessageFormatter.ParseFailure);
             }
 
             var result = JsonSerializer.Deserialize<AIAnalysisResult>(content);
             if (result is null)
             {
-                return new AIAnalysisResult
-                {
-                    IsSuccess = false,
-                    ErrorMessage = "AI response JSON could not be parsed."
-                };
+                return CreateFailure(AIErrorMessageFormatter.ParseFailure);
             }
 
             return result with
@@ -92,13 +85,40 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
                 TtsText = string.IsNullOrWhiteSpace(result.TtsText) ? "-" : result.TtsText
             };
         }
+        catch (JsonException ex)
+        {
+            Debug.WriteLine($"AI response parse failed: {ex}");
+            return CreateFailure(AIErrorMessageFormatter.ParseFailure);
+        }
+        catch (HttpRequestException ex)
+        {
+            Debug.WriteLine($"AI request failed: {ex}");
+            return CreateFailure(AIErrorMessageFormatter.FormatHttpFailure(ex));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            Debug.WriteLine($"AI request timed out: {ex}");
+            return CreateFailure(AIErrorMessageFormatter.NetworkError);
+        }
         catch (Exception ex)
         {
-            return new AIAnalysisResult
-            {
-                IsSuccess = false,
-                ErrorMessage = ex.Message
-            };
+            Debug.WriteLine($"AI request failed unexpectedly: {ex}");
+            return CreateFailure(AIErrorMessageFormatter.NetworkError);
         }
+    }
+
+    private static AIAnalysisResult CreateFailure(string errorMessage)
+    {
+        return new AIAnalysisResult
+        {
+            IsSuccess = false,
+            ErrorMessage = string.IsNullOrWhiteSpace(errorMessage)
+                ? AIErrorMessageFormatter.NetworkError
+                : errorMessage
+        };
     }
 }

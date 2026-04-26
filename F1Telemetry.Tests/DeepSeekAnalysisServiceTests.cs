@@ -18,13 +18,19 @@ public sealed class DeepSeekAnalysisServiceTests
     [Fact]
     public async Task AnalyzeAsync_MissingApiKey_ReturnsFailureResult()
     {
-        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => throw new InvalidOperationException("HTTP should not be called."))));
+        var wasCalled = false;
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ =>
+        {
+            wasCalled = true;
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        })));
         var service = new DeepSeekAnalysisService(client, new PromptBuilder());
 
         var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = string.Empty });
 
         Assert.False(result.IsSuccess);
-        Assert.Contains("API Key", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(AIErrorMessageFormatter.MissingApiKey, result.ErrorMessage);
+        Assert.False(wasCalled);
     }
 
     /// <summary>
@@ -86,6 +92,93 @@ public sealed class DeepSeekAnalysisServiceTests
 
         Assert.NotNull(observedUri);
         Assert.Equal("https://api.deepseek.com/chat/completions", observedUri!.ToString());
+    }
+
+    /// <summary>
+    /// Verifies network failures are normalized without leaking request details.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_NetworkFailure_ReturnsNormalizedErrorWithoutRawException()
+    {
+        const string secret = "test-secret-key";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ =>
+            throw new HttpRequestException($"Authorization Bearer {secret} https://secret.example.local"))));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(
+            new AIAnalysisContext(),
+            new AISettings
+            {
+                AiEnabled = true,
+                ApiKey = secret,
+                BaseUrl = "https://secret.example.local"
+            });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AIErrorMessageFormatter.NetworkError, result.ErrorMessage);
+        Assert.DoesNotContain(secret, result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Authorization", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret.example", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies rate limits and service failures are normalized for user logs.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task AnalyzeAsync_ServiceOrRateLimit_ReturnsNormalizedError(HttpStatusCode statusCode)
+    {
+        const string secret = "test-secret-key";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent($"service failure with {secret}", Encoding.UTF8, "text/plain")
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(
+            new AIAnalysisContext(),
+            new AISettings
+            {
+                AiEnabled = true,
+                ApiKey = secret,
+                BaseUrl = "https://secret.example.local"
+            });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AIErrorMessageFormatter.ServiceOrRateLimit, result.ErrorMessage);
+        Assert.DoesNotContain(secret, result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret.example", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies malformed AI JSON is reported with a normalized parse error.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_InvalidJson_ReturnsNormalizedParseFailure()
+    {
+        const string completionJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "content": "not json from https://secret.example.local"
+      }
+    }
+  ]
+}
+""";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(completionJson, Encoding.UTF8, "application/json")
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = "test-secret-key" });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(AIErrorMessageFormatter.ParseFailure, result.ErrorMessage);
+        Assert.DoesNotContain("secret.example", result.ErrorMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

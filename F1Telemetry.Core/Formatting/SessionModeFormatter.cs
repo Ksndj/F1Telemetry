@@ -76,11 +76,11 @@ public static class SessionModeFormatter
             SessionMode.Practice =>
                 "重点给长距离节奏、轮胎、油耗、圈速趋势建议。",
             SessionMode.Qualifying or SessionMode.SprintQualifying or SessionMode.TimeTrial =>
-                "重点给有效圈、交通、ERS、轮胎准备和输入稳定性建议；避免正赛长距离策略建议。",
+                "重点给有效圈、交通、ERS、轮胎准备和输入稳定性建议；只给单圈执行建议。",
             SessionMode.SprintRace =>
                 "重点给短距离轮胎、ERS、攻防窗口、前后车差距建议。",
             SessionMode.Race =>
-                "重点给轮胎、燃油、交通、进站建议。",
+                "重点给轮胎、燃油、交通、进站建议、前后车风险建议。",
             _ =>
                 "重点给现有圈速、轮胎、燃油、ERS 和交通状态建议。"
         };
