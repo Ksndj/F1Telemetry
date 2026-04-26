@@ -39,14 +39,14 @@ public sealed class CurrentLapChartBuilder
 
         if (speedPoints.Count == 0)
         {
-            return CreateEmptyPanel("当前圈速度曲线", "圈内距离 (m)", "km/h");
+            return CreateEmptyPanel("当前圈速度曲线", "圈内距离 (m)", "km/h", "等待本圈采样");
         }
 
         return new ChartPanelViewModel(
             title: "当前圈速度曲线",
             xAxisLabel: "圈内距离 (m)",
             yAxisLabel: "km/h",
-            emptyMessage: "等待当前圈采样",
+            emptyMessage: "等待本圈采样",
             isEmpty: false,
             series:
             [
@@ -89,14 +89,14 @@ public sealed class CurrentLapChartBuilder
 
         if (throttlePoints.Count == 0 && brakePoints.Count == 0)
         {
-            return CreateEmptyPanel("当前圈油门 / 刹车曲线", "圈内距离 (m)", "%");
+            return CreateEmptyPanel("当前圈油门 / 刹车曲线", "圈内距离 (m)", "%", "等待输入数据");
         }
 
         return new ChartPanelViewModel(
             title: "当前圈油门 / 刹车曲线",
             xAxisLabel: "圈内距离 (m)",
             yAxisLabel: "%",
-            emptyMessage: "等待当前圈采样",
+            emptyMessage: "等待输入数据",
             isEmpty: false,
             series:
             [
@@ -115,13 +115,17 @@ public sealed class CurrentLapChartBuilder
             ]);
     }
 
-    private static ChartPanelViewModel CreateEmptyPanel(string title, string xAxisLabel, string yAxisLabel)
+    private static ChartPanelViewModel CreateEmptyPanel(
+        string title,
+        string xAxisLabel,
+        string yAxisLabel,
+        string emptyStateText)
     {
         return new ChartPanelViewModel(
             title: title,
             xAxisLabel: xAxisLabel,
             yAxisLabel: yAxisLabel,
-            emptyMessage: "等待当前圈采样",
+            emptyMessage: emptyStateText,
             isEmpty: true,
             series: Array.Empty<ChartSeriesModel>());
     }

@@ -32,7 +32,7 @@ public sealed class ChartPanelViewModelTests
                 title: "多圈燃油趋势",
                 xAxisLabel: "圈号",
                 yAxisLabel: "L",
-                emptyMessage: "暂无历史圈数据",
+                emptyMessage: "完成至少一圈后显示",
                 isEmpty: false,
                 series:
                 [
@@ -50,8 +50,8 @@ public sealed class ChartPanelViewModelTests
         Assert.Contains(nameof(ChartPanelViewModel.Title), notifications);
         Assert.Contains(nameof(ChartPanelViewModel.XAxisLabel), notifications);
         Assert.Contains(nameof(ChartPanelViewModel.YAxisLabel), notifications);
-        Assert.Contains(nameof(ChartPanelViewModel.EmptyMessage), notifications);
-        Assert.Contains(nameof(ChartPanelViewModel.IsEmpty), notifications);
+        Assert.Contains(nameof(ChartPanelViewModel.EmptyStateText), notifications);
+        Assert.Contains(nameof(ChartPanelViewModel.HasData), notifications);
         Assert.Contains(nameof(ChartPanelViewModel.Series), notifications);
     }
 
@@ -66,7 +66,7 @@ public sealed class ChartPanelViewModelTests
             title: "当前圈速度曲线",
             xAxisLabel: "圈内距离 (m)",
             yAxisLabel: "km/h",
-            emptyMessage: "等待当前圈采样",
+            emptyMessage: "等待本圈采样",
             isEmpty: false,
             series:
             [
@@ -86,8 +86,89 @@ public sealed class ChartPanelViewModelTests
         Assert.Equal(source.Title, panel.Title);
         Assert.Equal(source.XAxisLabel, panel.XAxisLabel);
         Assert.Equal(source.YAxisLabel, panel.YAxisLabel);
-        Assert.Equal(source.EmptyMessage, panel.EmptyMessage);
-        Assert.Equal(source.IsEmpty, panel.IsEmpty);
+        Assert.Equal(source.EmptyStateText, panel.EmptyStateText);
+        Assert.Equal(source.HasData, panel.HasData);
         Assert.Same(source.Series, panel.Series);
+    }
+
+    /// <summary>
+    /// Verifies that chart data state is derived from plottable points instead of series count.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(NonPlottableSeries))]
+    public void HasData_WithNoPlottablePoints_ReturnsFalse(IReadOnlyList<ChartSeriesModel> series)
+    {
+        var panel = new ChartPanelViewModel(
+            title: "当前圈速度曲线",
+            xAxisLabel: "圈内距离 (m)",
+            yAxisLabel: "km/h",
+            emptyMessage: "等待本圈采样",
+            isEmpty: false,
+            series: series);
+
+        Assert.False(panel.HasData);
+        Assert.True(panel.IsEmpty);
+    }
+
+    /// <summary>
+    /// Verifies that a single finite chart point is enough to render a live chart.
+    /// </summary>
+    [Fact]
+    public void HasData_WithSinglePlottablePoint_ReturnsTrue()
+    {
+        var panel = new ChartPanelViewModel(
+            title: "当前圈速度曲线",
+            xAxisLabel: "圈内距离 (m)",
+            yAxisLabel: "km/h",
+            emptyMessage: "等待本圈采样",
+            isEmpty: true,
+            series:
+            [
+                new ChartSeriesModel
+                {
+                    Name = "速度",
+                    StrokeBrush = Brushes.DeepSkyBlue,
+                    Points =
+                    [
+                        new ChartPointModel { X = 120d, Y = 238d }
+                    ]
+                }
+            ]);
+
+        Assert.True(panel.HasData);
+        Assert.False(panel.IsEmpty);
+    }
+
+    /// <summary>
+    /// Returns series shapes that contain no finite plottable points.
+    /// </summary>
+    public static TheoryData<IReadOnlyList<ChartSeriesModel>> NonPlottableSeries()
+    {
+        return new TheoryData<IReadOnlyList<ChartSeriesModel>>
+        {
+            Array.Empty<ChartSeriesModel>(),
+            new[]
+            {
+                new ChartSeriesModel
+                {
+                    Name = "空序列",
+                    StrokeBrush = Brushes.Gray,
+                    Points = Array.Empty<ChartPointModel>()
+                }
+            },
+            new[]
+            {
+                new ChartSeriesModel
+                {
+                    Name = "无效点",
+                    StrokeBrush = Brushes.Gray,
+                    Points =
+                    [
+                        new ChartPointModel { X = double.NaN, Y = 1d },
+                        new ChartPointModel { X = 1d, Y = double.PositiveInfinity }
+                    ]
+                }
+            }
+        };
     }
 }

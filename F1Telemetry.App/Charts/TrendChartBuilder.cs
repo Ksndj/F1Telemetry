@@ -22,14 +22,14 @@ public sealed class TrendChartBuilder
 
         if (orderedLaps.Length == 0)
         {
-            return CreateEmptyPanel("多圈燃油趋势", "圈号", "L");
+            return CreateEmptyPanel("多圈燃油趋势", "圈号", "L", "完成至少一圈后显示");
         }
 
         return new ChartPanelViewModel(
             title: "多圈燃油趋势",
             xAxisLabel: "圈号",
             yAxisLabel: "L",
-            emptyMessage: "暂无历史圈数据",
+            emptyMessage: "完成至少一圈后显示",
             isEmpty: false,
             series:
             [
@@ -61,14 +61,14 @@ public sealed class TrendChartBuilder
 
         if (orderedLaps.Length == 0)
         {
-            return CreateEmptyPanel("多圈四轮磨损趋势", "圈号", "%");
+            return CreateEmptyPanel("多圈四轮磨损趋势", "圈号", "%", "等待轮胎磨损数据");
         }
 
         return new ChartPanelViewModel(
             title: "多圈四轮磨损趋势",
             xAxisLabel: "圈号",
             yAxisLabel: "%",
-            emptyMessage: "暂无历史圈数据",
+            emptyMessage: "等待轮胎磨损数据",
             isEmpty: false,
             series:
             [
@@ -99,13 +99,17 @@ public sealed class TrendChartBuilder
         };
     }
 
-    private static ChartPanelViewModel CreateEmptyPanel(string title, string xAxisLabel, string yAxisLabel)
+    private static ChartPanelViewModel CreateEmptyPanel(
+        string title,
+        string xAxisLabel,
+        string yAxisLabel,
+        string emptyStateText)
     {
         return new ChartPanelViewModel(
             title: title,
             xAxisLabel: xAxisLabel,
             yAxisLabel: yAxisLabel,
-            emptyMessage: "暂无历史圈数据",
+            emptyMessage: emptyStateText,
             isEmpty: true,
             series: Array.Empty<ChartSeriesModel>());
     }

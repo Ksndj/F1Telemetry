@@ -189,10 +189,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             new() { Title = "轮胎窗口", Description = "后续接入温度、磨损与轮胎工作区间。" },
             new() { Title = "能量管理", Description = "后续接入 ERS、燃油与部署策略图表。" }
         };
-        SpeedChartPanel.UpdateFrom(_currentLapChartBuilder.BuildSpeedPanel(Array.Empty<LapSample>()));
-        InputsChartPanel.UpdateFrom(_currentLapChartBuilder.BuildThrottleBrakePanel(Array.Empty<LapSample>()));
-        FuelTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildFuelTrendPanel(Array.Empty<LapSummary>()));
-        TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(Array.Empty<LapSummary>()));
+        ResetChartPanels();
 
         AiTtsLogs.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
         LoadAvailableVoices();
@@ -1119,6 +1116,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _lastAnalyzedLapKey = null;
                 _lastPersistedLapKey = null;
                 _lastTrendRefreshLapNumber = null;
+                ResetChartPanels();
             }
             IsConnected = false;
             Interlocked.Exchange(ref _lastPacketReceivedUnixMs, -1);
@@ -1160,6 +1158,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _lastAnalyzedLapKey = null;
             _lastPersistedLapKey = null;
             _lastTrendRefreshLapNumber = null;
+            ResetChartPanels();
             StatusMessage = "UDP 监听已停止。";
             EnqueueEventLog("系统", StatusMessage);
         }
@@ -1216,6 +1215,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastEventCode = null;
         _recentAiEvents.Clear();
         _activeSessionUid = incomingSessionUid;
+        ResetChartPanels();
         EnqueueEventLog("会话", $"检测到会话切换：SessionUid={incomingSessionUid}");
         EnqueueAiTtsLog("System", $"已切换到新会话（UID {incomingSessionUid}），圈历史已清空。");
     }
@@ -1430,6 +1430,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var recentLaps = _lapAnalyzer.CaptureRecentLaps(12);
         FuelTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildFuelTrendPanel(recentLaps));
         TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(recentLaps));
+    }
+
+    private void ResetChartPanels()
+    {
+        SpeedChartPanel.UpdateFrom(_currentLapChartBuilder.BuildSpeedPanel(Array.Empty<LapSample>()));
+        InputsChartPanel.UpdateFrom(_currentLapChartBuilder.BuildThrottleBrakePanel(Array.Empty<LapSample>()));
+        FuelTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildFuelTrendPanel(Array.Empty<LapSummary>()));
+        TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(Array.Empty<LapSummary>()));
     }
 
     private void PersistLatestLapIfNeeded()

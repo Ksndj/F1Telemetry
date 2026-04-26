@@ -23,6 +23,7 @@ public sealed class CurrentLapChartBuilderTests
             new LapSample { LapDistance = 20f, SpeedKph = 205d }
         ]);
 
+        Assert.True(panel.HasData);
         Assert.False(panel.IsEmpty);
         Assert.Equal("当前圈速度曲线", panel.Title);
         Assert.Equal("圈内距离 (m)", panel.XAxisLabel);
@@ -47,6 +48,7 @@ public sealed class CurrentLapChartBuilderTests
             new LapSample { LapDistance = 20f, Throttle = 0.90d, Brake = 0.00d }
         ]);
 
+        Assert.True(panel.HasData);
         Assert.False(panel.IsEmpty);
         Assert.Equal(2, panel.Series.Count);
         Assert.Contains(panel.Series, series => series.Name == "油门");
@@ -64,8 +66,25 @@ public sealed class CurrentLapChartBuilderTests
 
         var panel = builder.BuildThrottleBrakePanel(Array.Empty<LapSample>());
 
+        Assert.False(panel.HasData);
         Assert.True(panel.IsEmpty);
-        Assert.Equal("等待当前圈采样", panel.EmptyMessage);
+        Assert.Equal("等待输入数据", panel.EmptyStateText);
+        Assert.Empty(panel.Series);
+    }
+
+    /// <summary>
+    /// Verifies that empty current-lap speed data yields the speed-specific empty state.
+    /// </summary>
+    [Fact]
+    public void BuildSpeedPanel_WithoutSamples_ReturnsSpeedEmptyState()
+    {
+        var builder = new CurrentLapChartBuilder();
+
+        var panel = builder.BuildSpeedPanel(Array.Empty<LapSample>());
+
+        Assert.False(panel.HasData);
+        Assert.True(panel.IsEmpty);
+        Assert.Equal("等待本圈采样", panel.EmptyStateText);
         Assert.Empty(panel.Series);
     }
 
