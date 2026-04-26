@@ -13,7 +13,7 @@ using Xunit;
 namespace F1Telemetry.Tests;
 
 /// <summary>
-/// Verifies beta2 UI polish for settings controls and resilient voice discovery.
+/// Verifies UI polish for settings controls and resilient voice discovery.
 /// </summary>
 public sealed class UiSettingsPolishTests
 {

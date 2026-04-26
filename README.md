@@ -117,7 +117,7 @@ dotnet run --project .\F1Telemetry.App\F1Telemetry.App.csproj
 4. 生成安装包：
 
    ```text
-   build/output/F1Telemetry-Setup-1.0.2.exe
+   build/output/F1Telemetry-1.0.2-win-x64-setup.exe
    ```
 
 5. 将安装包上传到 GitHub Releases。
