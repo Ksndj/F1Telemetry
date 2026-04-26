@@ -37,6 +37,63 @@ public sealed class AppSettingsStoreTests
         Assert.False(settings.UdpRawLog.Enabled);
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
+        Assert.Equal(20777, settings.Udp.ListenPort);
+    }
+
+    /// <summary>
+    /// Verifies old settings files without a UDP block keep the default listen port.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_MissingUdpBlock_ReturnsDefaultUdpListenPort()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(20777, settings.Udp.ListenPort);
+    }
+
+    /// <summary>
+    /// Verifies invalid persisted UDP ports are ignored in favor of the default.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_InvalidUdpListenPort_ReturnsDefaultUdpListenPort()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "udp": {
+                "listenPort": 70000
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(20777, settings.Udp.ListenPort);
     }
 
     /// <summary>
@@ -260,6 +317,58 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(64, persisted.UdpRawLog.QueueCapacity);
         Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
         Assert.Equal("C:\\Logs\\Udp", json.RootElement.GetProperty("udpRawLog").GetProperty("directoryPath").GetString());
+    }
+
+    /// <summary>
+    /// Verifies saving the UDP settings block writes the listen port and preserves existing settings.
+    /// </summary>
+    [Fact]
+    public async Task SaveUdpSettingsAsync_PreservesExistingBlocksAndWritesListenPort()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "tts": {
+                "enabled": true,
+                "voiceName": "Voice A",
+                "volume": 80,
+                "rate": 1,
+                "cooldownSeconds": 9
+              },
+              "udpRawLog": {
+                "enabled": true,
+                "directoryPath": "C:\\Logs\\Udp",
+                "queueCapacity": 64
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveUdpSettingsAsync(new UdpSettings { ListenPort = 20778 });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.Equal(20778, persisted.Udp.ListenPort);
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.Tts.TtsEnabled);
+        Assert.True(persisted.UdpRawLog.Enabled);
+        Assert.Equal(20778, json.RootElement.GetProperty("udp").GetProperty("listenPort").GetInt32());
+        Assert.True(json.RootElement.GetProperty("ai").GetProperty("enabled").GetBoolean());
+        Assert.True(json.RootElement.GetProperty("tts").GetProperty("enabled").GetBoolean());
+        Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
     }
 
     /// <summary>

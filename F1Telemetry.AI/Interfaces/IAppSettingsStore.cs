@@ -28,4 +28,9 @@ public interface IAppSettingsStore
     /// Saves the raw UDP log settings block while preserving other blocks.
     /// </summary>
     Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves the UDP listener settings block while preserving other blocks.
+    /// </summary>
+    Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default);
 }

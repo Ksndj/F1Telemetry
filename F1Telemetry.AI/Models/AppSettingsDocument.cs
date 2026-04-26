@@ -22,4 +22,9 @@ public sealed record AppSettingsDocument
     /// Gets the raw UDP log settings block.
     /// </summary>
     public UdpRawLogOptions UdpRawLog { get; init; } = new();
+
+    /// <summary>
+    /// Gets the UDP listener settings block.
+    /// </summary>
+    public UdpSettings Udp { get; init; } = new();
 }

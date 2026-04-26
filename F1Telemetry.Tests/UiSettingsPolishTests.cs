@@ -1,10 +1,12 @@
 using System.ComponentModel;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Xml.Linq;
 using F1Telemetry.App.AttachedProperties;
 using F1Telemetry.App.Views;
 using F1Telemetry.TTS.Services;
@@ -134,6 +136,24 @@ public sealed class UiSettingsPolishTests
         });
     }
 
+    /// <summary>
+    /// Verifies the shell UDP port input writes edits back to the dashboard view model immediately.
+    /// </summary>
+    [Fact]
+    public void MainWindow_UdpPortTextBox_UsesTwoWayPropertyChangedBinding()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "MainWindow.xaml"));
+        var textBoxes = document.Descendants()
+            .Where(element => element.Name.LocalName == "TextBox")
+            .Select(element => element.Attribute("Text")?.Value)
+            .Where(value => value is not null)
+            .ToArray();
+
+        Assert.Contains(
+            "{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            textBoxes);
+    }
+
     private static void AssertBindingPath(DependencyObject target, DependencyProperty property, string expectedPath)
     {
         var binding = BindingOperations.GetBinding(target, property);
@@ -187,6 +207,23 @@ public sealed class UiSettingsPolishTests
         {
             throw capturedException;
         }
+    }
+
+    private static string FindRepositoryFile(params string[] pathParts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(new[] { directory.FullName }.Concat(pathParts).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find repository file: {Path.Combine(pathParts)}");
     }
 
     private sealed class PasswordBindingSource : INotifyPropertyChanged

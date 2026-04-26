@@ -367,7 +367,7 @@
                             <TextBox Width="120"
                                      Margin="0,0,10,0"
                                      Padding="10,6"
-                                     Text="{Binding PortText, UpdateSourceTrigger=PropertyChanged}" />
+                                     Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <Button Width="108"
                                     Height="36"
                                     Margin="0,0,10,0"
