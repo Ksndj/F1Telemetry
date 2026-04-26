@@ -249,7 +249,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <summary>
     /// Gets the window subtitle.
     /// </summary>
-    public string Subtitle => "v1.1.1-beta1 · 实时遥测助手";
+    public string Subtitle => "v1.1.1-beta2 · 实时遥测助手";
 
     /// <summary>
     /// Gets the application version text displayed in the shell.

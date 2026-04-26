@@ -136,9 +136,9 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3">
-                            <Run Text="{Binding UdpRawLogWrittenPacketCount}" />
+                            <Run Text="{Binding UdpRawLogWrittenPacketCount, Mode=OneWay}" />
                             <Run Text=" / " />
-                            <Run Text="{Binding UdpRawLogDroppedPacketCount}" />
+                            <Run Text="{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}" />
                         </TextBlock>
 
                         <TextBlock Grid.Row="4"
