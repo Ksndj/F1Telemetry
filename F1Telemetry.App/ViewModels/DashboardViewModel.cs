@@ -1778,7 +1778,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         _lastEventCode = eventCode;
-        EnqueueEventLog("UDP", $"收到原始事件：{eventCode}");
+        var display = RawEventCodeLogFormatter.Format(eventCode);
+        EnqueueEventLog(display.Category, display.Message);
     }
 
     private void EnqueueEventLog(string category, string message)
