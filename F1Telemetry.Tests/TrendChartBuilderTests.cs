@@ -34,6 +34,27 @@ public sealed class TrendChartBuilderTests
     }
 
     /// <summary>
+    /// Verifies that completed laps with fuel usage are enough to render the fuel trend.
+    /// </summary>
+    [Fact]
+    public void BuildFuelTrendPanel_WithCompletedFuelUsage_HasData()
+    {
+        var builder = new TrendChartBuilder();
+
+        var panel = builder.BuildFuelTrendPanel(
+        [
+            new LapSummary { LapNumber = 1, FuelUsedLitres = 1.42f }
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.False(panel.IsEmpty);
+        var series = Assert.Single(panel.Series);
+        var point = Assert.Single(series.Points);
+        Assert.Equal(1d, point.X);
+        Assert.InRange(point.Y, 1.419d, 1.421d);
+    }
+
+    /// <summary>
     /// Verifies that missing wheel-delta data is skipped instead of breaking the chart.
     /// </summary>
     [Fact]
@@ -78,6 +99,53 @@ public sealed class TrendChartBuilderTests
     }
 
     /// <summary>
+    /// Verifies that CarDamage observations are not bypassed into tyre charts without LapSummary deltas.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearTrendPanel_WithObservedDamageButNoLapSummaryDelta_StaysEmpty()
+    {
+        var builder = new TrendChartBuilder();
+
+        var panel = builder.BuildTyreWearTrendPanel(
+        [
+            new LapSummary { LapNumber = 1, TyreWearDeltaPerWheel = null },
+            new LapSummary { LapNumber = 2, TyreWearDeltaPerWheel = null }
+        ]);
+
+        Assert.False(panel.HasData);
+        Assert.True(panel.IsEmpty);
+        Assert.Equal("等待轮胎磨损数据", panel.EmptyStateText);
+        Assert.Empty(panel.Series);
+    }
+
+    /// <summary>
+    /// Verifies that real wheel-delta summaries render all four tyre wear trend lines.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearTrendPanel_WithWheelDeltas_ReturnsFourPlottableSeries()
+    {
+        var builder = new TrendChartBuilder();
+
+        var panel = builder.BuildTyreWearTrendPanel(
+        [
+            new LapSummary
+            {
+                LapNumber = 7,
+                TyreWearDeltaPerWheel = new WheelSet<float>(0.4f, 0.5f, 0.7f, 0.8f)
+            }
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.Equal(4, panel.Series.Count);
+        Assert.All(panel.Series, series =>
+        {
+            var point = Assert.Single(series.Points);
+            Assert.Equal(7d, point.X);
+            Assert.True(point.Y > 0d);
+        });
+    }
+
+    /// <summary>
     /// Verifies that missing completed fuel laps reports the fuel-specific empty state.
     /// </summary>
     [Fact]
@@ -85,7 +153,10 @@ public sealed class TrendChartBuilderTests
     {
         var builder = new TrendChartBuilder();
 
-        var panel = builder.BuildFuelTrendPanel(Array.Empty<LapSummary>());
+        var panel = builder.BuildFuelTrendPanel(
+        [
+            new LapSummary { LapNumber = 1, FuelUsedLitres = null }
+        ]);
 
         Assert.False(panel.HasData);
         Assert.True(panel.IsEmpty);

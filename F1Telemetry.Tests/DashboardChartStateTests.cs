@@ -59,12 +59,16 @@ public sealed class DashboardChartStateTests
 
                 Assert.False(viewModel.SpeedChartPanel.HasData);
                 Assert.Equal("等待本圈采样", viewModel.SpeedChartPanel.EmptyStateText);
+                Assert.Empty(viewModel.SpeedChartPanel.Series);
                 Assert.False(viewModel.InputsChartPanel.HasData);
                 Assert.Equal("等待输入数据", viewModel.InputsChartPanel.EmptyStateText);
+                Assert.Empty(viewModel.InputsChartPanel.Series);
                 Assert.False(viewModel.FuelTrendChartPanel.HasData);
                 Assert.Equal("完成至少一圈后显示", viewModel.FuelTrendChartPanel.EmptyStateText);
+                Assert.Empty(viewModel.FuelTrendChartPanel.Series);
                 Assert.False(viewModel.TyreWearTrendChartPanel.HasData);
                 Assert.Equal("等待轮胎磨损数据", viewModel.TyreWearTrendChartPanel.EmptyStateText);
+                Assert.Empty(viewModel.TyreWearTrendChartPanel.Series);
             }
             finally
             {

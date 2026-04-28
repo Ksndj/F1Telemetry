@@ -35,6 +35,27 @@ public sealed class CurrentLapChartBuilderTests
     }
 
     /// <summary>
+    /// Verifies that real-log-shaped telemetry samples are treated as drawable current-lap speed data.
+    /// </summary>
+    [Fact]
+    public void BuildSpeedPanel_WithRealLogLikeTelemetrySamples_HasData()
+    {
+        var builder = new CurrentLapChartBuilder();
+
+        var panel = builder.BuildSpeedPanel(
+        [
+            new LapSample { LapDistance = 0f, SpeedKph = 82d },
+            new LapSample { LapDistance = 24.8f, SpeedKph = 121d },
+            new LapSample { LapDistance = 61.2f, SpeedKph = 178d }
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.False(panel.IsEmpty);
+        Assert.Single(panel.Series);
+        Assert.Equal(3, panel.Series[0].Points.Count);
+    }
+
+    /// <summary>
     /// Verifies that the throttle and brake chart returns both series when samples exist.
     /// </summary>
     [Fact]
@@ -54,6 +75,45 @@ public sealed class CurrentLapChartBuilderTests
         Assert.Contains(panel.Series, series => series.Name == "油门");
         Assert.Contains(panel.Series, series => series.Name == "刹车");
         Assert.All(panel.Series, series => Assert.Equal("%", panel.YAxisLabel));
+    }
+
+    /// <summary>
+    /// Verifies that a missing input channel does not leave an empty chart series behind.
+    /// </summary>
+    [Fact]
+    public void BuildThrottleBrakePanel_WithThrottleOnlySamples_ReturnsOnlyPlottableSeries()
+    {
+        var builder = new CurrentLapChartBuilder();
+
+        var panel = builder.BuildThrottleBrakePanel(
+        [
+            new LapSample { LapDistance = 10f, Throttle = 0.45d },
+            new LapSample { LapDistance = 20f, Throttle = 0.80d }
+        ]);
+
+        Assert.True(panel.HasData);
+        var series = Assert.Single(panel.Series);
+        Assert.Equal("油门", series.Name);
+        Assert.All(panel.Series, chartSeries => Assert.NotEmpty(chartSeries.Points));
+    }
+
+    /// <summary>
+    /// Verifies that a single current-lap point is enough for a marker-based live chart.
+    /// </summary>
+    [Fact]
+    public void BuildSpeedPanel_WithSinglePoint_HasData()
+    {
+        var builder = new CurrentLapChartBuilder();
+
+        var panel = builder.BuildSpeedPanel(
+        [
+            new LapSample { LapDistance = 14f, SpeedKph = 96d }
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.False(panel.IsEmpty);
+        Assert.Single(panel.Series);
+        Assert.Single(panel.Series[0].Points);
     }
 
     /// <summary>
