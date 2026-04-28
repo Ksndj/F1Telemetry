@@ -92,6 +92,46 @@ public sealed class ChartPanelViewModelTests
     }
 
     /// <summary>
+    /// Verifies that updating a populated panel to an empty snapshot clears stale series.
+    /// </summary>
+    [Fact]
+    public void UpdateFrom_DataPanelToEmptyPanel_ClearsSeriesAndHasData()
+    {
+        var panel = new ChartPanelViewModel(
+            title: "当前圈速度曲线",
+            xAxisLabel: "圈内距离 (m)",
+            yAxisLabel: "km/h",
+            emptyMessage: "等待本圈采样",
+            isEmpty: false,
+            series:
+            [
+                new ChartSeriesModel
+                {
+                    Name = "速度",
+                    StrokeBrush = Brushes.DeepSkyBlue,
+                    Points =
+                    [
+                        new ChartPointModel { X = 10d, Y = 200d }
+                    ]
+                }
+            ]);
+
+        panel.UpdateFrom(
+            new ChartPanelViewModel(
+                title: "当前圈速度曲线",
+                xAxisLabel: "圈内距离 (m)",
+                yAxisLabel: "km/h",
+                emptyMessage: "等待本圈采样",
+                isEmpty: true,
+                series: Array.Empty<ChartSeriesModel>()));
+
+        Assert.False(panel.HasData);
+        Assert.True(panel.IsEmpty);
+        Assert.Empty(panel.Series);
+        Assert.Equal("等待本圈采样", panel.EmptyStateText);
+    }
+
+    /// <summary>
     /// Verifies that chart data state is derived from plottable points instead of series count.
     /// </summary>
     [Theory]
