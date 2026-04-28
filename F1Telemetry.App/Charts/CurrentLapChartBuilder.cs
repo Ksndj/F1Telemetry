@@ -92,27 +92,34 @@ public sealed class CurrentLapChartBuilder
             return CreateEmptyPanel("当前圈油门 / 刹车曲线", "圈内距离 (m)", "%", "等待输入数据");
         }
 
+        var series = new List<ChartSeriesModel>(capacity: 2);
+        if (throttlePoints.Count > 0)
+        {
+            series.Add(new ChartSeriesModel
+            {
+                Name = "油门",
+                StrokeBrush = Brushes.LimeGreen,
+                Points = throttlePoints
+            });
+        }
+
+        if (brakePoints.Count > 0)
+        {
+            series.Add(new ChartSeriesModel
+            {
+                Name = "刹车",
+                StrokeBrush = Brushes.OrangeRed,
+                Points = brakePoints
+            });
+        }
+
         return new ChartPanelViewModel(
             title: "当前圈油门 / 刹车曲线",
             xAxisLabel: "圈内距离 (m)",
             yAxisLabel: "%",
             emptyMessage: "等待输入数据",
             isEmpty: false,
-            series:
-            [
-                new ChartSeriesModel
-                {
-                    Name = "油门",
-                    StrokeBrush = Brushes.LimeGreen,
-                    Points = throttlePoints
-                },
-                new ChartSeriesModel
-                {
-                    Name = "刹车",
-                    StrokeBrush = Brushes.OrangeRed,
-                    Points = brakePoints
-                }
-            ]);
+            series: series);
     }
 
     private static ChartPanelViewModel CreateEmptyPanel(
