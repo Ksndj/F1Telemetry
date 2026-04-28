@@ -82,10 +82,21 @@
                                FontWeight="SemiBold"
                                Foreground="White"
                                Text="UDP Raw Log" />
-                    <CheckBox Margin="0,14,0,0"
-                              Foreground="#D7E4F3"
-                              Content="启用 UDP Raw Log"
-                              IsChecked="{Binding UdpRawLogEnabled, Mode=TwoWay}" />
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <CheckBox Foreground="#D7E4F3"
+                                  Content="启用 UDP Raw Log"
+                                  IsChecked="{Binding UdpRawLogEnabled, Mode=TwoWay}" />
+                        <Button Grid.Column="1"
+                                Width="120"
+                                Height="32"
+                                Command="{Binding OpenUdpRawLogDirectoryCommand}"
+                                Content="打开日志目录" />
+                    </Grid>
 
                     <Grid Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
@@ -98,41 +109,65 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Foreground="#7FA5D8" Text="日志目录" />
+                        <TextBlock Foreground="#7FA5D8" Text="状态" />
                         <TextBlock Grid.Column="1"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding UdpRawLogDirectoryText}"
+                                   Text="{Binding UdpRawLogStatusText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
-                                   Text="最近文件" />
+                                   Text="日志目录" />
                         <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogDirectoryText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="最近文件" />
+                        <TextBlock Grid.Row="2"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
                                    Text="{Binding UdpRawLogLastFilePathText}"
                                    TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="2"
+                        <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
-                                   Text="状态" />
-                        <TextBlock Grid.Row="2"
+                                   Text="文件大小" />
+                        <TextBlock Grid.Row="3"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding UdpRawLogStatusText}"
+                                   Text="{Binding UdpRawLogLastFileSizeText}"
                                    TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="3"
+                        <TextBlock Grid.Row="4"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="最近写入时间" />
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding UdpRawLogLastWriteTimeText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="5"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
                                    Text="已记录 / 丢弃" />
-                        <TextBlock Grid.Row="3"
+                        <TextBlock Grid.Row="5"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3">
@@ -141,11 +176,11 @@
                             <Run Text="{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}" />
                         </TextBlock>
 
-                        <TextBlock Grid.Row="4"
+                        <TextBlock Grid.Row="6"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
-                                   Text="写入错误" />
-                        <TextBlock Grid.Row="4"
+                                   Text="最近错误" />
+                        <TextBlock Grid.Row="6"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"

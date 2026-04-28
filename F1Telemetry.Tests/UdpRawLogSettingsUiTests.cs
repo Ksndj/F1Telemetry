@@ -21,9 +21,13 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("UdpRawLogEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("UdpRawLogDirectoryText", xaml, StringComparison.Ordinal);
         Assert.Contains("UdpRawLogLastFilePathText", xaml, StringComparison.Ordinal);
+        Assert.Contains("UdpRawLogLastFileSizeText", xaml, StringComparison.Ordinal);
+        Assert.Contains("UdpRawLogLastWriteTimeText", xaml, StringComparison.Ordinal);
         Assert.Contains("UdpRawLogStatusText", xaml, StringComparison.Ordinal);
         Assert.Contains("UdpRawLogWrittenPacketCount", xaml, StringComparison.Ordinal);
         Assert.Contains("UdpRawLogDroppedPacketCount", xaml, StringComparison.Ordinal);
+        Assert.Contains("UdpRawLogLastErrorText", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenUdpRawLogDirectoryCommand", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>

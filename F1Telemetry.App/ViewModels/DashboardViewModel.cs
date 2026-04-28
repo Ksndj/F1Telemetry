@@ -14,6 +14,7 @@ using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.Formatting;
 using F1Telemetry.App.Logging;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
@@ -53,6 +54,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly TtsQueue _ttsQueue;
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
+    private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
+    private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
     private readonly DispatcherTimer _uiTimer;
@@ -68,6 +71,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _stopListeningCommand;
     private readonly RelayCommand _downloadLatestVersionCommand;
     private readonly RelayCommand _toggleSidebarCommand;
+    private readonly RelayCommand _openUdpRawLogDirectoryCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private bool _isSidebarExpanded = true;
     private bool _isBusy;
@@ -117,9 +121,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _aiRequestTimeoutSeconds = 10;
     private bool _udpRawLogEnabled;
     private string _udpRawLogDirectoryText = string.Empty;
-    private string _udpRawLogLastFilePathText = "未生成 Raw Log";
+    private string _udpRawLogLastFilePathText = "无";
+    private string _udpRawLogLastFileSizeText = "无";
+    private string _udpRawLogLastWriteTimeText = "无";
     private string _udpRawLogStatusText = "Raw Log 未启用";
     private string _udpRawLogLastErrorText = string.Empty;
+    private string _udpRawLogDirectoryOpenErrorText = string.Empty;
     private long _udpRawLogWrittenPacketCount;
     private long _udpRawLogDroppedPacketCount;
     private int _udpRawLogQueueCapacity = 4096;
@@ -162,6 +169,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="storagePersistenceService">The background SQLite persistence coordinator.</param>
     /// <param name="dispatcher">The UI dispatcher.</param>
     /// <param name="windowsVoiceCatalog">The optional Windows voice catalog used by the settings UI.</param>
+    /// <param name="udpRawLogDirectoryService">The optional raw UDP log directory helper used by Settings.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -175,7 +183,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         TtsQueue ttsQueue,
         IStoragePersistenceService storagePersistenceService,
         Dispatcher dispatcher,
-        WindowsVoiceCatalog? windowsVoiceCatalog = null)
+        WindowsVoiceCatalog? windowsVoiceCatalog = null,
+        IUdpRawLogDirectoryService? udpRawLogDirectoryService = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -189,6 +198,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
+        _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
+        _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
         _trendChartBuilder = new TrendChartBuilder();
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
@@ -226,6 +237,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
         _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
         _toggleSidebarCommand = new RelayCommand(ToggleSidebar);
+        _openUdpRawLogDirectoryCommand = new RelayCommand(OpenUdpRawLogDirectory);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -496,6 +508,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the current or most recent raw UDP log file size.
+    /// </summary>
+    public string UdpRawLogLastFileSizeText
+    {
+        get => _udpRawLogLastFileSizeText;
+        private set => SetProperty(ref _udpRawLogLastFileSizeText, value);
+    }
+
+    /// <summary>
+    /// Gets the current or most recent raw UDP log file write time.
+    /// </summary>
+    public string UdpRawLogLastWriteTimeText
+    {
+        get => _udpRawLogLastWriteTimeText;
+        private set => SetProperty(ref _udpRawLogLastWriteTimeText, value);
+    }
+
+    /// <summary>
     /// Gets the raw UDP log state summary.
     /// </summary>
     public string UdpRawLogStatusText
@@ -722,6 +752,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the command that expands or collapses the sidebar.
     /// </summary>
     public ICommand ToggleSidebarCommand => _toggleSidebarCommand;
+
+    /// <summary>
+    /// Gets the command that opens the raw UDP log directory.
+    /// </summary>
+    public ICommand OpenUdpRawLogDirectoryCommand => _openUdpRawLogDirectoryCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
@@ -1390,6 +1425,31 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch (Exception ex)
         {
             EnqueueAiTtsLog("System", $"打开发布页失败：{ex.Message}");
+        }
+    }
+
+    private async void OpenUdpRawLogDirectory()
+    {
+        try
+        {
+            var directoryPath = _udpRawLogWriter.Status.DirectoryPath;
+            var result = await Task
+                .Run(() => _udpRawLogDirectoryService.OpenDirectory(directoryPath))
+                .ConfigureAwait(false);
+
+            UpdateUdpRawLogUi(() =>
+            {
+                _udpRawLogDirectoryOpenErrorText = result.Succeeded ? string.Empty : result.ErrorMessage;
+                RefreshUdpRawLogStatus();
+            });
+        }
+        catch (Exception ex)
+        {
+            UpdateUdpRawLogUi(() =>
+            {
+                _udpRawLogDirectoryOpenErrorText = $"打开日志目录失败：{ex.Message}";
+                RefreshUdpRawLogStatus();
+            });
         }
     }
 
@@ -2276,16 +2336,54 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void RefreshUdpRawLogStatus()
     {
         var status = _udpRawLogWriter.Status;
+        var latestFileInfo = _udpRawLogDirectoryService.GetLatestFileInfo(status);
         UdpRawLogDirectoryText = status.DirectoryPath;
-        UdpRawLogLastFilePathText = string.IsNullOrWhiteSpace(status.CurrentFilePath)
-            ? "未生成 Raw Log"
-            : status.CurrentFilePath;
+        UdpRawLogLastFilePathText = latestFileInfo.FilePathText;
+        UdpRawLogLastFileSizeText = latestFileInfo.FileSizeText;
+        UdpRawLogLastWriteTimeText = latestFileInfo.LastWriteTimeText;
         UdpRawLogWrittenPacketCount = status.WrittenPacketCount;
         UdpRawLogDroppedPacketCount = status.DroppedPacketCount;
-        UdpRawLogLastErrorText = string.IsNullOrWhiteSpace(status.LastError) ? "-" : status.LastError;
+        UdpRawLogLastErrorText = BuildUdpRawLogErrorText(
+            status.LastError,
+            latestFileInfo.ErrorMessage,
+            _udpRawLogDirectoryOpenErrorText);
         UdpRawLogStatusText = status.Enabled
-            ? $"Raw Log 已启用 · 已记录 {status.WrittenPacketCount} · 丢弃 {status.DroppedPacketCount}"
+            ? "Raw Log 已启用"
             : "Raw Log 未启用";
+    }
+
+    private void UpdateUdpRawLogUi(Action update)
+    {
+        try
+        {
+            if (_dispatcher.HasShutdownStarted || _dispatcher.HasShutdownFinished)
+            {
+                return;
+            }
+
+            if (_dispatcher.CheckAccess())
+            {
+                update();
+                return;
+            }
+
+            _dispatcher.Invoke(update);
+        }
+        catch
+        {
+        }
+    }
+
+    private static string BuildUdpRawLogErrorText(params string[] messages)
+    {
+        var visibleMessages = messages
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Select(message => message.Trim())
+            .ToArray();
+
+        return visibleMessages.Length == 0
+            ? "-"
+            : string.Join("；", visibleMessages);
     }
 
     private static LogEntryViewModel CreateLogEntry(string category, string message)

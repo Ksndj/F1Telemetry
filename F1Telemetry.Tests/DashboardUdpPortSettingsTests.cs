@@ -1,4 +1,5 @@
 using System.Net;
+using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Windows.Threading;
 using F1Telemetry.AI.Interfaces;
@@ -7,6 +8,7 @@ using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.State;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -190,7 +192,52 @@ public sealed class DashboardUdpPortSettingsTests
         });
     }
 
-    private static DashboardViewModelHarness CreateDashboardViewModel(FakeAppSettingsStore appSettingsStore)
+    /// <summary>
+    /// Verifies the raw log directory command reports opener failures without leaking async exceptions.
+    /// </summary>
+    [Fact]
+    public void OpenUdpRawLogDirectoryCommand_WhenDirectoryServiceThrows_ShowsError()
+    {
+        RunOnStaThread(() =>
+        {
+            var settingsStore = new FakeAppSettingsStore(20777);
+            var rawLogWriter = new FakeUdpRawLogWriter(new UdpRawLogStatus
+            {
+                DirectoryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+            });
+            var rawLogDirectoryService = new FakeUdpRawLogDirectoryService
+            {
+                OpenException = new InvalidOperationException("explorer unavailable")
+            };
+            var harness = CreateDashboardViewModel(settingsStore, rawLogWriter, rawLogDirectoryService);
+
+            try
+            {
+                PumpDispatcherUntil(() => settingsStore.LoadCallCount > 0, TimeSpan.FromSeconds(2));
+                rawLogWriter.Status = rawLogWriter.Status with
+                {
+                    DirectoryPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"))
+                };
+
+                harness.ViewModel.OpenUdpRawLogDirectoryCommand.Execute(null);
+
+                PumpDispatcherUntil(
+                    () => harness.ViewModel.UdpRawLogLastErrorText.Contains("打开日志目录失败", StringComparison.Ordinal),
+                    TimeSpan.FromSeconds(3));
+
+                Assert.Contains("explorer unavailable", harness.ViewModel.UdpRawLogLastErrorText, StringComparison.Ordinal);
+            }
+            finally
+            {
+                harness.ViewModel.Dispose();
+            }
+        });
+    }
+
+    private static DashboardViewModelHarness CreateDashboardViewModel(
+        FakeAppSettingsStore appSettingsStore,
+        FakeUdpRawLogWriter? udpRawLogWriter = null,
+        IUdpRawLogDirectoryService? udpRawLogDirectoryService = null)
     {
         var udpListener = new FakeUdpListener();
         var ttsQueue = new TtsQueue(new FakeTtsService(), new TtsOptions());
@@ -202,12 +249,13 @@ public sealed class DashboardUdpPortSettingsTests
             new EventDetectionService(),
             new FakeAiAnalysisService(),
             appSettingsStore,
-            new FakeUdpRawLogWriter(),
+            udpRawLogWriter ?? new FakeUdpRawLogWriter(),
             new TtsMessageFactory(),
             ttsQueue,
             new FakeStoragePersistenceService(),
             Dispatcher.CurrentDispatcher,
-            new WindowsVoiceCatalog(() => new WindowsVoiceCatalogResult(Array.Empty<string>(), string.Empty, "No voices.")));
+            new WindowsVoiceCatalog(() => new WindowsVoiceCatalogResult(Array.Empty<string>(), string.Empty, "No voices.")),
+            udpRawLogDirectoryService);
 
         return new DashboardViewModelHarness(viewModel, udpListener);
     }
@@ -382,7 +430,12 @@ public sealed class DashboardUdpPortSettingsTests
 
     private sealed class FakeUdpRawLogWriter : IUdpRawLogWriter
     {
-        public UdpRawLogStatus Status { get; private set; } = new();
+        public FakeUdpRawLogWriter(UdpRawLogStatus? status = null)
+        {
+            Status = status ?? new UdpRawLogStatus();
+        }
+
+        public UdpRawLogStatus Status { get; set; } = new();
 
         public void UpdateOptions(UdpRawLogOptions options)
         {
@@ -400,6 +453,26 @@ public sealed class DashboardUdpPortSettingsTests
         public ValueTask DisposeAsync()
         {
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class FakeUdpRawLogDirectoryService : IUdpRawLogDirectoryService
+    {
+        public Exception? OpenException { get; init; }
+
+        public UdpRawLogFileInfo GetLatestFileInfo(UdpRawLogStatus status)
+        {
+            return new UdpRawLogFileInfo("无", "无", "无", string.Empty);
+        }
+
+        public UdpRawLogDirectoryOpenResult OpenDirectory(string directoryPath)
+        {
+            if (OpenException is not null)
+            {
+                throw OpenException;
+            }
+
+            return new UdpRawLogDirectoryOpenResult(true, string.Empty);
         }
     }
 
