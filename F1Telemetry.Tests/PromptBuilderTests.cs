@@ -55,6 +55,9 @@ public sealed class PromptBuilderTests
         Assert.Contains("Lap 14", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("fuel used 1.24 L", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Rear car pitted.", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("V16", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("A16", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("L16", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("packet", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("udp", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
     }
