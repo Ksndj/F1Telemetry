@@ -96,6 +96,16 @@ public static class OverviewEventSummaryFormatter
             return 80;
         }
 
+        if (ContainsAny(message, "碰撞", "最快圈"))
+        {
+            return 70;
+        }
+
+        if (ContainsAny(message, "超车", "OVTK", "Overtake"))
+        {
+            return 50;
+        }
+
         return 60;
     }
 

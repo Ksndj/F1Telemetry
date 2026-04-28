@@ -85,6 +85,114 @@ public sealed class EventSummaryAndLogCategoryTests
     }
 
     /// <summary>
+    /// Verifies that noisy raw UDP event codes remain loggable as UDP entries.
+    /// </summary>
+    [Theory]
+    [InlineData("BUTN", "UDP")]
+    [InlineData("SPTP", "UDP")]
+    [InlineData("SEND", "UDP")]
+    public void FormatRawEventCode_WithNoisyCodes_KeepsLogsAsUdp(string eventCode, string expectedCategory)
+    {
+        var display = RawEventCodeLogFormatter.Format(eventCode);
+
+        Assert.Equal(expectedCategory, display.Category);
+        Assert.Contains(eventCode, display.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that key raw event codes are shown as readable race events.
+    /// </summary>
+    [Theory]
+    [InlineData("OVTK", "超车事件")]
+    [InlineData("FTLP", "最快圈")]
+    [InlineData("COLL", "碰撞")]
+    public void FormatRawEventCode_WithKnownRaceCodes_ReturnsReadableRaceEvent(string eventCode, string expectedMessage)
+    {
+        var display = RawEventCodeLogFormatter.Format(eventCode);
+
+        Assert.Equal("RaceEvent", display.Category);
+        Assert.Equal(expectedMessage, display.Message);
+    }
+
+    /// <summary>
+    /// Verifies that session-state and unknown raw events stay out of Overview.
+    /// </summary>
+    [Fact]
+    public void BuildSummaries_WithSessionAndUnknownRawCodes_DropsThemFromOverview()
+    {
+        var sessionState = RawEventCodeLogFormatter.Format("SSTA");
+        var unknown = RawEventCodeLogFormatter.Format("ABCD");
+        var logs = new[]
+        {
+            CreateLog(sessionState.Category, sessionState.Message),
+            CreateLog(unknown.Category, unknown.Message),
+            CreateLog("RaceEvent", "低油警告：预计剩余 0.6 圈。")
+        };
+
+        var summaries = OverviewEventSummaryFormatter.BuildSummaries(logs);
+
+        Assert.Single(summaries);
+        Assert.Equal("低油警告：预计剩余 0.6 圈。", summaries[0].Message);
+        Assert.Equal("System", sessionState.Category);
+        Assert.Equal("Session 状态变化", sessionState.Message);
+        Assert.Equal("UDP", unknown.Category);
+    }
+
+    /// <summary>
+    /// Verifies that frequent overtake events do not outrank critical overview warnings.
+    /// </summary>
+    [Fact]
+    public void BuildSummaries_WithManyOvertakes_KeepsOvertakesBelowCriticalEvents()
+    {
+        var overtake = RawEventCodeLogFormatter.Format("OVTK");
+        var logs = new[]
+        {
+            CreateLog(overtake.Category, overtake.Message),
+            CreateLog(overtake.Category, overtake.Message),
+            CreateLog(overtake.Category, overtake.Message),
+            CreateLog("RaceEvent", "高胎磨警告：右后磨损过高。"),
+            CreateLog("RaceEvent", "低油警告：预计剩余 0.6 圈。"),
+            CreateLog("RaceEvent", "圈无效：本圈成绩不会计入。"),
+            CreateLog("RaceEvent", "进站提醒：前车已进站。"),
+            CreateLog("RaceEvent", "黄旗：前方事故。")
+        };
+
+        var summaries = OverviewEventSummaryFormatter.BuildSummaries(logs, maxCount: 5);
+
+        Assert.Equal(5, summaries.Count);
+        Assert.DoesNotContain(summaries, summary => summary.Message.Contains("超车", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("黄旗", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("进站", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("圈无效", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("低油", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("高胎磨", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies that fastest lap and collision stay above low-priority overtake events.
+    /// </summary>
+    [Fact]
+    public void BuildSummaries_WithFastestLapCollisionAndOvertake_PrioritizesReadableKeyEvents()
+    {
+        var overtake = RawEventCodeLogFormatter.Format("OVTK");
+        var fastestLap = RawEventCodeLogFormatter.Format("FTLP");
+        var collision = RawEventCodeLogFormatter.Format("COLL");
+        var logs = new[]
+        {
+            CreateLog(overtake.Category, overtake.Message),
+            CreateLog(fastestLap.Category, fastestLap.Message),
+            CreateLog(collision.Category, collision.Message)
+        };
+
+        var summaries = OverviewEventSummaryFormatter.BuildSummaries(logs, maxCount: 2);
+
+        Assert.Equal(2, summaries.Count);
+        Assert.DoesNotContain(summaries, summary => summary.Message.Contains("超车", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("最快圈", StringComparison.Ordinal));
+        Assert.Contains(summaries, summary => summary.Message.Contains("碰撞", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Verifies that known log categories are normalized to the public category set.
     /// </summary>
     [Theory]
