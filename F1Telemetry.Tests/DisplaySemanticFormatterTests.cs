@@ -51,6 +51,7 @@ public sealed class DisplaySemanticFormatterTests
 
     /// <summary>
     /// Verifies that visual tyre compound is used before actual compound.
+    /// The dry visual mappings are calibrated from the 2026-04-26 practice raw log observations.
     /// </summary>
     [Theory]
     [InlineData(16, 8, "红胎")]
@@ -64,6 +65,17 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies that actual wet compounds remain safe to display when visual compound is absent.
+    /// </summary>
+    [Theory]
+    [InlineData(7, "半雨胎")]
+    [InlineData(8, "全雨胎")]
+    public void TyreCompoundFormatter_Format_ActualWetCompoundWithoutVisual_ReturnsWetTyre(byte actual, string expected)
+    {
+        Assert.Equal(expected, TyreCompoundFormatter.Format(null, actual, hasTelemetryAccess: true));
+    }
+
+    /// <summary>
     /// Verifies that actual dry compounds are not guessed as soft, medium, or hard.
     /// </summary>
     [Theory]
@@ -73,6 +85,28 @@ public sealed class DisplaySemanticFormatterTests
     public void TyreCompoundFormatter_Format_ActualDryCompoundWithoutVisual_ReturnsUnknownWithCode(byte actual)
     {
         Assert.Equal($"未知胎（编码 {actual}）", TyreCompoundFormatter.Format(null, actual, hasTelemetryAccess: true));
+    }
+
+    /// <summary>
+    /// Verifies that restricted telemetry never leaks tyre compound codes through formal text.
+    /// </summary>
+    [Fact]
+    public void TyreCompoundFormatter_Format_RestrictedTelemetryWithCodes_ReturnsRestrictedText()
+    {
+        Assert.Equal("遥测受限", TyreCompoundFormatter.Format(16, 16, hasTelemetryAccess: false));
+        Assert.Equal("遥测受限", TyreCompoundFormatter.Format(null, 7, hasTelemetryAccess: false));
+    }
+
+    /// <summary>
+    /// Verifies that legacy lap tyre codes are localized without exposing raw L-prefixed text.
+    /// </summary>
+    [Fact]
+    public void TyreCompoundFormatter_FormatRawCompoundText_LegacyLapCode_ReturnsUnknownCodeFallback()
+    {
+        var text = TyreCompoundFormatter.FormatRawCompoundText("L16");
+
+        Assert.Equal("未知胎（编码 16）", text);
+        Assert.DoesNotContain("L16", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -180,6 +214,27 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies that player overview tyre text uses a Chinese compound name as its formal UI text.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_BuildTyreText_DoesNotExposeRawTyreCodes()
+    {
+        var player = CreateCar(position: 1, deltaToLeaderInMs: 0) with
+        {
+            IsPlayer = true,
+            VisualTyreCompound = 16,
+            ActualTyreCompound = 16
+        };
+
+        var text = InvokeDashboardTyreText(player);
+
+        Assert.Equal("红胎", text);
+        Assert.DoesNotContain("V16", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("A16", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("L16", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that lap history rows localize raw tyre summary text before display.
     /// </summary>
     [Fact]
@@ -216,5 +271,12 @@ public sealed class DisplaySemanticFormatterTests
         var method = typeof(DashboardViewModel).GetMethod("BuildTrackText", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return Assert.IsType<string>(method!.Invoke(null, new object?[] { trackId }));
+    }
+
+    private static string InvokeDashboardTyreText(CarSnapshot playerCar)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildTyreText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { playerCar }));
     }
 }

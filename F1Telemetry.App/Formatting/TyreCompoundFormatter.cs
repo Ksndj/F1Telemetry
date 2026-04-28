@@ -13,6 +13,11 @@ public static class TyreCompoundFormatter
     /// <param name="hasTelemetryAccess">Whether tyre telemetry is visible for this car.</param>
     public static string Format(byte? visualCompound, byte? actualCompound, bool hasTelemetryAccess)
     {
+        if (!hasTelemetryAccess)
+        {
+            return "遥测受限";
+        }
+
         if (visualCompound is not null)
         {
             return FormatVisualCompound(visualCompound.Value) ?? FormatUnknownCompound(visualCompound.Value);
@@ -51,6 +56,10 @@ public static class TyreCompoundFormatter
                 visualCompound = compound;
             }
             else if (token[0] is 'A' or 'a')
+            {
+                actualCompound = compound;
+            }
+            else if (token[0] is 'L' or 'l')
             {
                 actualCompound = compound;
             }
