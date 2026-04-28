@@ -18,6 +18,7 @@
     <ProjectReference Include="..\F1Telemetry.Storage\F1Telemetry.Storage.csproj" />
     <ProjectReference Include="..\F1Telemetry.TTS\F1Telemetry.TTS.csproj" />
     <ProjectReference Include="..\F1Telemetry.Udp\F1Telemetry.Udp.csproj" />
+    <ProjectReference Include="..\tools\F1Telemetry.RawLogAnalyzer\F1Telemetry.RawLogAnalyzer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
