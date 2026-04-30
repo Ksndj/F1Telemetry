@@ -19,6 +19,10 @@ public sealed record RaceAnalysisReport(
     ErsTrendSummary ErsTrendSummary,
     GapTrendSummary GapTrendSummary,
     IReadOnlyList<RaceEventTimelineEntry> RaceEventTimeline,
+    AiRaceSummary AiRaceSummary,
+    string AiInputPreview,
+    IReadOnlyList<string> RaceAdviceQuestions,
+    IReadOnlyList<string> DataQualityForAi,
     IReadOnlyList<string> DataQualityWarnings);
 
 /// <summary>
@@ -152,6 +156,31 @@ public enum RaceEventTimelineSource
     SessionStatus,
     DerivedSummary
 }
+
+/// <summary>
+/// Contains a compact aggregate race summary intended for offline AI review input.
+/// </summary>
+public sealed record AiRaceSummary(
+    string TrackName,
+    int TrackId,
+    int SessionType,
+    bool IsRaceSession,
+    int TotalLaps,
+    int? CompletedLaps,
+    int? GridPosition,
+    int? FinalPosition,
+    int? PositionGain,
+    uint? BestLapTimeInMs,
+    double? AverageLapTimeInMs,
+    int PitStopCount,
+    int SafetyCarCount,
+    int VirtualSafetyCarCount,
+    int RedFlagCount,
+    IReadOnlyList<string> Stints,
+    IReadOnlyList<string> Trends,
+    IReadOnlyList<string> KeyEvents,
+    IReadOnlyList<string> DataQualityLimitations,
+    bool IsTruncated);
 
 /// <summary>
 /// Describes which evidence source produced a stint summary.

@@ -37,6 +37,9 @@ internal static class RawLogMarkdownReportWriter
         AppendErsTrendSummary(builder, report.ErsTrendSummary);
         AppendGapTrendSummary(builder, report.GapTrendSummary);
         AppendRaceEventTimeline(builder, report);
+        AppendAiRaceSummaryInput(builder, report);
+        AppendAiRaceAdviceQuestions(builder, report.RaceAdviceQuestions);
+        AppendAiDataQualityWarnings(builder, report.DataQualityForAi);
         AppendDataQualityWarnings(builder, report.DataQualityWarnings);
         return builder.ToString();
     }
@@ -301,6 +304,58 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine("## Data Quality Warnings");
         builder.AppendLine();
 
+        foreach (var warning in warnings)
+        {
+            builder.AppendLine($"- {warning}");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendAiRaceSummaryInput(StringBuilder builder, RaceAnalysisReport report)
+    {
+        builder.AppendLine("## AI Race Summary Input");
+        builder.AppendLine();
+        if (report.SessionSummary.SessionType != RaceSessionType)
+        {
+            builder.AppendLine("- Notes: 非正赛样本，仅供调试");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine($"- Preview length characters: {report.AiInputPreview.Length}");
+        builder.AppendLine($"- Key events included: {report.AiRaceSummary.KeyEvents.Count}");
+        builder.AppendLine();
+        builder.AppendLine("```text");
+        builder.Append(report.AiInputPreview);
+        if (!report.AiInputPreview.EndsWith(Environment.NewLine, StringComparison.Ordinal))
+        {
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("```");
+        builder.AppendLine();
+    }
+
+    private static void AppendAiRaceAdviceQuestions(
+        StringBuilder builder,
+        IReadOnlyList<string> questions)
+    {
+        builder.AppendLine("## AI Race Advice Questions");
+        builder.AppendLine();
+        foreach (var question in questions)
+        {
+            builder.AppendLine($"- {question}");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendAiDataQualityWarnings(
+        StringBuilder builder,
+        IReadOnlyList<string> warnings)
+    {
+        builder.AppendLine("## AI Data Quality Warnings");
+        builder.AppendLine();
         foreach (var warning in warnings)
         {
             builder.AppendLine($"- {warning}");

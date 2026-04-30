@@ -624,6 +624,139 @@ public sealed class RawLogAnalyzerTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_WritesAiRaceSummaryInputFromAggregateReportData()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 2), timestampUtc: "2026-04-28T10:00:00.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "SSTA"), timestampUtc: "2026-04-28T10:00:01.0000000Z"),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 1, Position: 5, DeltaToCarInFrontInMs: 900, TotalDistance: 100f),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 1, Position: 6, DeltaToCarInFrontInMs: 700, TotalDistance: 98f))),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 20f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 1, fuelRemainingLaps: 2.5f, ersStoreEnergy: 2_000_000f)),
+            BuildRecord(BuildEventPacket(1001UL, "PENA", [1, 2, 0, 4, 5, 2, 0]), timestampUtc: "2026-04-28T10:00:03.0000000Z"),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 2, Position: 8, DeltaToCarInFrontInMs: 800, TotalDistance: 200f, ResultStatus: 3, PitStatus: 1, NumPitStops: 1),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 2, Position: 9, DeltaToCarInFrontInMs: 700, TotalDistance: 198f, ResultStatus: 3))),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 18f, actualCompound: 18, visualCompound: 18, tyreAgeLaps: 0, fuelRemainingLaps: 0.4f, ersStoreEnergy: 400_000f, ersDeployedThisLap: 900_000f)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 75f)),
+            BuildRecord(BuildSessionHistoryPacket(
+                1001UL,
+                numLaps: 2,
+                firstLapTimeInMs: 90000,
+                lapTimesInMs: [90000U, 91000U],
+                tyreStints:
+                [
+                    new TyreStintTestData(EndLap: 1, Actual: 16, Visual: 17),
+                    new TyreStintTestData(EndLap: 2, Actual: 18, Visual: 18)
+                ])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 8, numLaps: 2, gridPosition: 5, points: 4, bestLapTimeInMs: 90000, penaltiesTime: 5, numPenalties: 1, numPitStops: 1))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var report = result.RaceReport;
+        Assert.Equal("Unknown track (TrackId 9)", report.AiRaceSummary.TrackName);
+        Assert.NotEmpty(report.RaceAdviceQuestions);
+        Assert.Contains("本场策略是否亏损？", report.RaceAdviceQuestions);
+        Assert.Contains(report.AiRaceSummary.KeyEvents, item => item.Contains("Penalty", StringComparison.OrdinalIgnoreCase));
+
+        var preview = report.AiInputPreview;
+        Assert.Contains("TrackName:", preview);
+        Assert.Contains("SessionType:", preview);
+        Assert.Contains("Stints:", preview);
+        Assert.Contains("KeyEvents:", preview);
+        Assert.Contains("DataQuality:", preview);
+        Assert.Contains("不要编造", preview);
+        Assert.Contains("数据不足时说明", preview);
+        Assert.DoesNotContain("payloadBase64", preview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CarTelemetry[]", preview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", preview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LapData[]", preview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("API Key", preview, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(inputPath, preview, StringComparison.OrdinalIgnoreCase);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("## AI Race Summary Input", markdown);
+        Assert.Contains("## AI Race Advice Questions", markdown);
+        Assert.Contains("## AI Data Quality Warnings", markdown);
+        Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CarTelemetry[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LapData[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("API Key", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(inputPath, markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_GeneratesAiSummaryWhenRaceAggregatesAreSparse()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 3)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 2))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.NotEmpty(result.RaceReport.AiInputPreview);
+        Assert.NotEmpty(result.RaceReport.RaceAdviceQuestions);
+        Assert.Contains(result.RaceReport.DataQualityForAi, warning => warning.Contains("stint", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.RaceReport.DataQualityForAi, warning => warning.Contains("pit", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.RaceReport.DataQualityForAi, warning => warning.Contains("event", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("No key race events were decoded.", result.RaceReport.AiInputPreview);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_LimitsAiKeyEventsAndPreviewLength()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new List<string>
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 20))
+        };
+        for (byte lap = 1; lap <= 20; lap++)
+        {
+            lines.Add(BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(
+                    CarIndex: 0,
+                    CurrentLap: lap,
+                    Position: 5,
+                    DeltaToCarInFrontInMs: 900,
+                    TotalDistance: lap * 100f,
+                    ResultStatus: lap == 20 ? (byte)3 : (byte)2,
+                    IsCurrentLapInvalid: true))));
+        }
+
+        lines.Add(BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 20, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0)));
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.True(result.RaceReport.RaceEventTimeline.Count > 15);
+        Assert.Equal(15, result.RaceReport.AiRaceSummary.KeyEvents.Count);
+        Assert.True(result.RaceReport.AiInputPreview.Length <= 8000);
+        Assert.Contains("AI input preview was truncated.", result.RaceReport.DataQualityForAi);
+        Assert.Contains("AI input preview was truncated.", result.RaceReport.AiInputPreview);
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_FiltersUnrelatedOvertakesFromRaceEventTimeline()
     {
         var inputPath = CreateTempJsonlPath();
@@ -664,10 +797,13 @@ public sealed class RawLogAnalyzerTests
         Assert.NotNull(result.RaceReport);
         Assert.Equal(12, result.RaceReport.SessionSummary.SessionType);
         Assert.Contains("非正赛样本，事件线仅供调试", result.RaceReport.DataQualityWarnings);
+        Assert.Contains("非正赛样本，仅供调试", result.RaceReport.DataQualityForAi);
+        Assert.Contains("非正赛样本，仅供调试", result.RaceReport.AiInputPreview);
         Assert.Contains(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.Start);
 
         var markdown = await File.ReadAllTextAsync(outputPath);
         Assert.Contains("非正赛样本，事件线仅供调试", markdown);
+        Assert.Contains("非正赛样本，仅供调试", markdown);
     }
 
     [Fact]
