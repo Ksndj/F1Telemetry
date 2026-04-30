@@ -30,6 +30,9 @@ internal static class RawLogMarkdownReportWriter
         AppendLapSummaries(builder, report.LapSummaries);
         AppendStintSummaries(builder, report.StintSummaries);
         AppendPitStopSummaries(builder, report.PitStopSummaries);
+        AppendTyreUsageSummaries(builder, report.TyreUsageSummaries);
+        AppendFuelTrendSummary(builder, report.FuelTrendSummary);
+        AppendErsTrendSummary(builder, report.ErsTrendSummary);
         AppendDataQualityWarnings(builder, report.DataQualityWarnings);
         return builder.ToString();
     }
@@ -129,6 +132,70 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine();
     }
 
+    private static void AppendTyreUsageSummaries(StringBuilder builder, IReadOnlyList<TyreUsageSummary> tyreUsageSummaries)
+    {
+        builder.AppendLine("## Tyre Usage Summary");
+        builder.AppendLine();
+
+        if (tyreUsageSummaries.Count == 0)
+        {
+            builder.AppendLine("- No tyre usage summaries were decoded.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Stint | Start lap | End lap | Laps | Actual | Visual | Start age | End age | Start wear % | End wear % | Max wear % | Wear delta % | Avg wear/lap % | Observed laps | Risk | Confidence | Notes |");
+        builder.AppendLine("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |");
+        foreach (var summary in tyreUsageSummaries)
+        {
+            builder.AppendLine($"| {summary.StintIndex} | {summary.StartLap} | {summary.EndLap} | {summary.LapCount} | {FormatOptional(summary.ActualTyreCompound)} | {FormatOptional(summary.VisualTyreCompound)} | {FormatOptional(summary.StartTyreAge)} | {FormatOptional(summary.EndTyreAge)} | {FormatOptional(summary.StartWearPercent)} | {FormatOptional(summary.EndWearPercent)} | {FormatOptional(summary.MaxWearPercent)} | {FormatOptional(summary.WearDeltaPercent)} | {FormatOptional(summary.AverageWearPerLapPercent)} | {summary.ObservedLapCount} | {summary.Risk} | {summary.Confidence} | {summary.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendFuelTrendSummary(StringBuilder builder, FuelTrendSummary summary)
+    {
+        builder.AppendLine("## Fuel Trend Summary");
+        builder.AppendLine();
+        builder.AppendLine($"- Start fuel kg: {FormatOptional(summary.StartFuelKg)}");
+        builder.AppendLine($"- End fuel kg: {FormatOptional(summary.EndFuelKg)}");
+        builder.AppendLine($"- Min fuel kg: {FormatOptional(summary.MinFuelKg)}");
+        builder.AppendLine($"- Max fuel kg: {FormatOptional(summary.MaxFuelKg)}");
+        builder.AppendLine($"- Fuel used kg: {FormatOptional(summary.FuelUsedKg)}");
+        builder.AppendLine($"- Average fuel per lap kg: {FormatOptional(summary.AverageFuelPerLapKg)}");
+        builder.AppendLine($"- Start fuel remaining laps: {FormatOptional(summary.StartFuelRemainingLaps)}");
+        builder.AppendLine($"- End fuel remaining laps: {FormatOptional(summary.EndFuelRemainingLaps)}");
+        builder.AppendLine($"- Min fuel remaining laps: {FormatOptional(summary.MinFuelRemainingLaps)}");
+        builder.AppendLine($"- Observed lap count: {summary.ObservedLapCount}");
+        builder.AppendLine($"- Risk: {summary.Risk}");
+        builder.AppendLine($"- Confidence: {summary.Confidence}");
+        builder.AppendLine($"- Notes: {summary.Notes}");
+        builder.AppendLine();
+    }
+
+    private static void AppendErsTrendSummary(StringBuilder builder, ErsTrendSummary summary)
+    {
+        builder.AppendLine("## ERS Trend Summary");
+        builder.AppendLine();
+        builder.AppendLine($"- Start store energy MJ: {FormatOptional(summary.StartStoreEnergyMJ)}");
+        builder.AppendLine($"- End store energy MJ: {FormatOptional(summary.EndStoreEnergyMJ)}");
+        builder.AppendLine($"- Min store energy MJ: {FormatOptional(summary.MinStoreEnergyMJ)}");
+        builder.AppendLine($"- Max store energy MJ: {FormatOptional(summary.MaxStoreEnergyMJ)}");
+        builder.AppendLine($"- Net store energy delta MJ: {FormatOptional(summary.NetStoreEnergyDeltaMJ)}");
+        builder.AppendLine($"- Average harvested per lap MJ: {FormatOptional(summary.AverageHarvestedPerLapMJ)}");
+        builder.AppendLine($"- Average deployed per lap MJ: {FormatOptional(summary.AverageDeployedPerLapMJ)}");
+        builder.AppendLine($"- Last deploy mode: {FormatOptional(summary.LastDeployMode)}");
+        builder.AppendLine($"- Low ERS lap count: {summary.LowErsLapCount}");
+        builder.AppendLine($"- High usage laps: {summary.HighUsageLaps}");
+        builder.AppendLine($"- Recovery laps: {summary.RecoveryLaps}");
+        builder.AppendLine($"- Observed lap count: {summary.ObservedLapCount}");
+        builder.AppendLine($"- Risk: {summary.Risk}");
+        builder.AppendLine($"- Confidence: {summary.Confidence}");
+        builder.AppendLine($"- Notes: {summary.Notes}");
+        builder.AppendLine();
+    }
+
     private static void AppendDataQualityWarnings(StringBuilder builder, IReadOnlyList<string> warnings)
     {
         builder.AppendLine("## Data Quality Warnings");
@@ -157,6 +224,11 @@ internal static class RawLogMarkdownReportWriter
     private static string FormatOptional(uint? value)
     {
         return value?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
+    }
+
+    private static string FormatOptional(float? value)
+    {
+        return value?.ToString("0.###", CultureInfo.InvariantCulture) ?? "unavailable";
     }
 
     private static string FormatOptional(string? value)

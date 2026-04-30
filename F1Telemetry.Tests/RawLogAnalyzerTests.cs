@@ -197,6 +197,168 @@ public sealed class RawLogAnalyzerTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_WritesRaceTrendSummariesWithKgFuelAndErsLapCounts()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 3)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 2, numPitStops: 0, lastLapTimeInMs: 90000)),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 30f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 1, fuelRemainingLaps: 3.5f, ersStoreEnergy: 2_500_000f, ersDeployMode: 1, ersHarvestedThisLapMguk: 100_000f, ersHarvestedThisLapMguh: 50_000f, ersDeployedThisLap: 700_000f)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 10f)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 2, totalDistance: 200f, position: 5, resultStatus: 2, numPitStops: 0, lastLapTimeInMs: 91000)),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 27f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 2, fuelRemainingLaps: 2.2f, ersStoreEnergy: 400_000f, ersDeployMode: 3, ersHarvestedThisLapMguk: 80_000f, ersHarvestedThisLapMguh: 40_000f, ersDeployedThisLap: 900_000f)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 55f)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 3, totalDistance: 300f, position: 5, resultStatus: 3, numPitStops: 0, lastLapTimeInMs: 92000)),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 24f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 3, fuelRemainingLaps: 1.2f, ersStoreEnergy: 1_200_000f, ersDeployMode: 2, ersHarvestedThisLapMguk: 400_000f, ersHarvestedThisLapMguh: 200_000f, ersDeployedThisLap: 200_000f)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 70f)),
+            BuildRecord(BuildSessionHistoryPacket(
+                1001UL,
+                numLaps: 3,
+                firstLapTimeInMs: 90000,
+                lapTimesInMs: [90000U, 91000U, 92000U],
+                tyreStints:
+                [
+                    new TyreStintTestData(EndLap: 3, Actual: 16, Visual: 17)
+                ])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 3, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var tyreUsage = Assert.Single(result.RaceReport.TyreUsageSummaries);
+        Assert.Equal(1, tyreUsage.StintIndex);
+        Assert.Equal(10f, tyreUsage.StartWearPercent);
+        Assert.Equal(70f, tyreUsage.EndWearPercent);
+        Assert.Equal(70f, tyreUsage.MaxWearPercent);
+        Assert.Equal(60f, tyreUsage.WearDeltaPercent);
+        Assert.Equal(20f, tyreUsage.AverageWearPerLapPercent);
+        Assert.Equal(3, tyreUsage.ObservedLapCount);
+        Assert.Equal(RaceTrendRisk.High, tyreUsage.Risk);
+        Assert.Equal(RaceAnalysisConfidence.High, tyreUsage.Confidence);
+
+        var fuel = result.RaceReport.FuelTrendSummary;
+        Assert.Equal(30f, fuel.StartFuelKg);
+        Assert.Equal(24f, fuel.EndFuelKg);
+        Assert.Equal(24f, fuel.MinFuelKg);
+        Assert.Equal(30f, fuel.MaxFuelKg);
+        Assert.Equal(6f, fuel.FuelUsedKg);
+        Assert.Equal(2f, fuel.AverageFuelPerLapKg);
+        Assert.Equal(1.2f, fuel.MinFuelRemainingLaps);
+        Assert.Equal(RaceTrendRisk.Medium, fuel.Risk);
+        Assert.Equal(RaceAnalysisConfidence.High, fuel.Confidence);
+
+        var ers = result.RaceReport.ErsTrendSummary;
+        Assert.Equal(2.5f, ers.StartStoreEnergyMJ);
+        Assert.Equal(1.2f, ers.EndStoreEnergyMJ);
+        Assert.Equal(0.4f, ers.MinStoreEnergyMJ);
+        Assert.Equal(2.5f, ers.MaxStoreEnergyMJ);
+        Assert.Equal(-1.3f, ers.NetStoreEnergyDeltaMJ);
+        Assert.Equal(1, ers.LowErsLapCount);
+        Assert.Equal(2, ers.HighUsageLaps);
+        Assert.Equal(1, ers.RecoveryLaps);
+        Assert.Equal(RaceTrendRisk.High, ers.Risk);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("## Tyre Usage Summary", markdown);
+        Assert.Contains("## Fuel Trend Summary", markdown);
+        Assert.Contains("Start fuel kg", markdown);
+        Assert.DoesNotContain("liters", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("litres", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("## ERS Trend Summary", markdown);
+        Assert.Contains("Low ERS lap count: 1", markdown);
+        Assert.Contains("High usage laps: 2", markdown);
+        Assert.Contains("Recovery laps: 1", markdown);
+        Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CarTelemetry[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_UsesCarDamageTyreWearBeforeTyreSetsWhenSourcesDisagree()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 2)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 2, lastLapTimeInMs: 90000)),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 20f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 1)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 20f)),
+            BuildRecord(BuildTyreSetsPacket(1001UL, actualCompound: 16, visualCompound: 17, wear: 44)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 2, totalDistance: 200f, position: 5, resultStatus: 3, lastLapTimeInMs: 91000)),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 18f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 2)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 30f)),
+            BuildRecord(BuildTyreSetsPacket(1001UL, actualCompound: 16, visualCompound: 17, wear: 60)),
+            BuildRecord(BuildSessionHistoryPacket(
+                1001UL,
+                numLaps: 2,
+                firstLapTimeInMs: 90000,
+                lapTimesInMs: [90000U, 91000U],
+                tyreStints:
+                [
+                    new TyreStintTestData(EndLap: 2, Actual: 16, Visual: 17)
+                ])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 2, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var tyreUsage = Assert.Single(result.RaceReport.TyreUsageSummaries);
+        Assert.Equal(20f, tyreUsage.StartWearPercent);
+        Assert.Equal(30f, tyreUsage.EndWearPercent);
+        Assert.Equal(30f, tyreUsage.MaxWearPercent);
+        Assert.Contains("TyreSets", tyreUsage.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CarDamage", tyreUsage.Notes, StringComparison.OrdinalIgnoreCase);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("TyreSets", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CarDamage", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WritesUnavailableTrendSummariesWhenTrendPacketsAreMissing()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 3, lastLapTimeInMs: 90000)),
+            BuildRecord(BuildSessionHistoryPacket(
+                1001UL,
+                numLaps: 1,
+                firstLapTimeInMs: 90000,
+                lapTimesInMs: [90000U],
+                tyreStints:
+                [
+                    new TyreStintTestData(EndLap: 1, Actual: 16, Visual: 17)
+                ])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 1, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.Equal(RaceTrendRisk.Unknown, result.RaceReport.FuelTrendSummary.Risk);
+        Assert.Equal(RaceTrendRisk.Unknown, result.RaceReport.ErsTrendSummary.Risk);
+        Assert.Equal(RaceTrendRisk.Unknown, Assert.Single(result.RaceReport.TyreUsageSummaries).Risk);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("unavailable", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_LabelsSlowLapOnlyPitInferenceAsPossibleLowConfidence()
     {
         var inputPath = CreateTempJsonlPath();
@@ -487,16 +649,30 @@ public sealed class RawLogAnalyzerTests
         float fuelInTank,
         byte actualCompound,
         byte visualCompound,
-        byte tyreAgeLaps = 9)
+        byte tyreAgeLaps = 9,
+        float fuelRemainingLaps = 0,
+        float ersStoreEnergy = 0,
+        byte ersDeployMode = 0,
+        float ersHarvestedThisLapMguk = 0,
+        float ersHarvestedThisLapMguh = 0,
+        float ersDeployedThisLap = 0)
     {
         return BuildPacket(sessionUid, PacketId.CarStatus, UdpPacketConstants.CarStatusBodySize, body =>
         {
             var offset = 5;
             ProtocolTestData.WriteFloat(body, ref offset, fuelInTank);
+            ProtocolTestData.WriteFloat(body, ref offset, 110f);
+            ProtocolTestData.WriteFloat(body, ref offset, fuelRemainingLaps);
             offset = 25;
             ProtocolTestData.WriteByte(body, ref offset, actualCompound);
             ProtocolTestData.WriteByte(body, ref offset, visualCompound);
             ProtocolTestData.WriteByte(body, ref offset, tyreAgeLaps);
+            offset = 37;
+            ProtocolTestData.WriteFloat(body, ref offset, ersStoreEnergy);
+            ProtocolTestData.WriteByte(body, ref offset, ersDeployMode);
+            ProtocolTestData.WriteFloat(body, ref offset, ersHarvestedThisLapMguk);
+            ProtocolTestData.WriteFloat(body, ref offset, ersHarvestedThisLapMguh);
+            ProtocolTestData.WriteFloat(body, ref offset, ersDeployedThisLap);
         });
     }
 

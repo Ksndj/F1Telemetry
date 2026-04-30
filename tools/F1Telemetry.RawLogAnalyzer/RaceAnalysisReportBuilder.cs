@@ -31,6 +31,8 @@ public static class RaceAnalysisReportBuilder
             DatagramCount: session.DatagramCount,
             PacketCounts: new SortedDictionary<PacketId, long>(session.PacketCounts));
 
+        var stintSummaries = session.BuildStintSummaries();
+
         return new RaceAnalysisReport(
             GeneratedAt: generatedAt,
             InputFile: Path.GetFileName(result.InputPath),
@@ -38,8 +40,11 @@ public static class RaceAnalysisReportBuilder
             SessionSummary: sessionSummary,
             PlayerRaceSummary: session.BuildPlayerRaceSummary(),
             LapSummaries: session.BuildRaceLapSummaries(),
-            StintSummaries: session.BuildStintSummaries(),
+            StintSummaries: stintSummaries,
             PitStopSummaries: session.BuildPitStopSummaries(),
+            TyreUsageSummaries: session.BuildTyreUsageSummaries(stintSummaries),
+            FuelTrendSummary: session.BuildFuelTrendSummary(),
+            ErsTrendSummary: session.BuildErsTrendSummary(),
             DataQualityWarnings: BuildWarnings(result, session));
     }
 
