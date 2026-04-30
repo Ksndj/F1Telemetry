@@ -68,7 +68,9 @@ public sealed class AiBroadcastConversionTests
         var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "ChartsView.xaml"));
 
         Assert.Contains("AI 分析播报", xaml, StringComparison.Ordinal);
-        Assert.Contains("AiTtsLogs", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiAnalysisLogs", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiCompletionModes", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("AiTtsLogs", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("TelemetryChartControl", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("实时图表", xaml, StringComparison.Ordinal);
     }

@@ -37,8 +37,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxLogEntries = 50;
     private const int MaxPendingEventLogs = 200;
     private const int MaxPendingAiTtsLogs = 200;
+    private const int MaxPendingAiAnalysisLogs = 200;
     private const int MaxOverviewEventSummaries = 4;
     private const int MaxOverviewEventSummaryChars = 40;
+    private const int MaxPostRaceAiLaps = 15;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
     private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
@@ -64,8 +66,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly CancellationTokenSource _lifecycleCts = new();
     private readonly Queue<LogEntryViewModel> _pendingEventLogs = new();
     private readonly Queue<LogEntryViewModel> _pendingAiTtsLogs = new();
+    private readonly Queue<LogEntryViewModel> _pendingAiAnalysisLogs = new();
     private readonly object _pendingEventLogsLock = new();
     private readonly object _pendingAiTtsLogsLock = new();
+    private readonly object _pendingAiAnalysisLogsLock = new();
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
     private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
@@ -73,7 +77,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _downloadLatestVersionCommand;
     private readonly RelayCommand _toggleSidebarCommand;
     private readonly RelayCommand _openUdpRawLogDirectoryCommand;
+    private readonly RelayCommand _generatePostRaceAiSummaryCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
+    private PostRaceAiCompletionModeOptionViewModel? _selectedPostRaceAiCompletionMode;
     private bool _isSidebarExpanded = true;
     private bool _isBusy;
     private bool _isListening;
@@ -147,9 +153,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _lastSavedUdpListenPort = UdpSettings.DefaultListenPort;
     private int _udpSettingsSaveVersion;
     private ulong? _activeSessionUid;
-    private string? _lastAnalyzedLapKey;
+    private string? _lastPostRaceAiSummaryKey;
+    private string? _lastStagedPostRaceAiKey;
     private string? _lastPersistedLapKey;
     private int? _lastTrendRefreshLapNumber;
+    private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
+    private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
     private readonly object _shutdownGate = new();
     private Task? _shutdownTask;
     private bool _disposed;
@@ -213,9 +222,32 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         RecentLapSummaries = new ObservableCollection<LapSummaryItemViewModel>();
         EventLogs = new ObservableCollection<LogEntryViewModel>();
         AiTtsLogs = new ObservableCollection<LogEntryViewModel>();
+        AiAnalysisLogs = new ObservableCollection<LogEntryViewModel>();
         LogEntries = new ObservableCollection<LogEntryViewModel>();
         OverviewEventSummaries = new ObservableCollection<LogEntryViewModel>();
         AvailableVoices = new ObservableCollection<string>();
+        PostRaceAiCompletionModes = new ObservableCollection<PostRaceAiCompletionModeOptionViewModel>(
+        [
+            new()
+            {
+                Mode = PostRaceAiCompletionMode.Auto,
+                DisplayName = "自动判断",
+                Description = "收到正赛最终分类后自动生成总结。"
+            },
+            new()
+            {
+                Mode = PostRaceAiCompletionMode.Hold,
+                DisplayName = "暂存不总结",
+                Description = "中途存档或未跑完时保留状态，不上传 AI。"
+            },
+            new()
+            {
+                Mode = PostRaceAiCompletionMode.ForceComplete,
+                DisplayName = "标记已完成",
+                Description = "手动确认已跑完并生成赛后总结。"
+            }
+        ]);
+        _selectedPostRaceAiCompletionMode = PostRaceAiCompletionModes[0];
         SpeedChartPanel = new ChartPanelViewModel();
         InputsChartPanel = new ChartPanelViewModel();
         FuelTrendChartPanel = new ChartPanelViewModel();
@@ -231,7 +263,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         var initialLogEntry = CreateLogEntry("System", "AI / TTS 日志已准备就绪。");
         AiTtsLogs.Add(initialLogEntry);
-        LogEntries.Add(initialLogEntry);
+        AiAnalysisLogs.Add(CreateLogEntry("AI", "赛后 AI 总结等待完整正赛结束。"));
+        LogEntries.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
         LoadAvailableVoices();
         RefreshUdpRawLogStatus();
 
@@ -240,6 +273,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
         _toggleSidebarCommand = new RelayCommand(ToggleSidebar);
         _openUdpRawLogDirectoryCommand = new RelayCommand(OpenUdpRawLogDirectory);
+        _generatePostRaceAiSummaryCommand = new RelayCommand(
+            () =>
+            {
+                var sessionState = _sessionStateStore.CaptureState();
+                _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, sessionState.PlayerCar, force: true);
+            },
+            () => CanGeneratePostRaceAiSummary);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -409,7 +449,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             if (SetProperty(ref _aiEnabled, value))
             {
+                _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
+                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
                 QueuePersistAiSettings();
             }
         }
@@ -455,7 +498,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             if (SetProperty(ref _aiApiKey, value))
             {
+                _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
+                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
                 QueuePersistAiSettings();
             }
         }
@@ -711,6 +757,60 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public ObservableCollection<LogEntryViewModel> AiTtsLogs { get; }
 
     /// <summary>
+    /// Gets the post-race AI summary lifecycle entries shown on the AI broadcast page.
+    /// </summary>
+    public ObservableCollection<LogEntryViewModel> AiAnalysisLogs { get; }
+
+    /// <summary>
+    /// Gets the selectable post-race AI completion modes.
+    /// </summary>
+    public ObservableCollection<PostRaceAiCompletionModeOptionViewModel> PostRaceAiCompletionModes { get; }
+
+    /// <summary>
+    /// Gets or sets the selected post-race AI completion mode.
+    /// </summary>
+    public PostRaceAiCompletionModeOptionViewModel? SelectedPostRaceAiCompletionMode
+    {
+        get => _selectedPostRaceAiCompletionMode;
+        set
+        {
+            if (SetProperty(ref _selectedPostRaceAiCompletionMode, value))
+            {
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
+                if (value?.Mode == PostRaceAiCompletionMode.ForceComplete)
+                {
+                    var sessionState = _sessionStateStore.CaptureState();
+                    _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, sessionState.PlayerCar, force: true);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the current post-race AI summary state.
+    /// </summary>
+    public string PostRaceAiStatusText
+    {
+        get => _postRaceAiStatusText;
+        private set => SetProperty(ref _postRaceAiStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the current completion evidence used for post-race AI gating.
+    /// </summary>
+    public string PostRaceAiCompletionText
+    {
+        get => _postRaceAiCompletionText;
+        private set => SetProperty(ref _postRaceAiCompletionText, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the manual post-race AI summary command can run.
+    /// </summary>
+    public bool CanGeneratePostRaceAiSummary =>
+        AiEnabled && !_isAiAnalysisRunning && CaptureAiSummaryLap(_sessionStateStore.CaptureState()) is not null;
+
+    /// <summary>
     /// Gets the current-lap speed chart panel state.
     /// </summary>
     public ChartPanelViewModel SpeedChartPanel { get; }
@@ -759,6 +859,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the command that opens the raw UDP log directory.
     /// </summary>
     public ICommand OpenUdpRawLogDirectoryCommand => _openUdpRawLogDirectoryCommand;
+
+    /// <summary>
+    /// Gets the command that manually generates a post-race AI summary from staged race data.
+    /// </summary>
+    public ICommand GeneratePostRaceAiSummaryCommand => _generatePostRaceAiSummaryCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
@@ -1478,7 +1583,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             if (IsListening)
             {
                 _activeSessionUid = null;
-                _lastAnalyzedLapKey = null;
+                _lastPostRaceAiSummaryKey = null;
+                _lastStagedPostRaceAiKey = null;
                 _lastPersistedLapKey = null;
                 _lastTrendRefreshLapNumber = null;
                 ResetChartPanels();
@@ -1519,8 +1625,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             ListeningPort = null;
             Interlocked.Exchange(ref _lastPacketReceivedUnixMs, -1);
             PacketsPerSecond = 0;
+            MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "UDP 监听已停止，未收到最终分类。");
             _activeSessionUid = null;
-            _lastAnalyzedLapKey = null;
+            _lastPostRaceAiSummaryKey = null;
+            _lastStagedPostRaceAiKey = null;
             _lastPersistedLapKey = null;
             _lastTrendRefreshLapNumber = null;
             ResetChartPanels();
@@ -1572,10 +1680,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "检测到新的 UDP session，上一场正赛未收到最终分类。");
         _sessionStateStore.Reset();
         _eventDetectionService.Reset();
         _lapAnalyzer.ResetForSession(incomingSessionUid);
-        _lastAnalyzedLapKey = null;
+        _lastPostRaceAiSummaryKey = null;
+        _lastStagedPostRaceAiKey = null;
         _lastPersistedLapKey = null;
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
@@ -1598,6 +1708,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         DrainTtsPlaybackRecords();
         DrainPendingEventLogs();
         DrainPendingAiTtsLogs();
+        DrainPendingAiAnalysisLogs();
         RefreshConnectionState();
         RefreshCounters();
         RefreshUdpRawLogStatus();
@@ -1725,7 +1836,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         RefreshLapHistory();
         PersistLatestLapIfNeeded();
         TrackLatestEvent(sessionState.LastEventCode);
-        _ = TriggerAiAnalysisIfNeededAsync(sessionState, playerCar);
+        RefreshPostRaceAiStatus(sessionState);
+        _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, playerCar);
     }
 
     private void UpdatePlayerCard(SessionState sessionState, CarSnapshot? playerCar)
@@ -1901,6 +2013,40 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             while (_pendingAiTtsLogs.Count > MaxPendingAiTtsLogs)
             {
                 _pendingAiTtsLogs.Dequeue();
+            }
+        }
+    }
+
+    private void DrainPendingAiAnalysisLogs()
+    {
+        while (true)
+        {
+            LogEntryViewModel? logEntry;
+            lock (_pendingAiAnalysisLogsLock)
+            {
+                if (!_pendingAiAnalysisLogs.TryDequeue(out logEntry))
+                {
+                    break;
+                }
+            }
+
+            AiAnalysisLogs.Insert(0, logEntry);
+
+            while (AiAnalysisLogs.Count > MaxLogEntries)
+            {
+                AiAnalysisLogs.RemoveAt(AiAnalysisLogs.Count - 1);
+            }
+        }
+    }
+
+    private void EnqueueAiAnalysisLog(string category, string message)
+    {
+        lock (_pendingAiAnalysisLogsLock)
+        {
+            _pendingAiAnalysisLogs.Enqueue(CreateLogEntry(category, message));
+            while (_pendingAiAnalysisLogs.Count > MaxPendingAiAnalysisLogs)
+            {
+                _pendingAiAnalysisLogs.Dequeue();
             }
         }
     }
@@ -2163,54 +2309,63 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         return AvailableVoices.FirstOrDefault() ?? string.Empty;
     }
 
-    private async Task TriggerAiAnalysisIfNeededAsync(SessionState sessionState, CarSnapshot? playerCar)
+    private async Task TriggerPostRaceAiAnalysisIfReadyAsync(
+        SessionState sessionState,
+        CarSnapshot? playerCar,
+        bool force = false)
     {
         if (_isAiAnalysisRunning || !AiEnabled)
         {
             return;
         }
 
-        var lastLap = _lapAnalyzer.CaptureLastLap();
+        var lastLap = CaptureAiSummaryLap(sessionState);
         if (lastLap is null)
         {
             return;
         }
 
-        var lapKey = BuildSessionLapKey(lastLap.LapNumber);
-        if (string.Equals(_lastAnalyzedLapKey, lapKey, StringComparison.Ordinal))
+        var completion = EvaluatePostRaceAiCompletion(sessionState, force);
+        if (!completion.ShouldGenerate)
+        {
+            return;
+        }
+
+        var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
+        if (string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
         {
             return;
         }
 
         if (string.IsNullOrWhiteSpace(AiApiKey))
         {
-            _lastAnalyzedLapKey = lapKey;
-            EnqueueAiTtsLog("AI", BuildAiFailureLogText(lastLap.LapNumber, AIErrorMessageFormatter.MissingApiKey));
+            _lastPostRaceAiSummaryKey = summaryKey;
+            PostRaceAiStatusText = "赛后 AI 总结未上传：AI API Key 未配置。";
+            EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, AIErrorMessageFormatter.MissingApiKey));
             return;
         }
 
-        _lastAnalyzedLapKey = lapKey;
+        _lastPostRaceAiSummaryKey = summaryKey;
         _isAiAnalysisRunning = true;
+        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
         var analysisSessionUid = _activeSessionUid;
+        PostRaceAiStatusText = completion.IsManual
+            ? "用户已标记完赛，正在生成赛后 AI 总结..."
+            : "已收到 UDP 最终分类，正在生成赛后 AI 总结...";
+        EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
 
         try
         {
             var result = await _aiAnalysisService.AnalyzeAsync(
                 BuildAiAnalysisContext(sessionState, playerCar, lastLap),
-                new AISettings
-                {
-                    ApiKey = AiApiKey,
-                    BaseUrl = AiBaseUrl,
-                    Model = AiModel,
-                    AiEnabled = AiEnabled,
-                    RequestTimeoutSeconds = _aiRequestTimeoutSeconds <= 0 ? 10 : _aiRequestTimeoutSeconds
-                },
+                BuildAiSettings(),
                 _lifecycleCts.Token);
 
             if (_activeSessionUid != analysisSessionUid ||
-                !string.Equals(_lastAnalyzedLapKey, lapKey, StringComparison.Ordinal))
+                !string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
             {
-                EnqueueAiTtsLog("System", $"已忽略过期 AI 分析结果：Lap {lastLap.LapNumber}。");
+                EnqueueAiAnalysisLog("System", $"已忽略过期赛后 AI 总结结果：Lap {lastLap.LapNumber}。");
                 return;
             }
 
@@ -2218,12 +2373,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
             if (result.IsSuccess)
             {
-                EnqueueAiTtsLog("AI", $"Lap {lastLap.LapNumber} · {result.Summary}");
+                PostRaceAiStatusText = $"赛后 AI 总结已生成：{result.Summary}";
+                EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
+                EnqueueEventLog("AI", "赛后 AI 总结已生成。");
                 TryEnqueueAiSpeech(lastLap, result);
             }
             else
             {
-                EnqueueAiTtsLog("AI", BuildAiFailureLogText(lastLap.LapNumber, result.ErrorMessage));
+                PostRaceAiStatusText = $"赛后 AI 总结失败：{result.ErrorMessage}";
+                EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, result.ErrorMessage));
             }
         }
         catch (OperationCanceledException)
@@ -2232,8 +2390,153 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         finally
         {
             _isAiAnalysisRunning = false;
+            OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+            _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
         }
     }
+
+    private void RefreshPostRaceAiStatus(SessionState sessionState)
+    {
+        var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        PostRaceAiCompletionText = completion.Evidence;
+
+        if (_isAiAnalysisRunning)
+        {
+            return;
+        }
+
+        PostRaceAiStatusText = completion.ShouldGenerate
+            ? "正赛已完成，等待生成赛后 AI 总结。"
+            : completion.ShouldStage
+                ? "正赛尚未完成；如中途退出，将暂存并等待完赛后总结。"
+                : completion.StatusText;
+
+        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+    }
+
+    private PostRaceAiCompletionEvaluation EvaluatePostRaceAiCompletion(SessionState sessionState, bool force)
+    {
+        var mode = force
+            ? PostRaceAiCompletionMode.ForceComplete
+            : SelectedPostRaceAiCompletionMode?.Mode ?? PostRaceAiCompletionMode.Auto;
+        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
+        var isRace = sessionMode == SessionMode.Race;
+
+        if (mode == PostRaceAiCompletionMode.Hold)
+        {
+            return new PostRaceAiCompletionEvaluation(
+                ShouldGenerate: false,
+                ShouldStage: isRace,
+                IsManual: false,
+                Evidence: "用户选择暂存不总结，AI 不会上传赛后摘要。",
+                StatusText: "当前设置为暂存不总结。");
+        }
+
+        if (mode == PostRaceAiCompletionMode.ForceComplete)
+        {
+            return new PostRaceAiCompletionEvaluation(
+                ShouldGenerate: true,
+                ShouldStage: false,
+                IsManual: true,
+                Evidence: "用户手动标记已完成。",
+                StatusText: "用户已标记完赛，可生成赛后 AI 总结。");
+        }
+
+        if (!isRace)
+        {
+            return new PostRaceAiCompletionEvaluation(
+                ShouldGenerate: false,
+                ShouldStage: false,
+                IsManual: false,
+                Evidence: $"当前赛制为 {SessionModeFormatter.FormatDisplayName(sessionMode)}，自动总结只等待正赛最终分类。",
+                StatusText: "非正赛样本不会自动生成赛后策略总结。");
+        }
+
+        if (sessionState.HasFinalClassification)
+        {
+            var lapText = sessionState.PlayerFinalClassificationLaps is null
+                ? "-"
+                : sessionState.PlayerFinalClassificationLaps.Value.ToString(CultureInfo.InvariantCulture);
+            var positionText = sessionState.PlayerFinalClassificationPosition is null
+                ? "-"
+                : sessionState.PlayerFinalClassificationPosition.Value.ToString(CultureInfo.InvariantCulture);
+            return new PostRaceAiCompletionEvaluation(
+                ShouldGenerate: true,
+                ShouldStage: false,
+                IsManual: false,
+                Evidence: $"UDP 已收到 FinalClassification：完赛圈 {lapText}，完赛名次 P{positionText}。",
+                StatusText: "UDP 已确认正赛完成。");
+        }
+
+        if (string.Equals(sessionState.LastEventCode, "CHQF", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sessionState.LastEventCode, "RCWN", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(sessionState.LastEventCode, "SEND", StringComparison.OrdinalIgnoreCase))
+        {
+            return new PostRaceAiCompletionEvaluation(
+                ShouldGenerate: false,
+                ShouldStage: true,
+                IsManual: false,
+                Evidence: $"UDP 已看到 {sessionState.LastEventCode}，仍等待 FinalClassification 确认可总结。",
+                StatusText: "正赛可能已结束，等待最终分类包。");
+        }
+
+        return new PostRaceAiCompletionEvaluation(
+            ShouldGenerate: false,
+            ShouldStage: true,
+            IsManual: false,
+            Evidence: "正赛未收到 FinalClassification，按未完整跑完暂存。",
+            StatusText: "正赛进行中或中途退出，等待完赛后生成总结。");
+    }
+
+    private void MarkIncompleteRaceAsStaged(SessionState sessionState, string reason)
+    {
+        if (SessionModeFormatter.Resolve(sessionState.SessionType) != SessionMode.Race ||
+            sessionState.HasFinalClassification)
+        {
+            return;
+        }
+
+        var key = BuildPostRaceSessionKey(sessionState);
+        if (string.Equals(_lastStagedPostRaceAiKey, key, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastStagedPostRaceAiKey = key;
+        PostRaceAiStatusText = $"正赛未完整结束，已暂存：{reason}";
+        EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
+        EnqueueEventLog("AI", "正赛 AI 总结已暂存，等待完赛后再生成。");
+    }
+
+    private string BuildPostRaceAiSummaryKey(SessionState sessionState, int lapNumber, bool isManual)
+    {
+        return $"{BuildPostRaceSessionKey(sessionState)}:lap{lapNumber}:{(isManual ? "manual" : "auto")}";
+    }
+
+    private string BuildPostRaceSessionKey(SessionState sessionState)
+    {
+        if (sessionState.SeasonLinkIdentifier is not null &&
+            sessionState.WeekendLinkIdentifier is not null &&
+            sessionState.SessionLinkIdentifier is not null)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "season{0}:weekend{1}:session{2}",
+                sessionState.SeasonLinkIdentifier,
+                sessionState.WeekendLinkIdentifier,
+                sessionState.SessionLinkIdentifier);
+        }
+
+        return _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+    }
+
+    private sealed record PostRaceAiCompletionEvaluation(
+        bool ShouldGenerate,
+        bool ShouldStage,
+        bool IsManual,
+        string Evidence,
+        string StatusText);
 
     private void TryEnqueueRaceEventSpeech(RaceEvent raceEvent, SessionMode sessionMode)
     {
@@ -2257,9 +2560,37 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ttsQueue.TryEnqueue(ttsMessage);
     }
 
+    private LapSummary? CaptureAiSummaryLap(SessionState sessionState)
+    {
+        var lastLap = _lapAnalyzer.CaptureLastLap();
+        if (lastLap is not null)
+        {
+            return lastLap;
+        }
+
+        var fallbackLapNumber = sessionState.PlayerFinalClassificationLaps ??
+                                sessionState.TotalLaps ??
+                                sessionState.PlayerCar?.CurrentLapNumber;
+        if (fallbackLapNumber is null || fallbackLapNumber == 0)
+        {
+            return null;
+        }
+
+        return new LapSummary
+        {
+            LapNumber = fallbackLapNumber.Value,
+            IsValid = true,
+            EndTyre = sessionState.PlayerCar is null ? "-" : BuildTyreText(sessionState.PlayerCar),
+            ClosedAt = sessionState.FinalClassificationReceivedAt ?? DateTimeOffset.UtcNow
+        };
+    }
+
     private AIAnalysisContext BuildAiAnalysisContext(SessionState sessionState, CarSnapshot? playerCar, LapSummary lastLap)
     {
-        var recentLaps = _lapAnalyzer.CaptureRecentLaps(5);
+        var recentLaps = _lapAnalyzer.CaptureAllLaps()
+            .Reverse()
+            .Take(MaxPostRaceAiLaps)
+            .ToArray();
         var currentLapSamples = _lapAnalyzer.CaptureCurrentLapSamples();
         var carBehind = playerCar?.Position is null
             ? null

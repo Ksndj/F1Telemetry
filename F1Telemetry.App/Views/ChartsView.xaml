@@ -26,12 +26,14 @@
                                Text="AI 分析播报" />
                     <TextBlock Margin="0,6,0,0"
                                Foreground="#9AB0C9"
-                               Text="速度、输入、燃油和胎磨趋势会进入闭圈后的 AI 短分析，并通过 TTS 播报关键结论。"
+                               Text="完整正赛结束后生成赛后 AI 总结；中途存档或退出时先暂存，不与事件日志重复显示。"
                                TextWrapping="Wrap" />
                 </StackPanel>
 
                 <Grid Grid.Row="2">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="12" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="12" />
                         <RowDefinition Height="Auto" />
@@ -44,18 +46,67 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="170" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center"
+                                       Foreground="#7FA5D8"
+                                       Text="赛后总结模式" />
+                            <ComboBox Grid.Column="1"
+                                      Margin="0,0,12,0"
+                                      Padding="8,5"
+                                      DisplayMemberPath="DisplayName"
+                                      ItemsSource="{Binding PostRaceAiCompletionModes}"
+                                      SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
+                            <Button Grid.Column="2"
+                                    Padding="12,6"
+                                    Command="{Binding GeneratePostRaceAiSummaryCommand}"
+                                    Content="生成赛后总结" />
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Padding="14"
+                            CornerRadius="12"
+                            Background="#132743">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Foreground="#7FA5D8"
-                                       Text="播报状态" />
+                                       Text="AI 总结状态" />
                             <TextBlock Grid.Column="1"
+                                       Foreground="White"
+                                       Text="{Binding PostRaceAiStatusText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="2"
+                                       Foreground="#7FA5D8"
+                                       Text="完赛判断" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="1"
+                                       Foreground="White"
+                                       Text="{Binding PostRaceAiCompletionText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Grid.Row="4"
+                                       Foreground="#7FA5D8"
+                                       Text="播报状态" />
+                            <TextBlock Grid.Row="4"
+                                       Grid.Column="1"
                                        Foreground="White"
                                        Text="{Binding TtsVoiceStatusText}"
                                        TextWrapping="Wrap" />
                         </Grid>
                     </Border>
 
-                    <ItemsControl Grid.Row="2"
-                                  ItemsSource="{Binding AiTtsLogs}">
+                    <ItemsControl Grid.Row="4"
+                                  ItemsSource="{Binding AiAnalysisLogs}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border Margin="0,0,0,8"
