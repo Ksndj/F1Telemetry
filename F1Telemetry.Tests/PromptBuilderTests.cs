@@ -51,9 +51,11 @@ public sealed class PromptBuilderTests
         Assert.Contains("Recent laps:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Current fuel remaining laps:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Current tyre:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Driving trend summary:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Lap 14", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("fuel used 1.24 L", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("当前圈最高速度 312 km/h", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Rear car pitted.", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("V16", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("A16", prompt.UserMessage, StringComparison.Ordinal);
@@ -127,7 +129,25 @@ public sealed class PromptBuilderTests
         Assert.Contains("前后车风险", prompt.UserMessage, StringComparison.Ordinal);
     }
 
-    private static AIAnalysisContext CreateContext(bool includeRecentCollections = true, SessionMode sessionMode = SessionMode.Race)
+    /// <summary>
+    /// Verifies race fuel guidance forbids impossible refueling pit calls.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_RaceFuelGuidanceForbidsRefuelingAdvice()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(sessionMode: SessionMode.Race, fuelRemainingLaps: 1.2f));
+        var combinedPrompt = prompt.SystemMessage + Environment.NewLine + prompt.UserMessage;
+
+        Assert.Contains("不能进站加油", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("省油", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("不要建议进站加油", combinedPrompt, StringComparison.Ordinal);
+    }
+
+    private static AIAnalysisContext CreateContext(
+        bool includeRecentCollections = true,
+        SessionMode sessionMode = SessionMode.Race,
+        float fuelRemainingLaps = 5.1f)
     {
         return new AIAnalysisContext
         {
@@ -143,12 +163,13 @@ public sealed class PromptBuilderTests
                 ]
                 : null!,
             CurrentFuelInTank = 8.4f,
-            CurrentFuelRemainingLaps = 5.1f,
+            CurrentFuelRemainingLaps = fuelRemainingLaps,
             CurrentErsStoreEnergy = 2_250_000f,
             CurrentTyre = "红胎",
             CurrentTyreAgeLaps = 7,
             GapToFrontInMs = 1_250,
             GapToBehindInMs = 980,
+            TelemetryAnalysisSummary = "当前圈最高速度 312 km/h；最大油门 100%；最大刹车 72%；近 2 圈燃油 1.18-1.24 L。",
             RecentEvents = includeRecentCollections
                 ? ["Rear car pitted."]
                 : null!

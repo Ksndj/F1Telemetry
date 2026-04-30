@@ -74,6 +74,11 @@ public sealed record AIAnalysisContext
     public ushort? GapToBehindInMs { get; init; }
 
     /// <summary>
+    /// Gets the compact driving trend summary derived from live telemetry samples.
+    /// </summary>
+    public string TelemetryAnalysisSummary { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the recent race events in summary form.
     /// </summary>
     public IReadOnlyList<string> RecentEvents { get; init; } = Array.Empty<string>();

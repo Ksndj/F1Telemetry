@@ -1,5 +1,7 @@
 # Milestone 10 Charts Implementation Plan
 
+> 2026-04-30 更新：驾驶中查看实时图表不再作为当前产品方向。本计划保留为历史参考，不再作为实施入口；速度、输入、燃油和胎磨趋势应优先压缩进 AI 分析播报，并通过 TTS 输出关键结论。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the middle dashboard placeholders with four real charts backed by existing lap analytics and lap-history data, while fixing the known chart-module correctness risks and the most important refresh-performance hotspots.

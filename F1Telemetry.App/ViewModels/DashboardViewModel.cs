@@ -58,6 +58,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
+    private readonly TelemetryAnalysisSummaryBuilder _telemetryAnalysisSummaryBuilder;
     private readonly DispatcherTimer _uiTimer;
     private readonly DispatcherTimer _udpPortSaveTimer;
     private readonly CancellationTokenSource _lifecycleCts = new();
@@ -202,6 +203,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
         _trendChartBuilder = new TrendChartBuilder();
+        _telemetryAnalysisSummaryBuilder = new TelemetryAnalysisSummaryBuilder();
         _lastPacketsPerSecondSampleAt = DateTimeOffset.UtcNow;
 
         ShellNavigationItems = new ObservableCollection<ShellNavigationItemViewModel>(
@@ -1710,7 +1712,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         UpdatePlayerCard(sessionState, playerCar);
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
-        RefreshCharts();
         PersistLatestLapIfNeeded();
         TrackLatestEvent(sessionState.LastEventCode);
         _ = TriggerAiAnalysisIfNeededAsync(sessionState, playerCar);
@@ -2248,10 +2249,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private AIAnalysisContext BuildAiAnalysisContext(SessionState sessionState, CarSnapshot? playerCar, LapSummary lastLap)
     {
         var recentLaps = _lapAnalyzer.CaptureRecentLaps(5);
+        var currentLapSamples = _lapAnalyzer.CaptureCurrentLapSamples();
         var carBehind = playerCar?.Position is null
             ? null
             : sessionState.Cars.FirstOrDefault(car => car.Position == playerCar.Position + 1);
         var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
+        var telemetryAnalysisSummary = _telemetryAnalysisSummaryBuilder.Build(currentLapSamples, recentLaps);
 
         return new AIAnalysisContext
         {
@@ -2268,6 +2271,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             CurrentTyreAgeLaps = playerCar?.TyresAgeLaps,
             GapToFrontInMs = playerCar?.DeltaToCarInFrontInMs,
             GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
+            TelemetryAnalysisSummary = telemetryAnalysisSummary,
             RecentEvents = _recentAiEvents.ToArray()
         };
     }

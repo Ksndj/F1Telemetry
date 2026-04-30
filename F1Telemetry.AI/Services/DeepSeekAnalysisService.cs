@@ -10,6 +10,24 @@ namespace F1Telemetry.AI.Services;
 /// </summary>
 public sealed class DeepSeekAnalysisService : IAIAnalysisService
 {
+    private const string RefuelingAdviceReplacement = "燃油偏低，请省油并控制油耗；维修区无法加燃油。";
+    private static readonly string[] RefuelingAdviceSignals =
+    [
+        "进站加油",
+        "进站补油",
+        "进站加燃油",
+        "回站加油",
+        "回站补油",
+        "补充燃油",
+        "补油",
+        "pit to refuel",
+        "pit for fuel",
+        "box to refuel",
+        "box for fuel",
+        "refuel",
+        "refueling"
+    ];
+
     private readonly DeepSeekClient _deepSeekClient;
     private readonly PromptBuilder _promptBuilder;
 
@@ -78,11 +96,11 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
             {
                 IsSuccess = true,
                 ErrorMessage = string.Empty,
-                Summary = string.IsNullOrWhiteSpace(result.Summary) ? "-" : result.Summary,
-                TyreAdvice = string.IsNullOrWhiteSpace(result.TyreAdvice) ? "-" : result.TyreAdvice,
-                FuelAdvice = string.IsNullOrWhiteSpace(result.FuelAdvice) ? "-" : result.FuelAdvice,
-                TrafficAdvice = string.IsNullOrWhiteSpace(result.TrafficAdvice) ? "-" : result.TrafficAdvice,
-                TtsText = string.IsNullOrWhiteSpace(result.TtsText) ? "-" : result.TtsText
+                Summary = NormalizeResultText(result.Summary),
+                TyreAdvice = NormalizeResultText(result.TyreAdvice),
+                FuelAdvice = NormalizeResultText(result.FuelAdvice),
+                TrafficAdvice = NormalizeResultText(result.TrafficAdvice),
+                TtsText = NormalizeResultText(result.TtsText)
             };
         }
         catch (JsonException ex)
@@ -109,6 +127,22 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
             Debug.WriteLine($"AI request failed unexpectedly: {ex}");
             return CreateFailure(AIErrorMessageFormatter.NetworkError);
         }
+    }
+
+    private static string NormalizeResultText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        var trimmed = text.Trim();
+        return ContainsRefuelingAdvice(trimmed) ? RefuelingAdviceReplacement : trimmed;
+    }
+
+    private static bool ContainsRefuelingAdvice(string text)
+    {
+        return RefuelingAdviceSignals.Any(signal => text.Contains(signal, StringComparison.OrdinalIgnoreCase));
     }
 
     private static AIAnalysisResult CreateFailure(string errorMessage)

@@ -21,7 +21,7 @@ public sealed class ReadmeUserGuideTests
             "F1 25 Windows 遥测助手",
             "UDP 接收",
             "实时概览",
-            "图表",
+            "AI 分析播报",
             "单圈历史",
             "对手信息",
             "事件日志",

@@ -25,6 +25,7 @@ Use short Chinese conclusions only.
 禁止长段分析，避免解释推理过程。
 Each value must be concise and suitable for TTS.
 ttsText must contain one short broadcast-ready key conclusion.
+F1 25 不能进站加油或补油；燃油不足时只能建议省油、抬滑、短换或控制节奏，不要建议进站加油或补油。
 """;
 
         var userMessage = BuildUserMessage(context);
@@ -74,6 +75,10 @@ ttsText must contain one short broadcast-ready key conclusion.
         builder.AppendLine($"Current tyre age laps: {FormatNullable(context.CurrentTyreAgeLaps)}");
         builder.AppendLine($"Gap to front in ms: {FormatNullable(context.GapToFrontInMs)}");
         builder.AppendLine($"Gap to behind in ms: {FormatNullable(context.GapToBehindInMs)}");
+        if (!string.IsNullOrWhiteSpace(context.TelemetryAnalysisSummary))
+        {
+            builder.AppendLine($"Driving trend summary: {context.TelemetryAnalysisSummary.Trim()}");
+        }
 
         if (recentEvents.Count > 0)
         {

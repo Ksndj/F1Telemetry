@@ -41,7 +41,7 @@ public sealed class ShellNavigationItemViewModel
         return
         [
             new("overview", "实时概览", "\uE80F"),
-            new("charts", "图表", "\uE9D2"),
+            new("charts", "分析播报", "\uE9D2"),
             new("lap-history", "单圈历史", "\uE81C"),
             new("opponents", "对手", "\uE716"),
             new("event-logs", "事件日志", "\uE787"),

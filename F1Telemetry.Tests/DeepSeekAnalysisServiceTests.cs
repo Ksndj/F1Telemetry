@@ -64,6 +64,39 @@ public sealed class DeepSeekAnalysisServiceTests
     }
 
     /// <summary>
+    /// Verifies impossible refueling advice is normalized before it reaches logs or TTS.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_RefuelingAdvice_NormalizesFuelGuidance()
+    {
+        const string completionJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "content": "{\"summary\":\"油量过低，进站加油\",\"tyreAdvice\":\"保胎\",\"fuelAdvice\":\"油量过低，立即进站加油\",\"trafficAdvice\":\"保持距离\",\"ttsText\":\"油量过低，进站加油\"}"
+      }
+    }
+  ]
+}
+""";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(completionJson, Encoding.UTF8, "application/json")
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = "configured" });
+
+        Assert.True(result.IsSuccess);
+        Assert.DoesNotContain("进站加油", result.Summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("进站加油", result.FuelAdvice, StringComparison.Ordinal);
+        Assert.DoesNotContain("进站加油", result.TtsText, StringComparison.Ordinal);
+        Assert.Contains("省油", result.FuelAdvice, StringComparison.Ordinal);
+        Assert.Contains("省油", result.TtsText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that the DeepSeek client normalizes the base URL before sending the request.
     /// </summary>
     [Fact]
