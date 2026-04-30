@@ -20,6 +20,8 @@ public sealed class RawLogSessionSummary
 
     public long DatagramCount { get; private set; }
 
+    public int PlayerCarIndex { get; private set; } = -1;
+
     public int TrackId { get; private set; } = -1;
 
     public int SessionType { get; private set; } = -1;
@@ -62,9 +64,13 @@ public sealed class RawLogSessionSummary
 
     public SortedSet<string> TyreCompoundPairs { get; } = new(StringComparer.Ordinal);
 
+    private readonly SortedDictionary<int, RaceLapAccumulator> _lapSummaries = new();
+    private FinalClassificationData? _playerFinalClassification;
+
     internal void ObserveDatagram(PacketHeader header, DateTimeOffset timestamp)
     {
         DatagramCount++;
+        PlayerCarIndex = header.PlayerCarIndex;
 
         if (timestamp == DateTimeOffset.MinValue)
         {
@@ -96,6 +102,15 @@ public sealed class RawLogSessionSummary
         LapSampleCount++;
         MaxPlayerLapNumber = Math.Max(MaxPlayerLapNumber, car.CurrentLapNumber);
         MaxPlayerTotalDistance = Math.Max(MaxPlayerTotalDistance, car.TotalDistance);
+
+        if (car.CurrentLapNumber > 0)
+        {
+            var lap = GetOrCreateLap(car.CurrentLapNumber);
+            lap.SampleCount++;
+            lap.Position = car.CarPosition;
+            lap.ResultStatus = car.ResultStatus;
+            lap.IsValid = !car.IsCurrentLapInvalid;
+        }
     }
 
     internal void ApplyCarTelemetryPacket(CarTelemetryPacket packet, PacketHeader header)
@@ -170,9 +185,89 @@ public sealed class RawLogSessionSummary
         EventCodeCounts[packet.RawEventCode] = current + 1;
     }
 
+    internal void ApplySessionHistoryPacket(SessionHistoryPacket packet, PacketHeader header)
+    {
+        if (packet.CarIndex != header.PlayerCarIndex)
+        {
+            return;
+        }
+
+        var lapCount = Math.Min(packet.NumLaps, packet.LapHistory.Length);
+        for (var index = 0; index < lapCount; index++)
+        {
+            var lapNumber = index + 1;
+            var lapHistory = packet.LapHistory[index];
+            var lap = GetOrCreateLap(lapNumber);
+            if (lapHistory.LapTimeInMs > 0)
+            {
+                lap.LapTimeInMs = lapHistory.LapTimeInMs;
+            }
+
+            lap.IsValid = lapHistory.IsLapValid;
+        }
+    }
+
+    internal void ApplyFinalClassificationPacket(FinalClassificationPacket packet, PacketHeader header)
+    {
+        if (header.PlayerCarIndex >= packet.Cars.Length)
+        {
+            return;
+        }
+
+        _playerFinalClassification = packet.Cars[header.PlayerCarIndex];
+    }
+
+    internal PlayerRaceSummary BuildPlayerRaceSummary()
+    {
+        if (_playerFinalClassification is null)
+        {
+            return new PlayerRaceSummary(
+                GridPosition: null,
+                FinalPosition: null,
+                CompletedLaps: null,
+                Points: null,
+                BestLapTimeInMs: null,
+                PenaltiesTimeSeconds: null,
+                NumPenalties: null);
+        }
+
+        return new PlayerRaceSummary(
+            GridPosition: _playerFinalClassification.GridPosition,
+            FinalPosition: _playerFinalClassification.Position,
+            CompletedLaps: _playerFinalClassification.NumLaps,
+            Points: _playerFinalClassification.Points,
+            BestLapTimeInMs: _playerFinalClassification.BestLapTimeInMs == 0 ? null : _playerFinalClassification.BestLapTimeInMs,
+            PenaltiesTimeSeconds: _playerFinalClassification.PenaltiesTime,
+            NumPenalties: _playerFinalClassification.NumPenalties);
+    }
+
+    internal IReadOnlyList<RaceLapSummary> BuildRaceLapSummaries()
+    {
+        return _lapSummaries
+            .Select(pair => new RaceLapSummary(
+                LapNumber: pair.Key,
+                LapTimeInMs: pair.Value.LapTimeInMs,
+                Position: pair.Value.Position,
+                IsValid: pair.Value.IsValid,
+                ResultStatus: pair.Value.ResultStatus,
+                SampleCount: pair.Value.SampleCount))
+            .ToArray();
+    }
+
     private void AddTyreCompoundPair(byte visualCompound, byte actualCompound)
     {
         TyreCompoundPairs.Add($"visual {visualCompound} / actual {actualCompound}");
+    }
+
+    private RaceLapAccumulator GetOrCreateLap(int lapNumber)
+    {
+        if (!_lapSummaries.TryGetValue(lapNumber, out var lap))
+        {
+            lap = new RaceLapAccumulator();
+            _lapSummaries[lapNumber] = lap;
+        }
+
+        return lap;
     }
 
     private static bool TryGetPlayerCar<T>(T[] cars, byte playerCarIndex, out T car)
@@ -192,5 +287,18 @@ public sealed class RawLogSessionSummary
         return Math.Max(
             Math.Max(values.RearLeft, values.RearRight),
             Math.Max(values.FrontLeft, values.FrontRight));
+    }
+
+    private sealed class RaceLapAccumulator
+    {
+        public uint? LapTimeInMs { get; set; }
+
+        public int? Position { get; set; }
+
+        public bool? IsValid { get; set; }
+
+        public int? ResultStatus { get; set; }
+
+        public long SampleCount { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 namespace F1Telemetry.RawLogAnalyzer;
 
-internal static class Program
+public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
@@ -20,6 +20,8 @@ internal static class Program
             Console.WriteLine($"Parsed packets: {result.ParsedPacketCount}.");
             Console.WriteLine($"Sessions: {result.Sessions.Count}.");
             Console.WriteLine($"Report: {result.ReportPath}");
+            Console.WriteLine(
+                $"Race session: {result.RaceReport?.SessionUid}.");
             Console.WriteLine(
                 $"Issues: invalidJson={result.InvalidJsonLineCount}, invalidBase64={result.InvalidBase64LineCount}, lengthMismatch={result.PayloadLengthMismatchCount}, unknownPacketIds={result.UnknownPacketIdCount}, unsupportedKnownPacketIds={result.UnsupportedPacketIdCount}, parseFailures={result.PacketParseFailureCount}.");
             return 0;
@@ -42,6 +44,7 @@ internal static class Program
 
         string? inputPath = null;
         string? outputPath = null;
+        ulong? sessionUid = null;
 
         for (var index = 0; index < args.Length; index++)
         {
@@ -58,6 +61,9 @@ internal static class Program
                 case "--output":
                     outputPath = ReadValue(args, ref index, "--output");
                     break;
+                case "--session-uid":
+                    sessionUid = ReadSessionUid(args, ref index);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown argument '{arg}'.");
             }
@@ -68,7 +74,7 @@ internal static class Program
             throw new ArgumentException("Missing required --input path.");
         }
 
-        return new RawLogAnalyzerOptions(inputPath, outputPath);
+        return new RawLogAnalyzerOptions(inputPath, outputPath, sessionUid);
     }
 
     private static string ReadValue(string[] args, ref int index, string name)
@@ -85,6 +91,17 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  dotnet run --project .\\tools\\F1Telemetry.RawLogAnalyzer\\F1Telemetry.RawLogAnalyzer.csproj -- --input <raw-log.jsonl> [--output <analysis.md>]");
+        Console.WriteLine("  dotnet run --project .\\tools\\F1Telemetry.RawLogAnalyzer\\F1Telemetry.RawLogAnalyzer.csproj -- --input <raw-log.jsonl> [--output <analysis.md>] [--session-uid <uid>]");
+    }
+
+    private static ulong ReadSessionUid(string[] args, ref int index)
+    {
+        var value = ReadValue(args, ref index, "--session-uid");
+        if (!ulong.TryParse(value, out var sessionUid))
+        {
+            throw new ArgumentException("--session-uid requires an unsigned integer value.");
+        }
+
+        return sessionUid;
     }
 }

@@ -20,6 +20,8 @@ public sealed class RawLogAnalysisResult
 
     public string ReportPath { get; internal set; }
 
+    public RaceAnalysisReport? RaceReport { get; internal set; }
+
     public long TotalLines { get; internal set; }
 
     public long ParsedPacketCount { get; internal set; }
