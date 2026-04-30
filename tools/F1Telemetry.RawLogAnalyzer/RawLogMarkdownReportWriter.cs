@@ -28,6 +28,8 @@ internal static class RawLogMarkdownReportWriter
         AppendSessionSummary(builder, report.SessionSummary);
         AppendPlayerSummary(builder, report.PlayerRaceSummary);
         AppendLapSummaries(builder, report.LapSummaries);
+        AppendStintSummaries(builder, report.StintSummaries);
+        AppendPitStopSummaries(builder, report.PitStopSummaries);
         AppendDataQualityWarnings(builder, report.DataQualityWarnings);
         return builder.ToString();
     }
@@ -83,6 +85,50 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine();
     }
 
+    private static void AppendStintSummaries(StringBuilder builder, IReadOnlyList<StintSummary> stintSummaries)
+    {
+        builder.AppendLine("## Stint Summaries");
+        builder.AppendLine();
+
+        if (stintSummaries.Count == 0)
+        {
+            builder.AppendLine("- No stint summaries were decoded.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Stint | Start lap | End lap | Laps | Actual | Visual | Start age | End age | Source | Confidence | Notes |");
+        builder.AppendLine("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |");
+        foreach (var stint in stintSummaries)
+        {
+            builder.AppendLine($"| {stint.StintIndex} | {stint.StartLap} | {stint.EndLap} | {stint.LapCount} | {FormatOptional(stint.ActualTyreCompound)} | {FormatOptional(stint.VisualTyreCompound)} | {FormatOptional(stint.StartTyreAge)} | {FormatOptional(stint.EndTyreAge)} | {stint.Source} | {stint.Confidence} | {stint.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendPitStopSummaries(StringBuilder builder, IReadOnlyList<PitStopSummary> pitStopSummaries)
+    {
+        builder.AppendLine("## Pit Stop Summary");
+        builder.AppendLine();
+
+        if (pitStopSummaries.Count == 0)
+        {
+            builder.AppendLine("- No pit stops were decoded.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Pit lap | Entry lap ms | Exit lap ms | Compound before | Compound after | Tyre age before | Tyre age after | Position before | Position after | Position lost | Estimated pit loss ms | Confidence | Notes |");
+        builder.AppendLine("| ---: | ---: | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |");
+        foreach (var pitStop in pitStopSummaries)
+        {
+            builder.AppendLine($"| {pitStop.PitLap} | {FormatOptional(pitStop.EntryLapTimeInMs)} | {FormatOptional(pitStop.ExitLapTimeInMs)} | {FormatOptional(pitStop.CompoundBefore)} | {FormatOptional(pitStop.CompoundAfter)} | {FormatOptional(pitStop.TyreAgeBefore)} | {FormatOptional(pitStop.TyreAgeAfter)} | {FormatOptional(pitStop.PositionBefore)} | {FormatOptional(pitStop.PositionAfter)} | {FormatOptional(pitStop.PositionLost)} | {FormatOptional(pitStop.EstimatedPitLossInMs)} | {pitStop.Confidence} | {pitStop.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
     private static void AppendDataQualityWarnings(StringBuilder builder, IReadOnlyList<string> warnings)
     {
         builder.AppendLine("## Data Quality Warnings");
@@ -111,6 +157,11 @@ internal static class RawLogMarkdownReportWriter
     private static string FormatOptional(uint? value)
     {
         return value?.ToString(CultureInfo.InvariantCulture) ?? "unavailable";
+    }
+
+    private static string FormatOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "unavailable" : value;
     }
 
     private static string FormatOptional(bool? value)
