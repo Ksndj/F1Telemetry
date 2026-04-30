@@ -31,7 +31,13 @@ public static class RaceAnalysisReportBuilder
             DatagramCount: session.DatagramCount,
             PacketCounts: new SortedDictionary<PacketId, long>(session.PacketCounts));
 
+        var lapSummaries = session.BuildRaceLapSummaries();
         var stintSummaries = session.BuildStintSummaries();
+        var pitStopSummaries = session.BuildPitStopSummaries();
+        var tyreUsageSummaries = session.BuildTyreUsageSummaries(stintSummaries);
+        var fuelTrendSummary = session.BuildFuelTrendSummary();
+        var ersTrendSummary = session.BuildErsTrendSummary();
+        var gapTrendSummary = session.BuildGapTrendSummary();
 
         return new RaceAnalysisReport(
             GeneratedAt: generatedAt,
@@ -39,13 +45,17 @@ public static class RaceAnalysisReportBuilder
             SessionUid: session.SessionUid,
             SessionSummary: sessionSummary,
             PlayerRaceSummary: session.BuildPlayerRaceSummary(),
-            LapSummaries: session.BuildRaceLapSummaries(),
+            LapSummaries: lapSummaries,
             StintSummaries: stintSummaries,
-            PitStopSummaries: session.BuildPitStopSummaries(),
-            TyreUsageSummaries: session.BuildTyreUsageSummaries(stintSummaries),
-            FuelTrendSummary: session.BuildFuelTrendSummary(),
-            ErsTrendSummary: session.BuildErsTrendSummary(),
-            GapTrendSummary: session.BuildGapTrendSummary(),
+            PitStopSummaries: pitStopSummaries,
+            TyreUsageSummaries: tyreUsageSummaries,
+            FuelTrendSummary: fuelTrendSummary,
+            ErsTrendSummary: ersTrendSummary,
+            GapTrendSummary: gapTrendSummary,
+            RaceEventTimeline: session.BuildRaceEventTimeline(
+                lapSummaries,
+                pitStopSummaries,
+                tyreUsageSummaries),
             DataQualityWarnings: BuildWarnings(result, session));
     }
 
@@ -70,6 +80,16 @@ public static class RaceAnalysisReportBuilder
         AppendCountWarning(warnings, "Unsupported known packet ids", result.UnsupportedPacketIdCount);
         AppendCountWarning(warnings, "Packet parse failures", result.PacketParseFailureCount);
         AppendCountWarning(warnings, "Dispatch failures", result.DispatchFailureCount);
+
+        foreach (var warning in session.DataQualityWarnings)
+        {
+            warnings.Add(warning);
+        }
+
+        if (!IsValidRaceSession(session))
+        {
+            warnings.Add("非正赛样本，事件线仅供调试");
+        }
 
         AddMissingPacketWarning(warnings, session, PacketId.Session);
         AddMissingPacketWarning(warnings, session, PacketId.LapData);

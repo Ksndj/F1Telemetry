@@ -236,7 +236,7 @@ public sealed class RawLogAnalyzerService
         switch (parsedPacket.Packet)
         {
             case SessionPacket packet:
-                session.ApplySessionPacket(packet);
+                session.ApplySessionPacket(packet, parsedPacket.Datagram.ReceivedAt);
                 break;
             case LapDataPacket packet:
                 session.ApplyLapDataPacket(packet, parsedPacket.Header);
@@ -254,7 +254,7 @@ public sealed class RawLogAnalyzerService
                 session.ApplyTyreSetsPacket(packet, parsedPacket.Header);
                 break;
             case EventPacket packet:
-                session.ApplyEventPacket(packet);
+                session.ApplyEventPacket(packet, parsedPacket.Header, parsedPacket.Datagram.ReceivedAt);
                 break;
             case SessionHistoryPacket packet:
                 session.ApplySessionHistoryPacket(packet, parsedPacket.Header);
@@ -275,13 +275,13 @@ public sealed class RawLogAnalyzerService
         if (requestedSessionUid is not null)
         {
             if (result.Sessions.TryGetValue(requestedSessionUid.Value, out var requestedSession)
-                && RaceAnalysisReportBuilder.IsValidRaceSession(requestedSession))
+                && requestedSession.SessionUid != 0)
             {
                 return requestedSession;
             }
 
             throw new InvalidOperationException(
-                $"No valid Race session was found for sessionUid {requestedSessionUid.Value}.");
+                $"No session was found for sessionUid {requestedSessionUid.Value}.");
         }
 
         var selectedSession = result.Sessions.Values

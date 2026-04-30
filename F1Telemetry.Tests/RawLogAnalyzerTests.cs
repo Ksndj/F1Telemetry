@@ -549,6 +549,157 @@ public sealed class RawLogAnalyzerTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_WritesRaceEventTimelineFromKeyUdpAndDerivedEvents()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 2), timestampUtc: "2026-04-28T10:00:00.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "SSTA"), timestampUtc: "2026-04-28T10:00:01.0000000Z"),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 1, Position: 5, DeltaToCarInFrontInMs: 900, TotalDistance: 100f),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 1, Position: 6, DeltaToCarInFrontInMs: 700, TotalDistance: 98f)),
+                timestampUtc: "2026-04-28T10:00:02.0000000Z"),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 20f, actualCompound: 16, visualCompound: 17, tyreAgeLaps: 1, fuelRemainingLaps: 2.5f, ersStoreEnergy: 2_000_000f)),
+            BuildRecord(BuildEventPacket(1001UL, "OVTK", [0, 2]), timestampUtc: "2026-04-28T10:00:04.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "OVTK", [3, 0]), timestampUtc: "2026-04-28T10:00:05.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "PENA", [1, 2, 0, 4, 5, 2, 0]), timestampUtc: "2026-04-28T10:00:06.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "SCAR", [1, 0]), timestampUtc: "2026-04-28T10:00:07.0000000Z"),
+            BuildRecord(BuildEventPacket(1001UL, "RDFL"), timestampUtc: "2026-04-28T10:00:08.0000000Z"),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 2, Position: 8, DeltaToCarInFrontInMs: 800, TotalDistance: 200f, ResultStatus: 3, PitStatus: 1, NumPitStops: 1, IsCurrentLapInvalid: true),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 2, Position: 9, DeltaToCarInFrontInMs: 700, TotalDistance: 198f, ResultStatus: 3)),
+                timestampUtc: "2026-04-28T10:00:09.0000000Z"),
+            BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 18f, actualCompound: 18, visualCompound: 18, tyreAgeLaps: 0, fuelRemainingLaps: 0.4f, ersStoreEnergy: 400_000f, ersDeployedThisLap: 900_000f)),
+            BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 75f)),
+            BuildRecord(BuildEventPacket(1001UL, "BUTN", [1, 0, 0, 0])),
+            BuildRecord(BuildEventPacket(1001UL, "SPTP")),
+            BuildRecord(BuildEventPacket(1001UL, "SEND")),
+            BuildRecord(BuildSessionHistoryPacket(
+                1001UL,
+                numLaps: 2,
+                firstLapTimeInMs: 90000,
+                lapTimesInMs: [90000U, 91000U],
+                tyreStints:
+                [
+                    new TyreStintTestData(EndLap: 1, Actual: 16, Visual: 17),
+                    new TyreStintTestData(EndLap: 2, Actual: 18, Visual: 18)
+                ])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 8, numLaps: 2, gridPosition: 5, points: 4, bestLapTimeInMs: 90000, penaltiesTime: 5, numPenalties: 1, numPitStops: 1))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var timeline = result.RaceReport.RaceEventTimeline;
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.Start && entry.Lap == 0);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.Overtake && entry.RelatedVehicleIndex == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.PositionLost && entry.RelatedVehicleIndex == 3);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.Penalty && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.SafetyCar && entry.Source == RaceEventTimelineSource.UdpEvent);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.RedFlag && entry.Source == RaceEventTimelineSource.UdpEvent);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.PitStop && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.TyreChange && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.LowFuel && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.HighTyreWear && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.LowErs && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.InvalidLap && entry.Lap == 2);
+        Assert.Contains(timeline, entry => entry.EventType == RaceEventTimelineType.FinalClassification && entry.Lap == 3);
+        Assert.DoesNotContain(timeline, entry => entry.Message.Contains("BUTN", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(timeline, entry => entry.Message.Contains("SPTP", StringComparison.OrdinalIgnoreCase));
+        Assert.True(timeline.SequenceEqual(timeline.OrderBy(entry => entry.Lap).ThenBy(entry => entry.TimestampUtc)));
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("## Race Event Timeline", markdown);
+        Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CarTelemetry[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LapPositions[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MarshalZones[]", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_FiltersUnrelatedOvertakesFromRaceEventTimeline()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 3)),
+            BuildRecord(BuildEventPacket(1001UL, "OVTK", [2, 3])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 1, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.Equal(1, result.Sessions[1001UL].EventCodeCounts["OVTK"]);
+        Assert.DoesNotContain(result.RaceReport.RaceEventTimeline, entry => entry.EventType is RaceEventTimelineType.Overtake or RaceEventTimelineType.PositionLost);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_AllowsExplicitNonRaceSessionWithDebugTimelineWarning()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 12, totalLaps: 1)),
+            BuildRecord(BuildEventPacket(1001UL, "SSTA")),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 3))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.Equal(12, result.RaceReport.SessionSummary.SessionType);
+        Assert.Contains("非正赛样本，事件线仅供调试", result.RaceReport.DataQualityWarnings);
+        Assert.Contains(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.Start);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("非正赛样本，事件线仅供调试", markdown);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_UsesSessionStatusChangesForSafetyEventsAndWarnsUnknownMarshalFlags()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1, safetyCarStatus: 0, marshalZoneFlags: [0])),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f, position: 5, resultStatus: 3)),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1, safetyCarStatus: 1, marshalZoneFlags: [3])),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1, safetyCarStatus: 1, marshalZoneFlags: [3])),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1, safetyCarStatus: 2, marshalZoneFlags: [4])),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1, safetyCarStatus: 9, marshalZoneFlags: [9])),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 1, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.Single(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.SafetyCar && entry.Source == RaceEventTimelineSource.SessionStatus);
+        Assert.Single(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.VirtualSafetyCar);
+        Assert.Single(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.YellowFlag);
+        Assert.Single(result.RaceReport.RaceEventTimeline, entry => entry.EventType == RaceEventTimelineType.RedFlag && entry.Source == RaceEventTimelineSource.SessionStatus);
+        Assert.Contains(result.RaceReport.DataQualityWarnings, warning => warning.Contains("Unknown marshal zone flag", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.RaceReport.DataQualityWarnings, warning => warning.Contains("Unknown safety car status", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_LabelsSlowLapOnlyPitInferenceAsPossibleLowConfidence()
     {
         var inputPath = CreateTempJsonlPath();
@@ -655,11 +806,14 @@ public sealed class RawLogAnalyzerTests
         return Path.Combine(directory, "synthetic.jsonl");
     }
 
-    private static string BuildRecord(byte[] payload, int? declaredLength = null)
+    private static string BuildRecord(
+        byte[] payload,
+        int? declaredLength = null,
+        string timestampUtc = "2026-04-28T10:00:00.0000000Z")
     {
         var record = new
         {
-            timestampUtc = "2026-04-28T10:00:00.0000000Z",
+            timestampUtc,
             source = "127.0.0.1:20777",
             length = declaredLength ?? payload.Length,
             packetId = payload.Length > 6 ? payload[6] : (byte?)null,
@@ -675,7 +829,13 @@ public sealed class RawLogAnalyzerTests
         return JsonSerializer.Serialize(record);
     }
 
-    private static byte[] BuildSessionPacket(ulong sessionUid, sbyte trackId, byte sessionType, byte totalLaps)
+    private static byte[] BuildSessionPacket(
+        ulong sessionUid,
+        sbyte trackId,
+        byte sessionType,
+        byte totalLaps,
+        byte safetyCarStatus = 0,
+        sbyte[]? marshalZoneFlags = null)
     {
         return BuildPacket(sessionUid, PacketId.Session, UdpPacketConstants.SessionBodySize, body =>
         {
@@ -687,6 +847,25 @@ public sealed class RawLogAnalyzerTests
             ProtocolTestData.WriteUInt16(body, ref offset, 5412);
             ProtocolTestData.WriteByte(body, ref offset, sessionType);
             ProtocolTestData.WriteSByte(body, ref offset, trackId);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteUInt16(body, ref offset, 0);
+            ProtocolTestData.WriteUInt16(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, (byte)(marshalZoneFlags?.Length ?? 0));
+            for (var index = 0; index < UdpPacketConstants.MaxMarshalZones; index++)
+            {
+                ProtocolTestData.WriteFloat(body, ref offset, index / 10f);
+                ProtocolTestData.WriteSByte(
+                    body,
+                    ref offset,
+                    marshalZoneFlags is not null && index < marshalZoneFlags.Length ? marshalZoneFlags[index] : (sbyte)0);
+            }
+
+            ProtocolTestData.WriteByte(body, ref offset, safetyCarStatus);
         });
     }
 
@@ -717,6 +896,7 @@ public sealed class RawLogAnalyzerTests
                 IsPitLaneTimerActive: isPitLaneTimerActive,
                 PitLaneTimeInLaneInMs: pitLaneTimeInLaneInMs,
                 PitStopTimerInMs: pitStopTimerInMs,
+                IsCurrentLapInvalid: false,
                 LastLapTimeInMs: lastLapTimeInMs));
     }
 
@@ -752,7 +932,7 @@ public sealed class RawLogAnalyzerTests
         ProtocolTestData.WriteByte(body, ref offset, car.PitStatus);
         ProtocolTestData.WriteByte(body, ref offset, car.NumPitStops);
         ProtocolTestData.WriteByte(body, ref offset, 0);
-        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, car.IsCurrentLapInvalid ? (byte)1 : (byte)0);
         ProtocolTestData.WriteByte(body, ref offset, 0);
         ProtocolTestData.WriteByte(body, ref offset, 0);
         ProtocolTestData.WriteByte(body, ref offset, 0);
@@ -947,11 +1127,15 @@ public sealed class RawLogAnalyzerTests
         });
     }
 
-    private static byte[] BuildEventPacket(ulong sessionUid, string eventCode)
+    private static byte[] BuildEventPacket(ulong sessionUid, string eventCode, byte[]? detail = null)
     {
         return BuildPacket(sessionUid, PacketId.Event, UdpPacketConstants.EventBodySize, body =>
         {
             Encoding.ASCII.GetBytes(eventCode, body[..4]);
+            if (detail is not null)
+            {
+                detail.AsSpan(0, Math.Min(detail.Length, 12)).CopyTo(body[4..]);
+            }
         });
     }
 
@@ -1018,6 +1202,7 @@ public sealed class RawLogAnalyzerTests
         bool IsPitLaneTimerActive = false,
         ushort PitLaneTimeInLaneInMs = 0,
         ushort PitStopTimerInMs = 0,
+        bool IsCurrentLapInvalid = false,
         uint LastLapTimeInMs = 90000);
 
     private sealed record LapPositionTestData(
