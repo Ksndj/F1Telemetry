@@ -56,6 +56,16 @@ public sealed record SessionState
     public byte? PitSpeedLimit { get; init; }
 
     /// <summary>
+    /// Gets the latest raw safety car status from the session packet.
+    /// </summary>
+    public byte? SafetyCarStatus { get; init; }
+
+    /// <summary>
+    /// Gets the latest marshal-zone flag values by zone index.
+    /// </summary>
+    public IReadOnlyDictionary<int, sbyte> MarshalZoneFlags { get; init; } = new Dictionary<int, sbyte>();
+
+    /// <summary>
     /// Gets the number of active cars when known.
     /// </summary>
     public byte? ActiveCarCount { get; init; }

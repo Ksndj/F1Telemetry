@@ -93,6 +93,6 @@ public static class SessionModeFormatter
     /// <returns><see langword="true"/> when pit-window speech should be kept.</returns>
     public static bool AllowsPitWindowSpeech(SessionMode sessionMode)
     {
-        return sessionMode is SessionMode.Race or SessionMode.SprintRace or SessionMode.Practice or SessionMode.Unknown;
+        return sessionMode is SessionMode.Race or SessionMode.SprintRace;
     }
 }
