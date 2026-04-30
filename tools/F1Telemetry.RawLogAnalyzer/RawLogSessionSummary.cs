@@ -9,6 +9,8 @@ public sealed class RawLogSessionSummary
 {
     private const float JoulesPerMegajoule = 1_000_000f;
     private const float TyreWearDisagreementThresholdPercent = 5f;
+    private const uint AttackDefenseGapThresholdMs = 1_000;
+    private const uint TrafficImpactGapThresholdMs = 1_500;
 
     internal RawLogSessionSummary(ulong sessionUid)
     {
@@ -123,6 +125,35 @@ public sealed class RawLogSessionSummary
             lap.IsPitLaneTimerActive = car.IsPitLaneTimerActive;
             lap.PitLaneTimeInLaneInMs = car.PitLaneTimeInLaneInMs == 0 ? null : car.PitLaneTimeInLaneInMs;
             lap.PitStopTimerInMs = car.PitStopTimerInMs == 0 ? null : car.PitStopTimerInMs;
+            ApplyGapData(packet, car, lap);
+        }
+    }
+
+    internal void ApplyLapPositionsPacket(LapPositionsPacket packet, PacketHeader header)
+    {
+        if (header.PlayerCarIndex >= UdpPacketConstants.MaxCarsInSession)
+        {
+            return;
+        }
+
+        var lapCount = Math.Min(packet.NumLaps, packet.PositionForVehicleIndexByLap.Length);
+        for (var index = 0; index < lapCount; index++)
+        {
+            var lapNumber = packet.LapStart + index;
+            if (lapNumber <= 0 || header.PlayerCarIndex >= packet.PositionForVehicleIndexByLap[index].Length)
+            {
+                continue;
+            }
+
+            var position = packet.PositionForVehicleIndexByLap[index][header.PlayerCarIndex];
+            if (position == 0)
+            {
+                continue;
+            }
+
+            var lap = GetOrCreateLap(lapNumber);
+            lap.LapPositionsPosition = position;
+            lap.HasLapPositionsEvidence = true;
         }
     }
 
@@ -564,6 +595,342 @@ public sealed class RawLogSessionSummary
             Risk: GetErsRisk(storeValues.Length == 0 ? null : storeValues.Min()),
             Confidence: RaceAnalysisConfidence.High,
             Notes: "ERS summary is aggregate only; gap-context decisions are out of scope for M3.");
+    }
+
+    internal GapTrendSummary BuildGapTrendSummary()
+    {
+        var observed = _lapSummaries
+            .Where(IsCompletedRaceLap)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => CreateGapLapSnapshot(pair.Key, pair.Value))
+            .Where(lap => lap.HasEvidence)
+            .ToArray();
+        if (observed.Length == 0)
+        {
+            return new GapTrendSummary(
+                ObservedLapCount: 0,
+                AttackWindowLapCount: 0,
+                DefenseWindowLapCount: 0,
+                TrafficImpactLapCount: 0,
+                MinGapFrontMs: null,
+                AverageGapFrontMs: null,
+                MinGapBehindMs: null,
+                AverageGapBehindMs: null,
+                AttackWindows: [],
+                DefenseWindows: [],
+                TrafficImpactLaps: [],
+                Confidence: GapAnalysisConfidence.Unknown,
+                Notes: "No reliable LapData gap timing or LapPositions ordering evidence was decoded.");
+        }
+
+        var frontGaps = observed
+            .Where(lap => lap.GapFrontMs is not null)
+            .Select(lap => lap.GapFrontMs!.Value)
+            .ToArray();
+        var frontAverages = observed
+            .Where(lap => lap.AverageGapFrontMs is not null)
+            .Select(lap => lap.AverageGapFrontMs!.Value)
+            .ToArray();
+        var behindGaps = observed
+            .Where(lap => lap.GapBehindMs is not null)
+            .Select(lap => lap.GapBehindMs!.Value)
+            .ToArray();
+        var behindAverages = observed
+            .Where(lap => lap.AverageGapBehindMs is not null)
+            .Select(lap => lap.AverageGapBehindMs!.Value)
+            .ToArray();
+        var attackWindows = BuildGapWindows(observed, GapWindowType.Attack);
+        var defenseWindows = BuildGapWindows(observed, GapWindowType.Defense);
+        var trafficImpactLaps = observed
+            .Where(IsTrafficImpactLap)
+            .Select(lap => new TrafficImpactLapSummary(
+                LapNumber: lap.LapNumber,
+                Position: lap.Position,
+                GapFrontMs: lap.GapFrontMs,
+                GapBehindMs: lap.GapBehindMs,
+                ImpactType: GetTrafficImpactType(lap),
+                Confidence: GetGapConfidence([lap]),
+                Notes: BuildGapLapNotes(lap)))
+            .ToArray();
+
+        return new GapTrendSummary(
+            ObservedLapCount: observed.Length,
+            AttackWindowLapCount: attackWindows.Sum(window => window.LapCount),
+            DefenseWindowLapCount: defenseWindows.Sum(window => window.LapCount),
+            TrafficImpactLapCount: trafficImpactLaps.Length,
+            MinGapFrontMs: frontGaps.Length == 0 ? null : frontGaps.Min(),
+            AverageGapFrontMs: frontAverages.Length == 0 ? null : frontAverages.Average(),
+            MinGapBehindMs: behindGaps.Length == 0 ? null : behindGaps.Min(),
+            AverageGapBehindMs: behindAverages.Length == 0 ? null : behindAverages.Average(),
+            AttackWindows: attackWindows,
+            DefenseWindows: defenseWindows,
+            TrafficImpactLaps: trafficImpactLaps,
+            Confidence: GetGapConfidence(observed),
+            Notes: BuildGapSummaryNotes(observed));
+    }
+
+    private static void ApplyGapData(LapDataPacket packet, LapDataEntry playerCar, RaceLapAccumulator lap)
+    {
+        if (playerCar.CarPosition == 0)
+        {
+            return;
+        }
+
+        lap.HasLapDataPositionEvidence = true;
+
+        if (playerCar.CarPosition > 1)
+        {
+            var frontGap = GetDeltaToCarInFrontMs(playerCar);
+            if (frontGap is null)
+            {
+                lap.MissingFrontTimingSampleCount++;
+            }
+            else
+            {
+                lap.AddGapFrontMs(frontGap.Value);
+            }
+        }
+
+        var rearCar = FindAdjacentRearCar(packet.Cars, playerCar.CarPosition);
+        if (rearCar is null)
+        {
+            lap.MissingAdjacentRearCarSampleCount++;
+            return;
+        }
+
+        if (rearCar.CurrentLapNumber != playerCar.CurrentLapNumber)
+        {
+            lap.RearLapMismatchSampleCount++;
+            return;
+        }
+
+        var behindGap = GetDeltaToCarInFrontMs(rearCar);
+        if (behindGap is null)
+        {
+            lap.MissingBehindTimingSampleCount++;
+            return;
+        }
+
+        lap.AddGapBehindMs(behindGap.Value);
+    }
+
+    private static IReadOnlyList<GapWindowSummary> BuildGapWindows(
+        IReadOnlyList<GapLapSnapshot> laps,
+        GapWindowType windowType)
+    {
+        var windows = new List<GapWindowSummary>();
+        var current = new List<GapLapSnapshot>();
+
+        foreach (var lap in laps)
+        {
+            if (IsGapWindowLap(lap, windowType))
+            {
+                current.Add(lap);
+                continue;
+            }
+
+            FlushGapWindow(windows, current, windowType);
+        }
+
+        FlushGapWindow(windows, current, windowType);
+        return windows;
+    }
+
+    private static void FlushGapWindow(
+        ICollection<GapWindowSummary> windows,
+        List<GapLapSnapshot> current,
+        GapWindowType windowType)
+    {
+        if (current.Count == 0)
+        {
+            return;
+        }
+
+        var frontGaps = current
+            .Where(lap => lap.GapFrontMs is not null)
+            .Select(lap => lap.GapFrontMs!.Value)
+            .ToArray();
+        var frontAverages = current
+            .Where(lap => lap.AverageGapFrontMs is not null)
+            .Select(lap => lap.AverageGapFrontMs!.Value)
+            .ToArray();
+        var behindGaps = current
+            .Where(lap => lap.GapBehindMs is not null)
+            .Select(lap => lap.GapBehindMs!.Value)
+            .ToArray();
+        var behindAverages = current
+            .Where(lap => lap.AverageGapBehindMs is not null)
+            .Select(lap => lap.AverageGapBehindMs!.Value)
+            .ToArray();
+
+        windows.Add(new GapWindowSummary(
+            WindowType: windowType,
+            StartLap: current[0].LapNumber,
+            EndLap: current[^1].LapNumber,
+            LapCount: current.Count,
+            MinGapFrontMs: frontGaps.Length == 0 ? null : frontGaps.Min(),
+            AverageGapFrontMs: frontAverages.Length == 0 ? null : frontAverages.Average(),
+            MinGapBehindMs: behindGaps.Length == 0 ? null : behindGaps.Min(),
+            AverageGapBehindMs: behindAverages.Length == 0 ? null : behindAverages.Average(),
+            StartPosition: current[0].Position,
+            EndPosition: current[^1].Position,
+            Confidence: GetGapConfidence(current),
+            Notes: BuildGapWindowNotes(windowType, current)));
+        current.Clear();
+    }
+
+    private static string BuildGapWindowNotes(GapWindowType windowType, IReadOnlyList<GapLapSnapshot> laps)
+    {
+        var source = windowType == GapWindowType.Attack
+            ? "Attack candidate uses player LapData front-gap timing."
+            : "Defense candidate uses same-lap adjacent rear-car LapData timing.";
+        return $"{source} {BuildGapSummaryNotes(laps)}";
+    }
+
+    private static string BuildGapSummaryNotes(IReadOnlyList<GapLapSnapshot> laps)
+    {
+        if (laps.Count == 0)
+        {
+            return "No reliable LapData gap timing or LapPositions ordering evidence was decoded.";
+        }
+
+        var notes = new List<string>
+        {
+            "Front gaps use player LapData.DeltaToCarInFront only.",
+            "Behind gaps use the same-lap adjacent rear car's LapData.DeltaToCarInFront only."
+        };
+        if (laps.Any(lap => lap.HasRearLapMismatch))
+        {
+            notes.Add("Some behind gaps are unavailable because the adjacent rear car was not on the same lap.");
+        }
+
+        if (laps.Any(lap => lap.HasMissingAdjacentRearCar))
+        {
+            notes.Add("Some behind gaps are unavailable because adjacent rear-car evidence was missing.");
+        }
+
+        if (laps.Any(lap => lap.HasMissingBehindTiming))
+        {
+            notes.Add("Some behind gaps are unavailable because reliable rear timing was missing.");
+        }
+
+        if (laps.Any(lap => lap.IsPositionOnly))
+        {
+            notes.Add("LapPositions or LapData positions confirm order only; no time gap is estimated from position or distance.");
+        }
+
+        return string.Join(" ", notes);
+    }
+
+    private static string BuildGapLapNotes(GapLapSnapshot lap)
+    {
+        var notes = new List<string>();
+        if (lap.GapFrontMs is not null)
+        {
+            notes.Add("Front gap came from player LapData.");
+        }
+
+        if (lap.GapBehindMs is not null)
+        {
+            notes.Add("Behind gap came from same-lap adjacent rear-car LapData.");
+        }
+
+        if (lap.HasRearLapMismatch)
+        {
+            notes.Add("Behind gap unavailable because the adjacent rear car was not on the same lap.");
+        }
+
+        if (lap.HasMissingAdjacentRearCar)
+        {
+            notes.Add("Behind gap unavailable because adjacent rear-car evidence was missing.");
+        }
+
+        if (lap.HasMissingBehindTiming)
+        {
+            notes.Add("Behind gap unavailable because reliable rear timing was missing.");
+        }
+
+        if (lap.IsPositionOnly)
+        {
+            notes.Add("Position order only; no time gap was estimated.");
+        }
+
+        return notes.Count == 0
+            ? "No additional gap notes."
+            : string.Join(" ", notes);
+    }
+
+    private static GapLapSnapshot CreateGapLapSnapshot(int lapNumber, RaceLapAccumulator lap)
+    {
+        return new GapLapSnapshot(
+            LapNumber: lapNumber,
+            Position: lap.Position ?? lap.LapPositionsPosition,
+            GapFrontMs: lap.MinGapFrontMs,
+            AverageGapFrontMs: lap.AverageGapFrontMs,
+            GapBehindMs: lap.MinGapBehindMs,
+            AverageGapBehindMs: lap.AverageGapBehindMs,
+            HasPositionEvidence: lap.HasPositionEvidence,
+            HasLapPositionsEvidence: lap.HasLapPositionsEvidence,
+            HasMissingAdjacentRearCar: lap.MissingAdjacentRearCarSampleCount > 0,
+            HasRearLapMismatch: lap.RearLapMismatchSampleCount > 0,
+            HasMissingBehindTiming: lap.MissingBehindTimingSampleCount > 0);
+    }
+
+    private static GapAnalysisConfidence GetGapConfidence(IEnumerable<GapLapSnapshot> laps)
+    {
+        var snapshots = laps as GapLapSnapshot[] ?? laps.ToArray();
+        var hasFrontGap = snapshots.Any(lap => lap.GapFrontMs is not null);
+        var hasBehindGap = snapshots.Any(lap => lap.GapBehindMs is not null);
+        if (hasFrontGap && hasBehindGap)
+        {
+            return GapAnalysisConfidence.High;
+        }
+
+        if (hasFrontGap || hasBehindGap)
+        {
+            return GapAnalysisConfidence.Medium;
+        }
+
+        return snapshots.Any(lap => lap.HasPositionEvidence)
+            ? GapAnalysisConfidence.Low
+            : GapAnalysisConfidence.Unknown;
+    }
+
+    private static TrafficImpactType GetTrafficImpactType(GapLapSnapshot lap)
+    {
+        var hasFrontTraffic = lap.GapFrontMs is not null && lap.GapFrontMs.Value <= TrafficImpactGapThresholdMs;
+        var hasRearPressure = lap.GapBehindMs is not null && lap.GapBehindMs.Value <= TrafficImpactGapThresholdMs;
+        if (hasFrontTraffic && hasRearPressure)
+        {
+            return TrafficImpactType.Sandwich;
+        }
+
+        return hasFrontTraffic ? TrafficImpactType.FrontTraffic : TrafficImpactType.RearPressure;
+    }
+
+    private static bool IsGapWindowLap(GapLapSnapshot lap, GapWindowType windowType)
+    {
+        return windowType == GapWindowType.Attack
+            ? lap.GapFrontMs is not null && lap.GapFrontMs.Value <= AttackDefenseGapThresholdMs
+            : lap.GapBehindMs is not null && lap.GapBehindMs.Value <= AttackDefenseGapThresholdMs;
+    }
+
+    private static bool IsTrafficImpactLap(GapLapSnapshot lap)
+    {
+        return (lap.GapFrontMs is not null && lap.GapFrontMs.Value <= TrafficImpactGapThresholdMs) ||
+               (lap.GapBehindMs is not null && lap.GapBehindMs.Value <= TrafficImpactGapThresholdMs);
+    }
+
+    private static LapDataEntry? FindAdjacentRearCar(IEnumerable<LapDataEntry> cars, int playerPosition)
+    {
+        var rearPosition = playerPosition + 1;
+        return cars.FirstOrDefault(car => car.CarPosition == rearPosition);
+    }
+
+    private static uint? GetDeltaToCarInFrontMs(LapDataEntry car)
+    {
+        var totalMs = (uint)(car.DeltaToCarInFrontMinutes * 60_000) + car.DeltaToCarInFrontInMs;
+        return totalMs == 0 ? null : totalMs;
     }
 
     private void AddTyreCompoundPair(byte visualCompound, byte actualCompound)
@@ -1104,9 +1471,45 @@ public sealed class RawLogSessionSummary
 
         public float? TyreSetsWearPercent { get; set; }
 
+        public int? LapPositionsPosition { get; set; }
+
+        public bool HasLapDataPositionEvidence { get; set; }
+
+        public bool HasLapPositionsEvidence { get; set; }
+
+        public uint? MinGapFrontMs { get; private set; }
+
+        public double GapFrontMsSum { get; private set; }
+
+        public long GapFrontSampleCount { get; private set; }
+
+        public uint? MinGapBehindMs { get; private set; }
+
+        public double GapBehindMsSum { get; private set; }
+
+        public long GapBehindSampleCount { get; private set; }
+
+        public int MissingFrontTimingSampleCount { get; set; }
+
+        public int MissingAdjacentRearCarSampleCount { get; set; }
+
+        public int RearLapMismatchSampleCount { get; set; }
+
+        public int MissingBehindTimingSampleCount { get; set; }
+
         public long SampleCount { get; set; }
 
         public bool HasCompound => ActualTyreCompound is not null || VisualTyreCompound is not null;
+
+        public bool HasPositionEvidence =>
+            HasLapDataPositionEvidence ||
+            HasLapPositionsEvidence ||
+            Position is not null ||
+            LapPositionsPosition is not null;
+
+        public double? AverageGapFrontMs => GapFrontSampleCount == 0 ? null : GapFrontMsSum / GapFrontSampleCount;
+
+        public double? AverageGapBehindMs => GapBehindSampleCount == 0 ? null : GapBehindMsSum / GapBehindSampleCount;
 
         public float? PrimaryTyreWearPercent => CarDamageTyreWearPercent ?? TyreSetsWearPercent;
 
@@ -1126,10 +1529,49 @@ public sealed class RawLogSessionSummary
             IsPitLaneTimerActive ||
             PitLaneTimeInLaneInMs.GetValueOrDefault() > 0 ||
             PitStopTimerInMs.GetValueOrDefault() > 0;
+
+        public void AddGapFrontMs(uint gapMs)
+        {
+            MinGapFrontMs = MinGapFrontMs is null ? gapMs : Math.Min(MinGapFrontMs.Value, gapMs);
+            GapFrontMsSum += gapMs;
+            GapFrontSampleCount++;
+        }
+
+        public void AddGapBehindMs(uint gapMs)
+        {
+            MinGapBehindMs = MinGapBehindMs is null ? gapMs : Math.Min(MinGapBehindMs.Value, gapMs);
+            GapBehindMsSum += gapMs;
+            GapBehindSampleCount++;
+        }
     }
 
     private sealed record TyreStintSnapshot(
         byte EndLap,
         byte ActualTyreCompound,
         byte VisualTyreCompound);
+
+    private sealed record GapLapSnapshot(
+        int LapNumber,
+        int? Position,
+        uint? GapFrontMs,
+        double? AverageGapFrontMs,
+        uint? GapBehindMs,
+        double? AverageGapBehindMs,
+        bool HasPositionEvidence,
+        bool HasLapPositionsEvidence,
+        bool HasMissingAdjacentRearCar,
+        bool HasRearLapMismatch,
+        bool HasMissingBehindTiming)
+    {
+        public bool HasEvidence =>
+            GapFrontMs is not null ||
+            GapBehindMs is not null ||
+            HasPositionEvidence ||
+            HasLapPositionsEvidence;
+
+        public bool IsPositionOnly =>
+            GapFrontMs is null &&
+            GapBehindMs is null &&
+            (HasPositionEvidence || HasLapPositionsEvidence);
+    }
 }

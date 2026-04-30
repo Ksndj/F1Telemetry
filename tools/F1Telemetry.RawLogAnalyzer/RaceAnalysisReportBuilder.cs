@@ -45,6 +45,7 @@ public static class RaceAnalysisReportBuilder
             TyreUsageSummaries: session.BuildTyreUsageSummaries(stintSummaries),
             FuelTrendSummary: session.BuildFuelTrendSummary(),
             ErsTrendSummary: session.BuildErsTrendSummary(),
+            GapTrendSummary: session.BuildGapTrendSummary(),
             DataQualityWarnings: BuildWarnings(result, session));
     }
 

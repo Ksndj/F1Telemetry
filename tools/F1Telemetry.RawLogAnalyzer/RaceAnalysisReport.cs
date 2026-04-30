@@ -17,6 +17,7 @@ public sealed record RaceAnalysisReport(
     IReadOnlyList<TyreUsageSummary> TyreUsageSummaries,
     FuelTrendSummary FuelTrendSummary,
     ErsTrendSummary ErsTrendSummary,
+    GapTrendSummary GapTrendSummary,
     IReadOnlyList<string> DataQualityWarnings);
 
 /// <summary>
@@ -75,6 +76,36 @@ public enum RaceTrendRisk
     Low,
     Medium,
     High
+}
+
+/// <summary>
+/// Describes confidence levels used only by M4 gap-derived summaries.
+/// </summary>
+public enum GapAnalysisConfidence
+{
+    Unknown,
+    Low,
+    Medium,
+    High
+}
+
+/// <summary>
+/// Describes the type of compact gap window represented in the report.
+/// </summary>
+public enum GapWindowType
+{
+    Attack,
+    Defense
+}
+
+/// <summary>
+/// Describes the compact traffic-impact category for one lap.
+/// </summary>
+public enum TrafficImpactType
+{
+    FrontTraffic,
+    RearPressure,
+    Sandwich
 }
 
 /// <summary>
@@ -181,4 +212,51 @@ public sealed record ErsTrendSummary(
     int ObservedLapCount,
     RaceTrendRisk Risk,
     RaceAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains aggregate race gap trends using millisecond fields internally.
+/// </summary>
+public sealed record GapTrendSummary(
+    int ObservedLapCount,
+    int AttackWindowLapCount,
+    int DefenseWindowLapCount,
+    int TrafficImpactLapCount,
+    uint? MinGapFrontMs,
+    double? AverageGapFrontMs,
+    uint? MinGapBehindMs,
+    double? AverageGapBehindMs,
+    IReadOnlyList<GapWindowSummary> AttackWindows,
+    IReadOnlyList<GapWindowSummary> DefenseWindows,
+    IReadOnlyList<TrafficImpactLapSummary> TrafficImpactLaps,
+    GapAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains one contiguous attack or defense candidate window without raw lap arrays.
+/// </summary>
+public sealed record GapWindowSummary(
+    GapWindowType WindowType,
+    int StartLap,
+    int EndLap,
+    int LapCount,
+    uint? MinGapFrontMs,
+    double? AverageGapFrontMs,
+    uint? MinGapBehindMs,
+    double? AverageGapBehindMs,
+    int? StartPosition,
+    int? EndPosition,
+    GapAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains one compact traffic-impact lap with millisecond gap fields.
+/// </summary>
+public sealed record TrafficImpactLapSummary(
+    int LapNumber,
+    int? Position,
+    uint? GapFrontMs,
+    uint? GapBehindMs,
+    TrafficImpactType ImpactType,
+    GapAnalysisConfidence Confidence,
     string Notes);

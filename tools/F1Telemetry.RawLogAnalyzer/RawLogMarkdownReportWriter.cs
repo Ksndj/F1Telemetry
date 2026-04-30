@@ -33,6 +33,7 @@ internal static class RawLogMarkdownReportWriter
         AppendTyreUsageSummaries(builder, report.TyreUsageSummaries);
         AppendFuelTrendSummary(builder, report.FuelTrendSummary);
         AppendErsTrendSummary(builder, report.ErsTrendSummary);
+        AppendGapTrendSummary(builder, report.GapTrendSummary);
         AppendDataQualityWarnings(builder, report.DataQualityWarnings);
         return builder.ToString();
     }
@@ -196,6 +197,74 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine();
     }
 
+    private static void AppendGapTrendSummary(StringBuilder builder, GapTrendSummary summary)
+    {
+        builder.AppendLine("## Gap Trend Summary");
+        builder.AppendLine();
+        builder.AppendLine($"- Observed lap count: {summary.ObservedLapCount}");
+        builder.AppendLine($"- Attack candidate lap count: {summary.AttackWindowLapCount}");
+        builder.AppendLine($"- Defense candidate lap count: {summary.DefenseWindowLapCount}");
+        builder.AppendLine($"- Traffic impact lap count: {summary.TrafficImpactLapCount}");
+        builder.AppendLine($"- Min front gap: {FormatGapSeconds(summary.MinGapFrontMs)}");
+        builder.AppendLine($"- Average front gap: {FormatGapSeconds(summary.AverageGapFrontMs)}");
+        builder.AppendLine($"- Min behind gap: {FormatGapSeconds(summary.MinGapBehindMs)}");
+        builder.AppendLine($"- Average behind gap: {FormatGapSeconds(summary.AverageGapBehindMs)}");
+        builder.AppendLine($"- Confidence: {summary.Confidence}");
+        builder.AppendLine($"- Notes: {summary.Notes}");
+        builder.AppendLine();
+
+        AppendGapWindows(builder, "Attack Candidates", summary.AttackWindows);
+        AppendGapWindows(builder, "Defense Candidates", summary.DefenseWindows);
+        AppendTrafficImpactLaps(builder, summary.TrafficImpactLaps);
+    }
+
+    private static void AppendGapWindows(
+        StringBuilder builder,
+        string heading,
+        IReadOnlyList<GapWindowSummary> windows)
+    {
+        builder.AppendLine($"### {heading}");
+        builder.AppendLine();
+        if (windows.Count == 0)
+        {
+            builder.AppendLine("- None.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Type | Start lap | End lap | Laps | Min front gap | Avg front gap | Min behind gap | Avg behind gap | Start pos | End pos | Confidence | Notes |");
+        builder.AppendLine("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |");
+        foreach (var window in windows)
+        {
+            builder.AppendLine($"| {window.WindowType} | {window.StartLap} | {window.EndLap} | {window.LapCount} | {FormatGapSeconds(window.MinGapFrontMs)} | {FormatGapSeconds(window.AverageGapFrontMs)} | {FormatGapSeconds(window.MinGapBehindMs)} | {FormatGapSeconds(window.AverageGapBehindMs)} | {FormatOptional(window.StartPosition)} | {FormatOptional(window.EndPosition)} | {window.Confidence} | {window.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendTrafficImpactLaps(
+        StringBuilder builder,
+        IReadOnlyList<TrafficImpactLapSummary> trafficImpactLaps)
+    {
+        builder.AppendLine("### Traffic Impact Laps");
+        builder.AppendLine();
+        if (trafficImpactLaps.Count == 0)
+        {
+            builder.AppendLine("- None.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Lap | Position | Front gap | Behind gap | Type | Confidence | Notes |");
+        builder.AppendLine("| ---: | ---: | ---: | ---: | --- | --- | --- |");
+        foreach (var lap in trafficImpactLaps)
+        {
+            builder.AppendLine($"| {lap.LapNumber} | {FormatOptional(lap.Position)} | {FormatGapSeconds(lap.GapFrontMs)} | {FormatGapSeconds(lap.GapBehindMs)} | {lap.ImpactType} | {lap.Confidence} | {lap.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
     private static void AppendDataQualityWarnings(StringBuilder builder, IReadOnlyList<string> warnings)
     {
         builder.AppendLine("## Data Quality Warnings");
@@ -231,6 +300,11 @@ internal static class RawLogMarkdownReportWriter
         return value?.ToString("0.###", CultureInfo.InvariantCulture) ?? "unavailable";
     }
 
+    private static string FormatOptional(double? value)
+    {
+        return value?.ToString("0.###", CultureInfo.InvariantCulture) ?? "unavailable";
+    }
+
     private static string FormatOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? "unavailable" : value;
@@ -239,6 +313,25 @@ internal static class RawLogMarkdownReportWriter
     private static string FormatOptional(bool? value)
     {
         return value?.ToString() ?? "unavailable";
+    }
+
+    private static string FormatGapSeconds(uint? valueMs)
+    {
+        return valueMs is null
+            ? "unavailable"
+            : FormatGapSeconds((double)valueMs.Value);
+    }
+
+    private static string FormatGapSeconds(double? valueMs)
+    {
+        return valueMs is null
+            ? "unavailable"
+            : FormatGapSeconds(valueMs.Value);
+    }
+
+    private static string FormatGapSeconds(double valueMs)
+    {
+        return $"{valueMs / 1000d:0.###} s";
     }
 
     private static string FormatNullable(int value)

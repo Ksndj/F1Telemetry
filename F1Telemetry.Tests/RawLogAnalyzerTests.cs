@@ -10,6 +10,8 @@ namespace F1Telemetry.Tests;
 
 public sealed class RawLogAnalyzerTests
 {
+    private const int LapDataEntryTestSize = 57;
+
     [Fact]
     public async Task AnalyzeAsync_WritesRaceAnalysisReportSkeletonForSelectedSession()
     {
@@ -359,6 +361,194 @@ public sealed class RawLogAnalyzerTests
     }
 
     [Fact]
+    public async Task AnalyzeAsync_WritesGapTrendSummaryWithMsStorageAndSecondMarkdownDisplay()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 3)),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 1, Position: 3, DeltaToCarInFrontInMs: 900, TotalDistance: 100f),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 1, Position: 4, DeltaToCarInFrontInMs: 700, TotalDistance: 98f))),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 2, Position: 4, DeltaToCarInFrontInMs: 1400, TotalDistance: 200f),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 2, Position: 5, DeltaToCarInFrontInMs: 1800, TotalDistance: 198f))),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 3, Position: 2, DeltaToCarInFrontInMs: 2500, TotalDistance: 300f, ResultStatus: 3),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 3, Position: 3, DeltaToCarInFrontInMs: 800, TotalDistance: 298f, ResultStatus: 3))),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 2, numLaps: 3, gridPosition: 4, points: 18, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var summary = result.RaceReport.GapTrendSummary;
+        Assert.Equal(3, summary.ObservedLapCount);
+        Assert.Equal(1, summary.AttackWindowLapCount);
+        Assert.Equal(2, summary.DefenseWindowLapCount);
+        Assert.Equal(3, summary.TrafficImpactLapCount);
+        Assert.Equal(900U, summary.MinGapFrontMs);
+        Assert.Equal(700U, summary.MinGapBehindMs);
+        Assert.Equal(GapAnalysisConfidence.High, summary.Confidence);
+        var attack = Assert.Single(summary.AttackWindows);
+        Assert.Equal(1, attack.StartLap);
+        Assert.Equal(1, attack.EndLap);
+        Assert.Equal(900U, attack.MinGapFrontMs);
+        Assert.Contains(summary.DefenseWindows, window => window.StartLap == 1 && window.MinGapBehindMs == 700U);
+        Assert.Contains(summary.DefenseWindows, window => window.StartLap == 3 && window.MinGapBehindMs == 800U);
+        Assert.Contains(summary.TrafficImpactLaps, lap => lap.LapNumber == 2 && lap.GapFrontMs == 1400U && lap.ImpactType == TrafficImpactType.FrontTraffic);
+        Assert.NotNull(typeof(TrafficImpactLapSummary).GetProperty(nameof(TrafficImpactLapSummary.GapFrontMs)));
+        Assert.NotNull(typeof(TrafficImpactLapSummary).GetProperty(nameof(TrafficImpactLapSummary.GapBehindMs)));
+        Assert.Null(typeof(TrafficImpactLapSummary).GetProperty("GapFrontSeconds"));
+        Assert.Null(typeof(TrafficImpactLapSummary).GetProperty("GapBehindSeconds"));
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("## Gap Trend Summary", markdown);
+        Assert.Contains("0.9 s", markdown);
+        Assert.Contains("1.4 s", markdown);
+        Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("CarTelemetry[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LapPositions[]", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_LeavesBehindGapUnavailableWhenAdjacentRearCarIsOffLap()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 2, Position: 5, DeltaToCarInFrontInMs: 800, TotalDistance: 200f, ResultStatus: 3),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 1, Position: 6, DeltaToCarInFrontInMs: 500, TotalDistance: 150f, ResultStatus: 2))),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 5, numLaps: 2, gridPosition: 5, points: 10, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var summary = result.RaceReport.GapTrendSummary;
+        Assert.Empty(summary.DefenseWindows);
+        Assert.Equal(0, summary.DefenseWindowLapCount);
+        Assert.Equal(GapAnalysisConfidence.Medium, summary.Confidence);
+        var trafficLap = Assert.Single(summary.TrafficImpactLaps);
+        Assert.Equal(800U, trafficLap.GapFrontMs);
+        Assert.Null(trafficLap.GapBehindMs);
+        Assert.Contains("same lap", trafficLap.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("same lap", summary.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_TreatsLapPositionsAsOrderingOnlyWithoutEstimatingGapTime()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildLapPositionsPacket(
+                1001UL,
+                numLaps: 1,
+                lapStart: 1,
+                new LapPositionTestData(LapNumber: 1, CarIndex: 0, Position: 3),
+                new LapPositionTestData(LapNumber: 1, CarIndex: 1, Position: 4))),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 3, numLaps: 1, gridPosition: 3, points: 15, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var summary = result.RaceReport.GapTrendSummary;
+        Assert.Equal(1, summary.ObservedLapCount);
+        Assert.Null(summary.MinGapFrontMs);
+        Assert.Null(summary.MinGapBehindMs);
+        Assert.Empty(summary.AttackWindows);
+        Assert.Empty(summary.DefenseWindows);
+        Assert.Empty(summary.TrafficImpactLaps);
+        Assert.Equal(GapAnalysisConfidence.Low, summary.Confidence);
+        Assert.Contains("position", summary.Notes, StringComparison.OrdinalIgnoreCase);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("unavailable", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("PositionForVehicleIndexByLap", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LapPositions[]", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_DoesNotEstimateGapTimingFromLapDistanceOrTotalDistance()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildLapDataPacketWithCars(
+                1001UL,
+                new LapDataCarTestData(CarIndex: 0, CurrentLap: 1, Position: 2, DeltaToCarInFrontInMs: 0, LapDistance: 4900f, TotalDistance: 10000f, ResultStatus: 3),
+                new LapDataCarTestData(CarIndex: 1, CurrentLap: 1, Position: 3, DeltaToCarInFrontInMs: 0, LapDistance: 4895f, TotalDistance: 9995f, ResultStatus: 3))),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 2, numLaps: 1, gridPosition: 2, points: 18, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var summary = result.RaceReport.GapTrendSummary;
+        Assert.Equal(1, summary.ObservedLapCount);
+        Assert.Null(summary.MinGapFrontMs);
+        Assert.Null(summary.MinGapBehindMs);
+        Assert.Empty(summary.AttackWindows);
+        Assert.Empty(summary.DefenseWindows);
+        Assert.Empty(summary.TrafficImpactLaps);
+        Assert.Equal(GapAnalysisConfidence.Low, summary.Confidence);
+        Assert.Contains("no time gap", summary.Notes, StringComparison.OrdinalIgnoreCase);
+
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("unavailable", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("0.005 s", markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_WritesUnknownGapSummaryWhenNoGapEvidenceExists()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 1, numLaps: 1, gridPosition: 1, points: 25, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.NotNull(result.RaceReport);
+        var summary = result.RaceReport.GapTrendSummary;
+        Assert.Equal(0, summary.ObservedLapCount);
+        Assert.Equal(GapAnalysisConfidence.Unknown, summary.Confidence);
+        Assert.Null(summary.MinGapFrontMs);
+        Assert.Null(summary.MinGapBehindMs);
+        Assert.Empty(summary.AttackWindows);
+        Assert.Empty(summary.DefenseWindows);
+        Assert.Empty(summary.TrafficImpactLaps);
+    }
+
+    [Fact]
     public async Task AnalyzeAsync_LabelsSlowLapOnlyPitInferenceAsPossibleLowConfidence()
     {
         var inputPath = CreateTempJsonlPath();
@@ -513,39 +703,91 @@ public sealed class RawLogAnalyzerTests
         ushort pitStopTimerInMs = 0,
         uint lastLapTimeInMs = 90000)
     {
+        return BuildLapDataPacketWithCars(
+            sessionUid,
+            new LapDataCarTestData(
+                CarIndex: 0,
+                CurrentLap: currentLap,
+                Position: position,
+                DeltaToCarInFrontInMs: 250,
+                TotalDistance: totalDistance,
+                ResultStatus: resultStatus,
+                PitStatus: pitStatus,
+                NumPitStops: numPitStops,
+                IsPitLaneTimerActive: isPitLaneTimerActive,
+                PitLaneTimeInLaneInMs: pitLaneTimeInLaneInMs,
+                PitStopTimerInMs: pitStopTimerInMs,
+                LastLapTimeInMs: lastLapTimeInMs));
+    }
+
+    private static byte[] BuildLapDataPacketWithCars(ulong sessionUid, params LapDataCarTestData[] cars)
+    {
         return BuildPacket(sessionUid, PacketId.LapData, UdpPacketConstants.LapDataBodySize, body =>
         {
+            foreach (var car in cars)
+            {
+                WriteLapDataEntry(body, car);
+            }
+        });
+    }
+
+    private static void WriteLapDataEntry(Span<byte> body, LapDataCarTestData car)
+    {
+        var offset = car.CarIndex * LapDataEntryTestSize;
+        ProtocolTestData.WriteUInt32(body, ref offset, car.LastLapTimeInMs);
+        ProtocolTestData.WriteUInt32(body, ref offset, 45000);
+        ProtocolTestData.WriteUInt16(body, ref offset, 30000);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteUInt16(body, ref offset, 31000);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteUInt16(body, ref offset, car.DeltaToCarInFrontInMs);
+        ProtocolTestData.WriteByte(body, ref offset, car.DeltaToCarInFrontMinutes);
+        ProtocolTestData.WriteUInt16(body, ref offset, 1000);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteFloat(body, ref offset, car.LapDistance);
+        ProtocolTestData.WriteFloat(body, ref offset, car.TotalDistance);
+        ProtocolTestData.WriteFloat(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, car.Position);
+        ProtocolTestData.WriteByte(body, ref offset, car.CurrentLap);
+        ProtocolTestData.WriteByte(body, ref offset, car.PitStatus);
+        ProtocolTestData.WriteByte(body, ref offset, car.NumPitStops);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteByte(body, ref offset, car.Position);
+        ProtocolTestData.WriteByte(body, ref offset, 1);
+        ProtocolTestData.WriteByte(body, ref offset, car.ResultStatus);
+        ProtocolTestData.WriteByte(body, ref offset, car.IsPitLaneTimerActive ? (byte)1 : (byte)0);
+        ProtocolTestData.WriteUInt16(body, ref offset, car.PitLaneTimeInLaneInMs);
+        ProtocolTestData.WriteUInt16(body, ref offset, car.PitStopTimerInMs);
+    }
+
+    private static byte[] BuildLapPositionsPacket(
+        ulong sessionUid,
+        byte numLaps,
+        byte lapStart,
+        params LapPositionTestData[] positions)
+    {
+        return BuildPacket(sessionUid, PacketId.LapPositions, UdpPacketConstants.LapPositionsBodySize, body =>
+        {
             var offset = 0;
-            ProtocolTestData.WriteUInt32(body, ref offset, lastLapTimeInMs);
-            ProtocolTestData.WriteUInt32(body, ref offset, 45000);
-            ProtocolTestData.WriteUInt16(body, ref offset, 30000);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteUInt16(body, ref offset, 31000);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteUInt16(body, ref offset, 250);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteUInt16(body, ref offset, 1000);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteFloat(body, ref offset, 123.4f);
-            ProtocolTestData.WriteFloat(body, ref offset, totalDistance);
-            ProtocolTestData.WriteFloat(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, position);
-            ProtocolTestData.WriteByte(body, ref offset, currentLap);
-            ProtocolTestData.WriteByte(body, ref offset, pitStatus);
-            ProtocolTestData.WriteByte(body, ref offset, numPitStops);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, position);
-            ProtocolTestData.WriteByte(body, ref offset, 1);
-            ProtocolTestData.WriteByte(body, ref offset, resultStatus);
-            ProtocolTestData.WriteByte(body, ref offset, isPitLaneTimerActive ? (byte)1 : (byte)0);
-            ProtocolTestData.WriteUInt16(body, ref offset, pitLaneTimeInLaneInMs);
-            ProtocolTestData.WriteUInt16(body, ref offset, pitStopTimerInMs);
+            ProtocolTestData.WriteByte(body, ref offset, numLaps);
+            ProtocolTestData.WriteByte(body, ref offset, lapStart);
+            foreach (var position in positions)
+            {
+                var lapIndex = position.LapNumber - lapStart;
+                if (lapIndex < 0 || lapIndex >= UdpPacketConstants.MaxLapPositionsLaps)
+                {
+                    continue;
+                }
+
+                var targetOffset = offset + (lapIndex * UdpPacketConstants.MaxCarsInSession) + position.CarIndex;
+                body[targetOffset] = position.Position;
+            }
         });
     }
 
@@ -761,4 +1003,25 @@ public sealed class RawLogAnalyzerTests
     }
 
     private sealed record TyreStintTestData(byte EndLap, byte Actual, byte Visual);
+
+    private sealed record LapDataCarTestData(
+        byte CarIndex,
+        byte CurrentLap,
+        byte Position,
+        ushort DeltaToCarInFrontInMs,
+        byte DeltaToCarInFrontMinutes = 0,
+        float LapDistance = 123.4f,
+        float TotalDistance = 100f,
+        byte ResultStatus = 2,
+        byte PitStatus = 0,
+        byte NumPitStops = 0,
+        bool IsPitLaneTimerActive = false,
+        ushort PitLaneTimeInLaneInMs = 0,
+        ushort PitStopTimerInMs = 0,
+        uint LastLapTimeInMs = 90000);
+
+    private sealed record LapPositionTestData(
+        byte LapNumber,
+        byte CarIndex,
+        byte Position);
 }

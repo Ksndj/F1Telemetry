@@ -262,6 +262,9 @@ public sealed class RawLogAnalyzerService
             case FinalClassificationPacket packet:
                 session.ApplyFinalClassificationPacket(packet, parsedPacket.Header);
                 break;
+            case LapPositionsPacket packet:
+                session.ApplyLapPositionsPacket(packet, parsedPacket.Header);
+                break;
         }
     }
 
