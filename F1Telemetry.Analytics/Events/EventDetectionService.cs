@@ -1,5 +1,6 @@
 using System.Text.Json;
 using F1Telemetry.Analytics.Interfaces;
+using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Models;
 
 namespace F1Telemetry.Analytics.Events;
@@ -15,7 +16,13 @@ public sealed class EventDetectionService : IEventDetectionService
     private readonly Queue<RaceEvent> _pendingEvents = new();
     private readonly Dictionary<string, DateTimeOffset> _lastRaisedAtByDedupKey = new(StringComparer.Ordinal);
     private readonly HashSet<string> _highTyreWearTyreKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _dataQualityWarningKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<int, sbyte> _lastMarshalZoneFlags = new();
     private readonly Dictionary<int, PitCandidate> _pitCandidates = new();
+    private byte? _lastSafetyCarStatus;
+    private bool _attackWindowArmed = true;
+    private bool _defenseWindowArmed = true;
+    private bool _lowErsArmed = true;
     private SessionState? _previousState;
 
     /// <summary>
@@ -35,9 +42,19 @@ public sealed class EventDetectionService : IEventDetectionService
         lock (_gate)
         {
             var previousState = _previousState;
+            DetectSafetyCarStatus(sessionState);
+            DetectMarshalZoneFlags(sessionState);
+
             if (previousState is not null)
             {
-                DetectPitEvents(previousState, sessionState);
+                if (IsRaceLikeSession(sessionState))
+                {
+                    DetectPitEvents(previousState, sessionState);
+                    DetectRaceGapWindows(sessionState);
+                    DetectLowErs(sessionState);
+                    DetectMissingRaceTrendEvidence(sessionState);
+                }
+
                 DetectPlayerLapInvalidated(previousState, sessionState);
                 DetectLowFuel(previousState, sessionState);
                 DetectHighTyreWear(previousState, sessionState);
@@ -76,7 +93,13 @@ public sealed class EventDetectionService : IEventDetectionService
             _pendingEvents.Clear();
             _lastRaisedAtByDedupKey.Clear();
             _highTyreWearTyreKeys.Clear();
+            _dataQualityWarningKeys.Clear();
+            _lastMarshalZoneFlags.Clear();
             _pitCandidates.Clear();
+            _lastSafetyCarStatus = null;
+            _attackWindowArmed = true;
+            _defenseWindowArmed = true;
+            _lowErsArmed = true;
             _previousState = null;
         }
     }
@@ -261,6 +284,327 @@ public sealed class EventDetectionService : IEventDetectionService
         }
     }
 
+    private void DetectSafetyCarStatus(SessionState currentState)
+    {
+        if (currentState.SafetyCarStatus is not { } safetyCarStatus ||
+            _lastSafetyCarStatus == safetyCarStatus)
+        {
+            return;
+        }
+
+        _lastSafetyCarStatus = safetyCarStatus;
+        switch (safetyCarStatus)
+        {
+            case 0:
+            case 3:
+                return;
+            case 1:
+                EmitEvent(
+                    eventType: EventType.SafetyCar,
+                    severity: EventSeverity.Warning,
+                    timestamp: currentState.UpdatedAt,
+                    lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                    vehicleIdx: null,
+                    driverName: null,
+                    message: "Safety car deployed.",
+                    dedupKey: "safety-car:full",
+                    payload: new { SafetyCarStatus = safetyCarStatus });
+                return;
+            case 2:
+                EmitEvent(
+                    eventType: EventType.VirtualSafetyCar,
+                    severity: EventSeverity.Warning,
+                    timestamp: currentState.UpdatedAt,
+                    lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                    vehicleIdx: null,
+                    driverName: null,
+                    message: "Virtual safety car deployed.",
+                    dedupKey: "safety-car:virtual",
+                    payload: new { SafetyCarStatus = safetyCarStatus });
+                return;
+            default:
+                EmitDataQualityWarning(
+                    key: $"safety-car-status:{safetyCarStatus}",
+                    timestamp: currentState.UpdatedAt,
+                    lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                    message: $"Unknown safety car status {safetyCarStatus}; no safety TTS event was emitted.");
+                return;
+        }
+    }
+
+    private void DetectMarshalZoneFlags(SessionState currentState)
+    {
+        foreach (var pair in currentState.MarshalZoneFlags.OrderBy(pair => pair.Key))
+        {
+            var zoneIndex = pair.Key;
+            var zoneFlag = pair.Value;
+            if (!IsKnownMarshalZoneFlag(zoneFlag))
+            {
+                EmitDataQualityWarning(
+                    key: $"marshal-zone:{zoneIndex}:{zoneFlag}",
+                    timestamp: currentState.UpdatedAt,
+                    lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                    message: $"Unknown marshal zone flag {zoneFlag} in zone {zoneIndex}; no flag TTS event was emitted.");
+                continue;
+            }
+
+            if (_lastMarshalZoneFlags.TryGetValue(zoneIndex, out var previousFlag) && previousFlag == zoneFlag)
+            {
+                continue;
+            }
+
+            _lastMarshalZoneFlags[zoneIndex] = zoneFlag;
+            switch (zoneFlag)
+            {
+                case 3:
+                    EmitEvent(
+                        eventType: EventType.YellowFlag,
+                        severity: EventSeverity.Warning,
+                        timestamp: currentState.UpdatedAt,
+                        lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                        vehicleIdx: null,
+                        driverName: null,
+                        message: $"Yellow flag in marshal zone {zoneIndex}.",
+                        dedupKey: $"marshal-zone:{zoneIndex}:yellow",
+                        payload: new { ZoneIndex = zoneIndex, ZoneFlag = zoneFlag });
+                    break;
+                case 4:
+                    EmitEvent(
+                        eventType: EventType.RedFlag,
+                        severity: EventSeverity.Warning,
+                        timestamp: currentState.UpdatedAt,
+                        lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                        vehicleIdx: null,
+                        driverName: null,
+                        message: $"Red flag in marshal zone {zoneIndex}.",
+                        dedupKey: $"marshal-zone:{zoneIndex}:red",
+                        payload: new { ZoneIndex = zoneIndex, ZoneFlag = zoneFlag });
+                    break;
+            }
+        }
+    }
+
+    private void DetectRaceGapWindows(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player?.Position is null)
+        {
+            return;
+        }
+
+        DetectAttackWindow(currentState, player);
+        DetectDefenseWindow(currentState, player);
+    }
+
+    private void DetectAttackWindow(SessionState currentState, CarSnapshot player)
+    {
+        var playerPosition = player.Position.GetValueOrDefault();
+        if (playerPosition <= 1)
+        {
+            _attackWindowArmed = true;
+            return;
+        }
+
+        if (player.DeltaToCarInFrontInMs is not { } gapFrontMs)
+        {
+            _attackWindowArmed = true;
+            EmitDataQualityWarning(
+                key: "gap-front-missing",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Front gap timing is unavailable; attack-window TTS was skipped.");
+            return;
+        }
+
+        if (gapFrontMs > _options.GapWindowResetThresholdMs)
+        {
+            _attackWindowArmed = true;
+            return;
+        }
+
+        if (gapFrontMs <= _options.AttackDefenseGapThresholdMs && _attackWindowArmed)
+        {
+            EmitEvent(
+                eventType: EventType.AttackWindow,
+                severity: EventSeverity.Warning,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                vehicleIdx: player.CarIndex,
+                driverName: player.DriverName,
+                message: $"Attack window: front gap {gapFrontMs} ms.",
+                dedupKey: "gap:attack-window",
+                payload: new
+                {
+                    player.CarIndex,
+                    player.CurrentLapNumber,
+                    GapFrontMs = gapFrontMs,
+                    ThresholdMs = _options.AttackDefenseGapThresholdMs
+                },
+                cooldownSeconds: _options.RaceWindowCooldownSeconds);
+            _attackWindowArmed = false;
+        }
+    }
+
+    private void DetectDefenseWindow(SessionState currentState, CarSnapshot player)
+    {
+        if (player.Position is null || player.CurrentLapNumber is null)
+        {
+            _defenseWindowArmed = true;
+            return;
+        }
+
+        var playerPosition = player.Position.Value;
+        var activeCarCount = currentState.ActiveCarCount.HasValue
+            ? currentState.ActiveCarCount.Value
+            : currentState.Cars.Count;
+        if (activeCarCount > 0 && playerPosition >= activeCarCount)
+        {
+            _defenseWindowArmed = true;
+            return;
+        }
+
+        var rearPosition = playerPosition + 1;
+        var rearCar = currentState.Cars.FirstOrDefault(car => car.Position.HasValue && car.Position.Value == rearPosition);
+        if (rearCar is null)
+        {
+            _defenseWindowArmed = true;
+            EmitDataQualityWarning(
+                key: "gap-behind-missing-adjacent",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Adjacent rear-car evidence is unavailable; defense-window TTS was skipped.");
+            return;
+        }
+
+        if (rearCar.CurrentLapNumber != player.CurrentLapNumber)
+        {
+            _defenseWindowArmed = true;
+            EmitDataQualityWarning(
+                key: "gap-behind-lap-mismatch",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Adjacent rear car is not on the same lap; defense-window TTS was skipped.");
+            return;
+        }
+
+        if (rearCar.DeltaToCarInFrontInMs is not { } gapBehindMs)
+        {
+            _defenseWindowArmed = true;
+            EmitDataQualityWarning(
+                key: "gap-behind-timing-missing",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Rear gap timing is unavailable; defense-window TTS was skipped.");
+            return;
+        }
+
+        if (gapBehindMs > _options.GapWindowResetThresholdMs)
+        {
+            _defenseWindowArmed = true;
+            return;
+        }
+
+        if (gapBehindMs <= _options.AttackDefenseGapThresholdMs && _defenseWindowArmed)
+        {
+            EmitEvent(
+                eventType: EventType.DefenseWindow,
+                severity: EventSeverity.Warning,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                vehicleIdx: rearCar.CarIndex,
+                driverName: rearCar.DriverName,
+                message: $"Defense window: rear gap {gapBehindMs} ms.",
+                dedupKey: "gap:defense-window",
+                payload: new
+                {
+                    PlayerCarIndex = player.CarIndex,
+                    RearCarIndex = rearCar.CarIndex,
+                    player.CurrentLapNumber,
+                    GapBehindMs = gapBehindMs,
+                    ThresholdMs = _options.AttackDefenseGapThresholdMs
+                },
+                cooldownSeconds: _options.RaceWindowCooldownSeconds);
+            _defenseWindowArmed = false;
+        }
+    }
+
+    private void DetectLowErs(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.ErsStoreEnergy is not { } ersStoreEnergy)
+        {
+            _lowErsArmed = true;
+            EmitDataQualityWarning(
+                key: "ers-store-missing",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "ERS store energy is unavailable; low-ERS TTS was skipped.");
+            return;
+        }
+
+        if (ersStoreEnergy >= _options.LowErsStoreEnergyThresholdJoules)
+        {
+            _lowErsArmed = true;
+            return;
+        }
+
+        if (!_lowErsArmed)
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.LowErs,
+            severity: EventSeverity.Warning,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: player.CarIndex,
+            driverName: player.DriverName,
+            message: $"Low ERS: store energy {ersStoreEnergy:0} J.",
+            dedupKey: "low-ers",
+            payload: new
+            {
+                player.CarIndex,
+                player.CurrentLapNumber,
+                player.ErsStoreEnergy,
+                ThresholdJoules = _options.LowErsStoreEnergyThresholdJoules
+            },
+            cooldownSeconds: _options.RaceWindowCooldownSeconds);
+        _lowErsArmed = false;
+    }
+
+    private void DetectMissingRaceTrendEvidence(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null)
+        {
+            return;
+        }
+
+        if (player.FuelRemainingLaps is null)
+        {
+            EmitDataQualityWarning(
+                key: "fuel-remaining-missing",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Fuel remaining laps are unavailable; low-fuel TTS risk was skipped.");
+        }
+
+        if (player.TyreWear is null)
+        {
+            EmitDataQualityWarning(
+                key: "tyre-wear-missing",
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                message: "Tyre wear is unavailable; high-tyre-wear TTS risk was skipped.");
+        }
+    }
+
     private void RegisterPitCandidate(CarSnapshot? snapshot, PitRelation relation, DateTimeOffset detectedAt)
     {
         if (snapshot is null || snapshot.IsPlayer)
@@ -310,10 +654,12 @@ public sealed class EventDetectionService : IEventDetectionService
         string? driverName,
         string message,
         string dedupKey,
-        object payload)
+        object payload,
+        int? cooldownSeconds = null)
     {
+        var effectiveCooldownSeconds = Math.Max(1, cooldownSeconds ?? _options.EventCooldownSeconds);
         if (_lastRaisedAtByDedupKey.TryGetValue(dedupKey, out var lastRaisedAt)
-            && timestamp - lastRaisedAt < TimeSpan.FromSeconds(_options.EventCooldownSeconds))
+            && timestamp - lastRaisedAt < TimeSpan.FromSeconds(effectiveCooldownSeconds))
         {
             return false;
         }
@@ -339,6 +685,30 @@ public sealed class EventDetectionService : IEventDetectionService
 
         _lastRaisedAtByDedupKey[dedupKey] = timestamp;
         return true;
+    }
+
+    private void EmitDataQualityWarning(string key, DateTimeOffset timestamp, int? lapNumber, string message)
+    {
+        if (!_dataQualityWarningKeys.Add(key))
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.DataQualityWarning,
+            severity: EventSeverity.Information,
+            timestamp: timestamp,
+            lapNumber: lapNumber,
+            vehicleIdx: null,
+            driverName: null,
+            message: message,
+            dedupKey: $"data-quality:{key}",
+            payload: new
+            {
+                Key = key,
+                Message = message
+            },
+            cooldownSeconds: _options.RaceWindowCooldownSeconds);
     }
 
     private void CleanupPitCandidates(DateTimeOffset now)
@@ -370,6 +740,16 @@ public sealed class EventDetectionService : IEventDetectionService
     private static string BuildTyreDedupKey(CarSnapshot carSnapshot)
     {
         return $"{carSnapshot.CarIndex}:{carSnapshot.NumPitStops ?? 0}:{carSnapshot.VisualTyreCompound?.ToString() ?? "-"}:{carSnapshot.ActualTyreCompound?.ToString() ?? "-"}";
+    }
+
+    private static bool IsKnownMarshalZoneFlag(sbyte zoneFlag)
+    {
+        return zoneFlag is >= -1 and <= 4;
+    }
+
+    private static bool IsRaceLikeSession(SessionState sessionState)
+    {
+        return SessionModeFormatter.Resolve(sessionState.SessionType) is SessionMode.Race or SessionMode.SprintRace;
     }
 
     private sealed class PitCandidate

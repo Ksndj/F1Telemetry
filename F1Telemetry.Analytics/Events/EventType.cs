@@ -28,5 +28,45 @@ public enum EventType
     /// <summary>
     /// Indicates that the player's tyre wear is above the configured threshold.
     /// </summary>
-    HighTyreWear
+    HighTyreWear,
+
+    /// <summary>
+    /// Indicates that a full safety car status is active.
+    /// </summary>
+    SafetyCar,
+
+    /// <summary>
+    /// Indicates that a virtual safety car status is active.
+    /// </summary>
+    VirtualSafetyCar,
+
+    /// <summary>
+    /// Indicates that a yellow flag marshal zone became active.
+    /// </summary>
+    YellowFlag,
+
+    /// <summary>
+    /// Indicates that a red flag marshal zone became active.
+    /// </summary>
+    RedFlag,
+
+    /// <summary>
+    /// Indicates that the player entered an attack gap window.
+    /// </summary>
+    AttackWindow,
+
+    /// <summary>
+    /// Indicates that the player entered a defense gap window.
+    /// </summary>
+    DefenseWindow,
+
+    /// <summary>
+    /// Indicates that the player's ERS store is below the configured threshold.
+    /// </summary>
+    LowErs,
+
+    /// <summary>
+    /// Indicates that required evidence was missing or uncertain.
+    /// </summary>
+    DataQualityWarning
 }

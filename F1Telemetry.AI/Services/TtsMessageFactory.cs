@@ -16,6 +16,22 @@ public sealed class TtsMessageFactory
 {
     private const int MaxAiTtsTextLength = 48;
     private const int MinimumAiCooldownSeconds = 20;
+    private const int MinimumRaceRiskCooldownSeconds = 30;
+    private readonly object _sync = new();
+    private readonly Dictionary<string, DateTimeOffset> _lastCreatedAtByCooldownKey = new(StringComparer.Ordinal);
+    private int? _lastAiLapNumber;
+
+    /// <summary>
+    /// Clears session-scoped TTS pacing state.
+    /// </summary>
+    public void Reset()
+    {
+        lock (_sync)
+        {
+            _lastCreatedAtByCooldownKey.Clear();
+            _lastAiLapNumber = null;
+        }
+    }
 
     /// <summary>
     /// Creates a queue-ready TTS message for a detected race event.
@@ -32,7 +48,8 @@ public sealed class TtsMessageFactory
         ArgumentNullException.ThrowIfNull(raceEvent);
         ArgumentNullException.ThrowIfNull(options);
 
-        if (string.IsNullOrWhiteSpace(raceEvent.Message))
+        if (raceEvent.EventType == EventType.DataQualityWarning ||
+            string.IsNullOrWhiteSpace(raceEvent.Message))
         {
             return null;
         }
@@ -44,6 +61,12 @@ public sealed class TtsMessageFactory
 
         var type = MapEventType(raceEvent.EventType);
         var id = BuildEventIdentifier(raceEvent);
+        var cooldown = BuildEventCooldown(raceEvent.EventType, options);
+        if (ShouldApplyFactoryCooldown(raceEvent.EventType) &&
+            IsCoolingDownOrMarkCreated($"event:{type}", cooldown, DateTimeOffset.UtcNow))
+        {
+            return null;
+        }
 
         return new TtsMessage
         {
@@ -51,8 +74,8 @@ public sealed class TtsMessageFactory
             Type = type,
             Text = raceEvent.Message.Trim(),
             DedupKey = BuildDedupKey("event", type, id),
-            Priority = raceEvent.Severity == EventSeverity.Warning ? TtsPriority.High : TtsPriority.Normal,
-            Cooldown = TimeSpan.FromSeconds(Math.Max(1, options.CooldownSeconds))
+            Priority = MapPriority(raceEvent.EventType, raceEvent.Severity),
+            Cooldown = cooldown
         };
     }
 
@@ -75,6 +98,19 @@ public sealed class TtsMessageFactory
             return null;
         }
 
+        var cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), MinimumAiCooldownSeconds));
+        lock (_sync)
+        {
+            if (_lastAiLapNumber == lastLap.LapNumber ||
+                IsCoolingDownUnsafe("ai:lap", cooldown, DateTimeOffset.UtcNow))
+            {
+                return null;
+            }
+
+            _lastAiLapNumber = lastLap.LapNumber;
+            _lastCreatedAtByCooldownKey["ai:lap"] = DateTimeOffset.UtcNow;
+        }
+
         return new TtsMessage
         {
             Source = "AI",
@@ -82,13 +118,13 @@ public sealed class TtsMessageFactory
             Text = speechText,
             DedupKey = BuildDedupKey("ai", "lap", lastLap.LapNumber.ToString(CultureInfo.InvariantCulture)),
             Priority = TtsPriority.Low,
-            Cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), MinimumAiCooldownSeconds))
+            Cooldown = cooldown
         };
     }
 
     private static bool ShouldSuppressForSessionMode(EventType eventType, SessionMode sessionMode)
     {
-        return eventType is EventType.FrontCarPitted or EventType.RearCarPitted
+        return eventType is EventType.FrontCarPitted or EventType.RearCarPitted or EventType.AttackWindow or EventType.DefenseWindow
             && !SessionModeFormatter.AllowsPitWindowSpeech(sessionMode);
     }
 
@@ -102,6 +138,12 @@ public sealed class TtsMessageFactory
                 $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.LowFuel =>
                 $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.AttackWindow or EventType.DefenseWindow or EventType.LowErs =>
+                $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.SafetyCar or EventType.VirtualSafetyCar =>
+                raceEvent.EventType.ToString().ToLowerInvariant(),
+            EventType.YellowFlag or EventType.RedFlag =>
+                $"flag:lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.HighTyreWear =>
                 $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}",
             _ =>
@@ -118,8 +160,68 @@ public sealed class TtsMessageFactory
             EventType.PlayerLapInvalidated => "lap_invalid",
             EventType.LowFuel => "low_fuel",
             EventType.HighTyreWear => "high_tyre_wear",
+            EventType.SafetyCar => "safety_car",
+            EventType.VirtualSafetyCar => "virtual_safety_car",
+            EventType.YellowFlag => "yellow_flag",
+            EventType.RedFlag => "red_flag",
+            EventType.AttackWindow => "attack_window",
+            EventType.DefenseWindow => "defense_window",
+            EventType.LowErs => "low_ers",
             _ => "event"
         };
+    }
+
+    private static TtsPriority MapPriority(EventType eventType, EventSeverity severity)
+    {
+        return eventType switch
+        {
+            EventType.SafetyCar or EventType.VirtualSafetyCar or EventType.YellowFlag or EventType.RedFlag =>
+                TtsPriority.High,
+            EventType.LowFuel or EventType.HighTyreWear or EventType.AttackWindow or EventType.DefenseWindow =>
+                TtsPriority.High,
+            EventType.FrontCarPitted or EventType.RearCarPitted or EventType.LowErs =>
+                TtsPriority.Normal,
+            _ => severity == EventSeverity.Warning ? TtsPriority.High : TtsPriority.Normal
+        };
+    }
+
+    private static TimeSpan BuildEventCooldown(EventType eventType, TtsOptions options)
+    {
+        var baseCooldownSeconds = Math.Max(1, options.CooldownSeconds);
+        var cooldownSeconds = ShouldApplyFactoryCooldown(eventType)
+            ? Math.Max(baseCooldownSeconds, MinimumRaceRiskCooldownSeconds)
+            : baseCooldownSeconds;
+
+        return TimeSpan.FromSeconds(cooldownSeconds);
+    }
+
+    private static bool ShouldApplyFactoryCooldown(EventType eventType)
+    {
+        return eventType is EventType.LowFuel
+            or EventType.HighTyreWear
+            or EventType.LowErs
+            or EventType.AttackWindow
+            or EventType.DefenseWindow;
+    }
+
+    private bool IsCoolingDownOrMarkCreated(string cooldownKey, TimeSpan cooldown, DateTimeOffset now)
+    {
+        lock (_sync)
+        {
+            if (IsCoolingDownUnsafe(cooldownKey, cooldown, now))
+            {
+                return true;
+            }
+
+            _lastCreatedAtByCooldownKey[cooldownKey] = now;
+            return false;
+        }
+    }
+
+    private bool IsCoolingDownUnsafe(string cooldownKey, TimeSpan cooldown, DateTimeOffset now)
+    {
+        return _lastCreatedAtByCooldownKey.TryGetValue(cooldownKey, out var lastCreatedAt) &&
+               now - lastCreatedAt < cooldown;
     }
 
     private static string BuildDedupKey(string source, string type, string id)

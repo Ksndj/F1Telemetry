@@ -2,6 +2,7 @@ using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS;
 using F1Telemetry.TTS.Models;
 using Xunit;
@@ -14,7 +15,7 @@ namespace F1Telemetry.Tests;
 public sealed class TtsMessageFactoryTests
 {
     /// <summary>
-    /// Verifies that a warning race event becomes a high-priority queue message with the normalized deduplication format.
+    /// Verifies that a race event becomes a queue message with the normalized deduplication format.
     /// </summary>
     [Fact]
     public void CreateForRaceEvent_BuildsNormalizedQueueMessage()
@@ -34,13 +35,14 @@ public sealed class TtsMessageFactoryTests
             {
                 TtsEnabled = true,
                 CooldownSeconds = 8
-            });
+            },
+            SessionMode.Race);
 
         Assert.NotNull(message);
         Assert.Equal("TTS", message!.Source);
         Assert.Equal("front_pit", message.Type);
         Assert.Equal("event:front_pit:car12:lap8", message.DedupKey);
-        Assert.Equal(TtsPriority.High, message.Priority);
+        Assert.Equal(TtsPriority.Normal, message.Priority);
         Assert.Equal(TimeSpan.FromSeconds(8), message.Cooldown);
     }
 
@@ -104,5 +106,144 @@ public sealed class TtsMessageFactoryTests
         Assert.True(message!.Text.Length <= 48);
         Assert.EndsWith("...", message.Text, StringComparison.Ordinal);
         Assert.Equal(TtsPriority.Low, message.Priority);
+    }
+
+    /// <summary>
+    /// Verifies that data-quality warnings stay in logs and never become spoken TTS.
+    /// </summary>
+    [Fact]
+    public void CreateForRaceEvent_DataQualityWarning_ReturnsNull()
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = EventType.DataQualityWarning,
+                Severity = EventSeverity.Information,
+                Message = "Gap timing unavailable."
+            },
+            new TtsOptions { TtsEnabled = true },
+            SessionMode.Race);
+
+        Assert.Null(message);
+    }
+
+    /// <summary>
+    /// Verifies key race event categories map to the expected race TTS priorities.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.SafetyCar, TtsPriority.High)]
+    [InlineData(EventType.YellowFlag, TtsPriority.High)]
+    [InlineData(EventType.RedFlag, TtsPriority.High)]
+    [InlineData(EventType.LowFuel, TtsPriority.High)]
+    [InlineData(EventType.HighTyreWear, TtsPriority.High)]
+    [InlineData(EventType.AttackWindow, TtsPriority.High)]
+    [InlineData(EventType.DefenseWindow, TtsPriority.High)]
+    [InlineData(EventType.LowErs, TtsPriority.Normal)]
+    public void CreateForRaceEvent_MapsRacePriorities(EventType eventType, TtsPriority expectedPriority)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = eventType,
+                LapNumber = 12,
+                VehicleIdx = 0,
+                Severity = EventSeverity.Warning,
+                Message = "Race event"
+            },
+            new TtsOptions
+            {
+                TtsEnabled = true,
+                CooldownSeconds = 8
+            },
+            SessionMode.Race);
+
+        Assert.NotNull(message);
+        Assert.Equal(expectedPriority, message!.Priority);
+    }
+
+    /// <summary>
+    /// Verifies same-type race risks are cooled down before reaching the TTS queue.
+    /// </summary>
+    [Fact]
+    public void CreateForRaceEvent_SameTypeRaceRiskCooldown_SuppressesRepeat()
+    {
+        var factory = new TtsMessageFactory();
+
+        var first = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = EventType.AttackWindow,
+                LapNumber = 12,
+                Severity = EventSeverity.Warning,
+                Message = "Attack window"
+            },
+            new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 },
+            SessionMode.Race);
+        var second = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = EventType.AttackWindow,
+                LapNumber = 13,
+                Severity = EventSeverity.Warning,
+                Message = "Attack window again"
+            },
+            new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 },
+            SessionMode.Race);
+
+        Assert.NotNull(first);
+        Assert.Null(second);
+        Assert.Equal(TimeSpan.FromSeconds(30), first!.Cooldown);
+    }
+
+    /// <summary>
+    /// Verifies AI speech is limited to one message per lap before reaching the queue.
+    /// </summary>
+    [Fact]
+    public void CreateForAiResult_SameLap_ReturnsOnlyOneMessage()
+    {
+        var factory = new TtsMessageFactory();
+        var lap = new LapSummary { LapNumber = 12 };
+        var result = new AIAnalysisResult
+        {
+            IsSuccess = true,
+            TtsText = "Keep the rhythm."
+        };
+        var options = new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 };
+
+        var first = factory.CreateForAiResult(lap, result, options);
+        var second = factory.CreateForAiResult(lap, result, options);
+
+        Assert.NotNull(first);
+        Assert.Null(second);
+    }
+
+    /// <summary>
+    /// Verifies race pit-window and gap-window speech is suppressed outside race-like sessions.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.FrontCarPitted)]
+    [InlineData(EventType.RearCarPitted)]
+    [InlineData(EventType.AttackWindow)]
+    [InlineData(EventType.DefenseWindow)]
+    public void CreateForRaceEvent_NonRaceStrategyEvent_ReturnsNull(EventType eventType)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = eventType,
+                LapNumber = 8,
+                Severity = EventSeverity.Warning,
+                Message = "Strategy event"
+            },
+            new TtsOptions { TtsEnabled = true },
+            SessionMode.Qualifying);
+
+        Assert.Null(message);
     }
 }

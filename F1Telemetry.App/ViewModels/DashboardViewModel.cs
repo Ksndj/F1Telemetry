@@ -1580,6 +1580,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
         _recentAiEvents.Clear();
+        _ttsMessageFactory.Reset();
         _activeSessionUid = incomingSessionUid;
         ResetChartPanels();
         EnqueueEventLog("会话", $"检测到会话切换：SessionUid={incomingSessionUid}");
@@ -1606,10 +1607,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void DrainDetectedRaceEvents()
     {
         var sessionMode = SessionModeFormatter.Resolve(_sessionStateStore.CaptureState().SessionType);
-        foreach (var raceEvent in _eventDetectionService.DrainPendingEvents())
+        var raceEvents = _eventDetectionService
+            .DrainPendingEvents()
+            .OrderByDescending(GetRaceEventDrainPriority)
+            .ThenBy(raceEvent => raceEvent.Timestamp)
+            .ToArray();
+
+        foreach (var raceEvent in raceEvents)
         {
             EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
-            AddRecentAiEvent(raceEvent.Message);
+            if (raceEvent.EventType != EventType.DataQualityWarning)
+            {
+                AddRecentAiEvent(raceEvent.Message);
+            }
+
             TryEnqueueRaceEventSpeech(raceEvent, sessionMode);
             _storagePersistenceService.EnqueueRaceEvent(raceEvent);
         }
@@ -2403,7 +2414,21 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string BuildEventCategory(RaceEvent raceEvent)
     {
-        return "RaceEvent";
+        return raceEvent.EventType == EventType.DataQualityWarning ? "System" : "RaceEvent";
+    }
+
+    private static int GetRaceEventDrainPriority(RaceEvent raceEvent)
+    {
+        return raceEvent.EventType switch
+        {
+            EventType.SafetyCar or EventType.VirtualSafetyCar or EventType.YellowFlag or EventType.RedFlag => 600,
+            EventType.LowFuel or EventType.HighTyreWear => 500,
+            EventType.AttackWindow or EventType.DefenseWindow => 400,
+            EventType.FrontCarPitted or EventType.RearCarPitted => 300,
+            EventType.LowErs => 200,
+            EventType.DataQualityWarning => 0,
+            _ => raceEvent.Severity == EventSeverity.Warning ? 100 : 50
+        };
     }
 
     private static string BuildTrackText(sbyte? trackId)

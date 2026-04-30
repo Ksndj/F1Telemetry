@@ -128,6 +128,8 @@ public sealed class StateAggregator : IStateAggregator
             sessionTimeLeft: packet.SessionTimeLeft,
             sessionDuration: packet.SessionDuration,
             pitSpeedLimit: packet.PitSpeedLimit,
+            safetyCarStatus: packet.SafetyCarStatus,
+            marshalZoneFlags: BuildMarshalZoneFlags(packet),
             updatedAt: receivedAt);
     }
 
@@ -335,5 +337,17 @@ public sealed class StateAggregator : IStateAggregator
                 VisualTyreCompound = tyreSet.VisualTyreCompound
             },
             receivedAt);
+    }
+
+    private static IReadOnlyDictionary<int, sbyte> BuildMarshalZoneFlags(SessionPacket packet)
+    {
+        var zoneCount = Math.Min(packet.NumMarshalZones, packet.MarshalZones.Length);
+        var flags = new Dictionary<int, sbyte>(zoneCount);
+        for (var index = 0; index < zoneCount; index++)
+        {
+            flags[index] = packet.MarshalZones[index].ZoneFlag;
+        }
+
+        return flags;
     }
 }

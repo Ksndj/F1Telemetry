@@ -43,6 +43,8 @@ public sealed class SessionStateStore
             SessionTimeLeft = metadata.SessionTimeLeft,
             SessionDuration = metadata.SessionDuration,
             PitSpeedLimit = metadata.PitSpeedLimit,
+            SafetyCarStatus = metadata.SafetyCarStatus,
+            MarshalZoneFlags = new Dictionary<int, sbyte>(metadata.MarshalZoneFlags),
             ActiveCarCount = metadata.ActiveCarCount,
             LastEventCode = metadata.LastEventCode,
             PlayerCar = CarStateStore.CapturePlayerCar(),
@@ -81,6 +83,8 @@ public sealed class SessionStateStore
         ushort sessionTimeLeft,
         ushort sessionDuration,
         byte pitSpeedLimit,
+        byte safetyCarStatus,
+        IReadOnlyDictionary<int, sbyte> marshalZoneFlags,
         DateTimeOffset updatedAt)
     {
         UpdateMetadata(metadata => metadata with
@@ -94,6 +98,8 @@ public sealed class SessionStateStore
             SessionTimeLeft = sessionTimeLeft,
             SessionDuration = sessionDuration,
             PitSpeedLimit = pitSpeedLimit,
+            SafetyCarStatus = safetyCarStatus,
+            MarshalZoneFlags = new Dictionary<int, sbyte>(marshalZoneFlags),
             UpdatedAt = updatedAt
         });
     }
@@ -144,6 +150,10 @@ public sealed class SessionStateStore
         public ushort? SessionDuration { get; init; }
 
         public byte? PitSpeedLimit { get; init; }
+
+        public byte? SafetyCarStatus { get; init; }
+
+        public IReadOnlyDictionary<int, sbyte> MarshalZoneFlags { get; init; } = new Dictionary<int, sbyte>();
 
         public byte? ActiveCarCount { get; init; }
 
