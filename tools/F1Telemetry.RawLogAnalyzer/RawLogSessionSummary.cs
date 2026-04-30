@@ -7,6 +7,9 @@ namespace F1Telemetry.RawLogAnalyzer;
 /// </summary>
 public sealed class RawLogSessionSummary
 {
+    private const float JoulesPerMegajoule = 1_000_000f;
+    private const float TyreWearDisagreementThresholdPercent = 5f;
+
     internal RawLogSessionSummary(ulong sessionUid)
     {
         SessionUid = sessionUid;
@@ -160,6 +163,12 @@ public sealed class RawLogSessionSummary
         if (_latestPlayerLapNumber > 0)
         {
             var lap = GetOrCreateLap(_latestPlayerLapNumber);
+            lap.FuelKg = car.FuelInTank;
+            lap.FuelRemainingLaps = car.FuelRemainingLaps;
+            lap.ErsStoreEnergyJoules = car.ErsStoreEnergy;
+            lap.ErsDeployMode = car.ErsDeployMode;
+            lap.ErsHarvestedThisLapJoules = car.ErsHarvestedThisLapMguk + car.ErsHarvestedThisLapMguh;
+            lap.ErsDeployedThisLapJoules = car.ErsDeployedThisLap;
             lap.ActualTyreCompound = car.ActualTyreCompound;
             lap.VisualTyreCompound = car.VisualTyreCompound;
             lap.TyreAgeLaps = car.TyresAgeLaps;
@@ -175,6 +184,11 @@ public sealed class RawLogSessionSummary
 
         TyreWearSampleCount++;
         MaxPlayerTyreWear = Math.Max(MaxPlayerTyreWear, MaxWheelValue(car.TyreWear));
+        if (_latestPlayerLapNumber > 0)
+        {
+            var lap = GetOrCreateLap(_latestPlayerLapNumber);
+            lap.CarDamageTyreWearPercent = MaxWheelValue(car.TyreWear);
+        }
     }
 
     internal void ApplyTyreSetsPacket(TyreSetsPacket packet, PacketHeader header)
@@ -199,6 +213,7 @@ public sealed class RawLogSessionSummary
                 var lap = GetOrCreateLap(_latestPlayerLapNumber);
                 lap.ActualTyreCompound = tyreSet.ActualTyreCompound;
                 lap.VisualTyreCompound = tyreSet.VisualTyreCompound;
+                lap.TyreSetsWearPercent = tyreSet.Wear;
             }
         }
     }
@@ -370,9 +385,294 @@ public sealed class RawLogSessionSummary
         return summaries;
     }
 
+    internal IReadOnlyList<TyreUsageSummary> BuildTyreUsageSummaries(IReadOnlyList<StintSummary> stintSummaries)
+    {
+        var summaries = new List<TyreUsageSummary>();
+        foreach (var stint in stintSummaries)
+        {
+            var observed = _lapSummaries
+                .Where(pair => pair.Key >= stint.StartLap && pair.Key <= stint.EndLap)
+                .OrderBy(pair => pair.Key)
+                .Select(pair => new
+                {
+                    Wear = pair.Value.PrimaryTyreWearPercent,
+                    HasCarDamage = pair.Value.CarDamageTyreWearPercent is not null,
+                    HasTyreSets = pair.Value.TyreSetsWearPercent is not null,
+                    Disagrees = pair.Value.HasTyreWearDisagreement
+                })
+                .Where(sample => sample.Wear is not null)
+                .ToArray();
+
+            var startWear = observed.FirstOrDefault()?.Wear;
+            var endWear = observed.LastOrDefault()?.Wear;
+            var maxWear = observed.Length == 0 ? null : observed.Max(sample => sample.Wear);
+            var delta = startWear is not null && endWear is not null
+                ? endWear.Value - startWear.Value
+                : (float?)null;
+            var averagePerLap = delta is not null && stint.LapCount > 0
+                ? delta.Value / stint.LapCount
+                : (float?)null;
+            var hasCarDamage = observed.Any(sample => sample.HasCarDamage);
+            var hasTyreSets = observed.Any(sample => sample.HasTyreSets);
+            var hasDisagreement = observed.Any(sample => sample.Disagrees);
+
+            summaries.Add(new TyreUsageSummary(
+                StintIndex: stint.StintIndex,
+                StartLap: stint.StartLap,
+                EndLap: stint.EndLap,
+                LapCount: stint.LapCount,
+                ActualTyreCompound: stint.ActualTyreCompound,
+                VisualTyreCompound: stint.VisualTyreCompound,
+                StartTyreAge: stint.StartTyreAge,
+                EndTyreAge: stint.EndTyreAge,
+                StartWearPercent: startWear,
+                EndWearPercent: endWear,
+                MaxWearPercent: maxWear,
+                WearDeltaPercent: delta,
+                AverageWearPerLapPercent: averagePerLap,
+                ObservedLapCount: observed.Length,
+                Risk: GetTyreRisk(maxWear, averagePerLap),
+                Confidence: GetTyreConfidence(observed.Length, hasCarDamage),
+                Notes: BuildTyreUsageNotes(observed.Length, hasCarDamage, hasTyreSets, hasDisagreement)));
+        }
+
+        return summaries;
+    }
+
+    internal FuelTrendSummary BuildFuelTrendSummary()
+    {
+        var observed = _lapSummaries
+            .Where(IsCompletedRaceLap)
+            .Where(pair => pair.Value.FuelKg is not null)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .ToArray();
+        if (observed.Length == 0)
+        {
+            return new FuelTrendSummary(
+                StartFuelKg: null,
+                EndFuelKg: null,
+                MinFuelKg: null,
+                MaxFuelKg: null,
+                FuelUsedKg: null,
+                AverageFuelPerLapKg: null,
+                StartFuelRemainingLaps: null,
+                EndFuelRemainingLaps: null,
+                MinFuelRemainingLaps: null,
+                ObservedLapCount: 0,
+                Risk: RaceTrendRisk.Unknown,
+                Confidence: RaceAnalysisConfidence.Low,
+                Notes: "No player CarStatus fuel samples were decoded.");
+        }
+
+        var startFuel = observed[0].FuelKg;
+        var endFuel = observed[^1].FuelKg;
+        var fuelUsed = startFuel is not null && endFuel is not null
+            ? startFuel.Value - endFuel.Value
+            : (float?)null;
+        var averageFuelPerLap = fuelUsed is not null && observed.Length > 0
+            ? fuelUsed.Value / observed.Length
+            : (float?)null;
+        var remainingLaps = observed
+            .Where(lap => lap.FuelRemainingLaps is not null)
+            .Select(lap => lap.FuelRemainingLaps!.Value)
+            .ToArray();
+
+        return new FuelTrendSummary(
+            StartFuelKg: startFuel,
+            EndFuelKg: endFuel,
+            MinFuelKg: observed.Min(lap => lap.FuelKg),
+            MaxFuelKg: observed.Max(lap => lap.FuelKg),
+            FuelUsedKg: fuelUsed,
+            AverageFuelPerLapKg: averageFuelPerLap,
+            StartFuelRemainingLaps: observed[0].FuelRemainingLaps,
+            EndFuelRemainingLaps: observed[^1].FuelRemainingLaps,
+            MinFuelRemainingLaps: remainingLaps.Length == 0 ? null : remainingLaps.Min(),
+            ObservedLapCount: observed.Length,
+            Risk: GetFuelRisk(remainingLaps.Length == 0 ? null : remainingLaps.Min()),
+            Confidence: RaceAnalysisConfidence.High,
+            Notes: remainingLaps.Length == 0
+                ? "CarStatus.FuelInTank is reported as kg; fuel remaining laps were unavailable."
+                : "CarStatus.FuelInTank is reported as kg.");
+    }
+
+    internal ErsTrendSummary BuildErsTrendSummary()
+    {
+        var observed = _lapSummaries
+            .Where(IsCompletedRaceLap)
+            .Where(pair => pair.Value.HasErsData)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .ToArray();
+        if (observed.Length == 0)
+        {
+            return new ErsTrendSummary(
+                StartStoreEnergyMJ: null,
+                EndStoreEnergyMJ: null,
+                MinStoreEnergyMJ: null,
+                MaxStoreEnergyMJ: null,
+                NetStoreEnergyDeltaMJ: null,
+                AverageHarvestedPerLapMJ: null,
+                AverageDeployedPerLapMJ: null,
+                LastDeployMode: null,
+                LowErsLapCount: 0,
+                HighUsageLaps: 0,
+                RecoveryLaps: 0,
+                ObservedLapCount: 0,
+                Risk: RaceTrendRisk.Unknown,
+                Confidence: RaceAnalysisConfidence.Low,
+                Notes: "No player CarStatus ERS samples were decoded.");
+        }
+
+        var startStore = ToMegajoules(observed[0].ErsStoreEnergyJoules);
+        var endStore = ToMegajoules(observed[^1].ErsStoreEnergyJoules);
+        var storeValues = observed
+            .Select(lap => ToMegajoules(lap.ErsStoreEnergyJoules))
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+        var harvestedValues = observed
+            .Select(lap => ToMegajoules(lap.ErsHarvestedThisLapJoules))
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+        var deployedValues = observed
+            .Select(lap => ToMegajoules(lap.ErsDeployedThisLapJoules))
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        return new ErsTrendSummary(
+            StartStoreEnergyMJ: startStore,
+            EndStoreEnergyMJ: endStore,
+            MinStoreEnergyMJ: storeValues.Length == 0 ? null : storeValues.Min(),
+            MaxStoreEnergyMJ: storeValues.Length == 0 ? null : storeValues.Max(),
+            NetStoreEnergyDeltaMJ: startStore is not null && endStore is not null
+                ? endStore.Value - startStore.Value
+                : null,
+            AverageHarvestedPerLapMJ: harvestedValues.Length == 0 ? null : harvestedValues.Average(),
+            AverageDeployedPerLapMJ: deployedValues.Length == 0 ? null : deployedValues.Average(),
+            LastDeployMode: observed.LastOrDefault(lap => lap.ErsDeployMode is not null)?.ErsDeployMode,
+            LowErsLapCount: storeValues.Count(value => value < 1f),
+            HighUsageLaps: observed.Count(lap => lap.ErsDeployedThisLapJoules is not null
+                && lap.ErsHarvestedThisLapJoules is not null
+                && lap.ErsDeployedThisLapJoules.Value > lap.ErsHarvestedThisLapJoules.Value),
+            RecoveryLaps: observed.Count(lap => lap.ErsDeployedThisLapJoules is not null
+                && lap.ErsHarvestedThisLapJoules is not null
+                && lap.ErsHarvestedThisLapJoules.Value > lap.ErsDeployedThisLapJoules.Value),
+            ObservedLapCount: observed.Length,
+            Risk: GetErsRisk(storeValues.Length == 0 ? null : storeValues.Min()),
+            Confidence: RaceAnalysisConfidence.High,
+            Notes: "ERS summary is aggregate only; gap-context decisions are out of scope for M3.");
+    }
+
     private void AddTyreCompoundPair(byte visualCompound, byte actualCompound)
     {
         TyreCompoundPairs.Add($"visual {visualCompound} / actual {actualCompound}");
+    }
+
+    private static RaceTrendRisk GetTyreRisk(float? maxWear, float? averageWearPerLap)
+    {
+        if (maxWear is null && averageWearPerLap is null)
+        {
+            return RaceTrendRisk.Unknown;
+        }
+
+        if (maxWear.GetValueOrDefault() >= 70f || averageWearPerLap.GetValueOrDefault() >= 5f)
+        {
+            return RaceTrendRisk.High;
+        }
+
+        if (maxWear.GetValueOrDefault() >= 50f || averageWearPerLap.GetValueOrDefault() >= 3f)
+        {
+            return RaceTrendRisk.Medium;
+        }
+
+        return RaceTrendRisk.Low;
+    }
+
+    private static RaceTrendRisk GetFuelRisk(float? minFuelRemainingLaps)
+    {
+        if (minFuelRemainingLaps is null)
+        {
+            return RaceTrendRisk.Unknown;
+        }
+
+        if (minFuelRemainingLaps.Value < 0.5f)
+        {
+            return RaceTrendRisk.High;
+        }
+
+        if (minFuelRemainingLaps.Value < 1.5f)
+        {
+            return RaceTrendRisk.Medium;
+        }
+
+        return RaceTrendRisk.Low;
+    }
+
+    private static RaceTrendRisk GetErsRisk(float? minStoreEnergyMJ)
+    {
+        if (minStoreEnergyMJ is null)
+        {
+            return RaceTrendRisk.Unknown;
+        }
+
+        if (minStoreEnergyMJ.Value < 0.5f)
+        {
+            return RaceTrendRisk.High;
+        }
+
+        if (minStoreEnergyMJ.Value < 1.0f)
+        {
+            return RaceTrendRisk.Medium;
+        }
+
+        return RaceTrendRisk.Low;
+    }
+
+    private static RaceAnalysisConfidence GetTyreConfidence(int observedLapCount, bool hasCarDamage)
+    {
+        if (observedLapCount == 0)
+        {
+            return RaceAnalysisConfidence.Low;
+        }
+
+        return hasCarDamage
+            ? RaceAnalysisConfidence.High
+            : RaceAnalysisConfidence.Medium;
+    }
+
+    private static string BuildTyreUsageNotes(
+        int observedLapCount,
+        bool hasCarDamage,
+        bool hasTyreSets,
+        bool hasDisagreement)
+    {
+        if (observedLapCount == 0)
+        {
+            return "No player tyre wear samples were decoded for this stint.";
+        }
+
+        var notes = hasCarDamage
+            ? "Tyre wear uses player CarDamage.TyreWear as primary."
+            : "Tyre wear uses fitted TyreSets.Wear fallback; CarDamage samples were unavailable.";
+        if (hasCarDamage && hasTyreSets)
+        {
+            notes += " Fitted TyreSets.Wear was used only as supplemental evidence.";
+        }
+
+        if (hasDisagreement)
+        {
+            notes += $" TyreSets wear disagreed with CarDamage by at least {TyreWearDisagreementThresholdPercent:0.#} percentage points; CarDamage was kept as primary.";
+        }
+
+        return notes;
+    }
+
+    private static float? ToMegajoules(float? joules)
+    {
+        return joules is null ? null : joules.Value / JoulesPerMegajoule;
     }
 
     private RaceLapAccumulator GetOrCreateLap(int lapNumber)
@@ -656,6 +956,12 @@ public sealed class RawLogSessionSummary
         return finalLaps > 0 ? finalLaps : MaxPlayerLapNumber;
     }
 
+    private bool IsCompletedRaceLap(KeyValuePair<int, RaceLapAccumulator> pair)
+    {
+        var completedLaps = GetCompletedLapCount();
+        return completedLaps <= 0 || pair.Key <= completedLaps;
+    }
+
     private int NormalizeStintEndLap(byte rawEndLap, int completedLaps, int startLap)
     {
         var endLap = rawEndLap is 0 or 255
@@ -782,9 +1088,38 @@ public sealed class RawLogSessionSummary
 
         public int? TyreAgeLaps { get; set; }
 
+        public float? FuelKg { get; set; }
+
+        public float? FuelRemainingLaps { get; set; }
+
+        public float? ErsStoreEnergyJoules { get; set; }
+
+        public int? ErsDeployMode { get; set; }
+
+        public float? ErsHarvestedThisLapJoules { get; set; }
+
+        public float? ErsDeployedThisLapJoules { get; set; }
+
+        public float? CarDamageTyreWearPercent { get; set; }
+
+        public float? TyreSetsWearPercent { get; set; }
+
         public long SampleCount { get; set; }
 
         public bool HasCompound => ActualTyreCompound is not null || VisualTyreCompound is not null;
+
+        public float? PrimaryTyreWearPercent => CarDamageTyreWearPercent ?? TyreSetsWearPercent;
+
+        public bool HasErsData =>
+            ErsStoreEnergyJoules is not null ||
+            ErsHarvestedThisLapJoules is not null ||
+            ErsDeployedThisLapJoules is not null ||
+            ErsDeployMode is not null;
+
+        public bool HasTyreWearDisagreement =>
+            CarDamageTyreWearPercent is not null &&
+            TyreSetsWearPercent is not null &&
+            Math.Abs(CarDamageTyreWearPercent.Value - TyreSetsWearPercent.Value) >= TyreWearDisagreementThresholdPercent;
 
         public bool HasPitEvidence =>
             PitStatus.GetValueOrDefault() > 0 ||

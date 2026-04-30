@@ -14,6 +14,9 @@ public sealed record RaceAnalysisReport(
     IReadOnlyList<RaceLapSummary> LapSummaries,
     IReadOnlyList<StintSummary> StintSummaries,
     IReadOnlyList<PitStopSummary> PitStopSummaries,
+    IReadOnlyList<TyreUsageSummary> TyreUsageSummaries,
+    FuelTrendSummary FuelTrendSummary,
+    ErsTrendSummary ErsTrendSummary,
     IReadOnlyList<string> DataQualityWarnings);
 
 /// <summary>
@@ -64,6 +67,17 @@ public enum RaceAnalysisConfidence
 }
 
 /// <summary>
+/// Describes coarse risk levels for race trend summaries.
+/// </summary>
+public enum RaceTrendRisk
+{
+    Unknown,
+    Low,
+    Medium,
+    High
+}
+
+/// <summary>
 /// Describes which evidence source produced a stint summary.
 /// </summary>
 public enum StintSummarySource
@@ -106,5 +120,65 @@ public sealed record PitStopSummary(
     int? PositionAfter,
     int? PositionLost,
     int? EstimatedPitLossInMs,
+    RaceAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains one aggregate tyre usage row for an already identified stint.
+/// </summary>
+public sealed record TyreUsageSummary(
+    int StintIndex,
+    int StartLap,
+    int EndLap,
+    int LapCount,
+    int? ActualTyreCompound,
+    int? VisualTyreCompound,
+    int? StartTyreAge,
+    int? EndTyreAge,
+    float? StartWearPercent,
+    float? EndWearPercent,
+    float? MaxWearPercent,
+    float? WearDeltaPercent,
+    float? AverageWearPerLapPercent,
+    int ObservedLapCount,
+    RaceTrendRisk Risk,
+    RaceAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains aggregate player fuel trends using kilogram field names only.
+/// </summary>
+public sealed record FuelTrendSummary(
+    float? StartFuelKg,
+    float? EndFuelKg,
+    float? MinFuelKg,
+    float? MaxFuelKg,
+    float? FuelUsedKg,
+    float? AverageFuelPerLapKg,
+    float? StartFuelRemainingLaps,
+    float? EndFuelRemainingLaps,
+    float? MinFuelRemainingLaps,
+    int ObservedLapCount,
+    RaceTrendRisk Risk,
+    RaceAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains aggregate player ERS trends converted from joules to megajoules.
+/// </summary>
+public sealed record ErsTrendSummary(
+    float? StartStoreEnergyMJ,
+    float? EndStoreEnergyMJ,
+    float? MinStoreEnergyMJ,
+    float? MaxStoreEnergyMJ,
+    float? NetStoreEnergyDeltaMJ,
+    float? AverageHarvestedPerLapMJ,
+    float? AverageDeployedPerLapMJ,
+    int? LastDeployMode,
+    int LowErsLapCount,
+    int HighUsageLaps,
+    int RecoveryLaps,
+    int ObservedLapCount,
+    RaceTrendRisk Risk,
     RaceAnalysisConfidence Confidence,
     string Notes);
