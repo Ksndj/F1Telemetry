@@ -65,7 +65,9 @@ public sealed class RawLogSessionSummary
     public SortedSet<string> TyreCompoundPairs { get; } = new(StringComparer.Ordinal);
 
     private readonly SortedDictionary<int, RaceLapAccumulator> _lapSummaries = new();
+    private readonly List<TyreStintSnapshot> _sessionHistoryTyreStints = [];
     private FinalClassificationData? _playerFinalClassification;
+    private int _latestPlayerLapNumber;
 
     internal void ObserveDatagram(PacketHeader header, DateTimeOffset timestamp)
     {
@@ -105,11 +107,19 @@ public sealed class RawLogSessionSummary
 
         if (car.CurrentLapNumber > 0)
         {
+            _latestPlayerLapNumber = car.CurrentLapNumber;
             var lap = GetOrCreateLap(car.CurrentLapNumber);
             lap.SampleCount++;
+            lap.LastLapTimeInMs = car.LastLapTimeInMs == 0 ? null : car.LastLapTimeInMs;
+            lap.CurrentLapTimeInMs = car.CurrentLapTimeInMs == 0 ? null : car.CurrentLapTimeInMs;
             lap.Position = car.CarPosition;
             lap.ResultStatus = car.ResultStatus;
             lap.IsValid = !car.IsCurrentLapInvalid;
+            lap.PitStatus = car.PitStatus;
+            lap.NumPitStops = car.NumPitStops;
+            lap.IsPitLaneTimerActive = car.IsPitLaneTimerActive;
+            lap.PitLaneTimeInLaneInMs = car.PitLaneTimeInLaneInMs == 0 ? null : car.PitLaneTimeInLaneInMs;
+            lap.PitStopTimerInMs = car.PitStopTimerInMs == 0 ? null : car.PitStopTimerInMs;
         }
     }
 
@@ -146,6 +156,14 @@ public sealed class RawLogSessionSummary
         FuelSampleCount++;
         MaxPlayerTyreAgeLaps = Math.Max(MaxPlayerTyreAgeLaps, car.TyresAgeLaps);
         AddTyreCompoundPair(car.VisualTyreCompound, car.ActualTyreCompound);
+
+        if (_latestPlayerLapNumber > 0)
+        {
+            var lap = GetOrCreateLap(_latestPlayerLapNumber);
+            lap.ActualTyreCompound = car.ActualTyreCompound;
+            lap.VisualTyreCompound = car.VisualTyreCompound;
+            lap.TyreAgeLaps = car.TyresAgeLaps;
+        }
     }
 
     internal void ApplyCarDamagePacket(CarDamagePacket packet, PacketHeader header)
@@ -176,6 +194,12 @@ public sealed class RawLogSessionSummary
             AddTyreCompoundPair(tyreSet.VisualTyreCompound, tyreSet.ActualTyreCompound);
             TyreWearSampleCount++;
             MaxPlayerTyreWear = Math.Max(MaxPlayerTyreWear, tyreSet.Wear);
+            if (_latestPlayerLapNumber > 0)
+            {
+                var lap = GetOrCreateLap(_latestPlayerLapNumber);
+                lap.ActualTyreCompound = tyreSet.ActualTyreCompound;
+                lap.VisualTyreCompound = tyreSet.VisualTyreCompound;
+            }
         }
     }
 
@@ -190,6 +214,22 @@ public sealed class RawLogSessionSummary
         if (packet.CarIndex != header.PlayerCarIndex)
         {
             return;
+        }
+
+        _sessionHistoryTyreStints.Clear();
+        var stintCount = Math.Min(packet.NumTyreStints, packet.TyreStints.Length);
+        for (var index = 0; index < stintCount; index++)
+        {
+            var stint = packet.TyreStints[index];
+            if (stint.EndLap == 0 && stint.ActualTyreCompound == 0 && stint.VisualTyreCompound == 0)
+            {
+                continue;
+            }
+
+            _sessionHistoryTyreStints.Add(new TyreStintSnapshot(
+                EndLap: stint.EndLap,
+                ActualTyreCompound: stint.ActualTyreCompound,
+                VisualTyreCompound: stint.VisualTyreCompound));
         }
 
         var lapCount = Math.Min(packet.NumLaps, packet.LapHistory.Length);
@@ -254,6 +294,82 @@ public sealed class RawLogSessionSummary
             .ToArray();
     }
 
+    internal IReadOnlyList<StintSummary> BuildStintSummaries()
+    {
+        var completedLaps = GetCompletedLapCount();
+        if (_sessionHistoryTyreStints.Count > 0)
+        {
+            return BuildStintsFromBoundaries(
+                _sessionHistoryTyreStints,
+                StintSummarySource.SessionHistory,
+                RaceAnalysisConfidence.High,
+                completedLaps);
+        }
+
+        var finalClassificationStints = BuildFinalClassificationStintSnapshots();
+        if (finalClassificationStints.Count > 0)
+        {
+            return BuildStintsFromBoundaries(
+                finalClassificationStints,
+                StintSummarySource.FinalClassification,
+                RaceAnalysisConfidence.High,
+                completedLaps);
+        }
+
+        var compoundStints = BuildCompoundChangeStints(completedLaps);
+        if (compoundStints.Count > 0)
+        {
+            return compoundStints;
+        }
+
+        return BuildPitStopInferredStints(completedLaps);
+    }
+
+    internal IReadOnlyList<PitStopSummary> BuildPitStopSummaries()
+    {
+        var summaries = new List<PitStopSummary>();
+        var orderedLaps = _lapSummaries.OrderBy(pair => pair.Key).ToArray();
+        int? previousPitStops = null;
+
+        foreach (var pair in orderedLaps)
+        {
+            var lap = pair.Value;
+            if (lap.NumPitStops is not null)
+            {
+                if (previousPitStops is not null && lap.NumPitStops.Value > previousPitStops.Value)
+                {
+                    var tyreChanged = HasTyreChangedAround(pair.Key);
+                    var hasPitEvidence = lap.HasPitEvidence;
+                    var confidence = hasPitEvidence && tyreChanged
+                        ? RaceAnalysisConfidence.High
+                        : RaceAnalysisConfidence.Medium;
+                    var notes = confidence == RaceAnalysisConfidence.High
+                        ? "confirmed from NumPitStops, pit lane evidence, and tyre change."
+                        : "confirmed from NumPitStops or pit lane evidence; tyre change evidence is incomplete.";
+                    summaries.Add(CreatePitStopSummary(pair.Key, confidence, notes));
+                }
+
+                previousPitStops = previousPitStops is null
+                    ? lap.NumPitStops.Value
+                    : Math.Max(previousPitStops.Value, lap.NumPitStops.Value);
+            }
+            else if (lap.HasPitEvidence && summaries.All(summary => summary.PitLap != pair.Key))
+            {
+                summaries.Add(CreatePitStopSummary(
+                    pair.Key,
+                    RaceAnalysisConfidence.Medium,
+                    "confirmed from pit lane evidence; NumPitStops was unavailable."));
+            }
+        }
+
+        if (summaries.Count == 0)
+        {
+            summaries.AddRange(BuildPossibleSlowLapPitStops(orderedLaps));
+        }
+
+        return summaries;
+    }
+
     private void AddTyreCompoundPair(byte visualCompound, byte actualCompound)
     {
         TyreCompoundPairs.Add($"visual {visualCompound} / actual {actualCompound}");
@@ -268,6 +384,353 @@ public sealed class RawLogSessionSummary
         }
 
         return lap;
+    }
+
+    private IReadOnlyList<TyreStintSnapshot> BuildFinalClassificationStintSnapshots()
+    {
+        if (_playerFinalClassification is null || _playerFinalClassification.NumTyreStints == 0)
+        {
+            return [];
+        }
+
+        var count = Math.Min((int)_playerFinalClassification.NumTyreStints, UdpPacketConstants.MaxFinalClassificationTyreStints);
+        var stints = new List<TyreStintSnapshot>();
+        for (var index = 0; index < count; index++)
+        {
+            var endLap = _playerFinalClassification.TyreStintsEndLaps[index];
+            var actual = _playerFinalClassification.TyreStintsActual[index];
+            var visual = _playerFinalClassification.TyreStintsVisual[index];
+            if (endLap == 0 && actual == 0 && visual == 0)
+            {
+                continue;
+            }
+
+            stints.Add(new TyreStintSnapshot(endLap, actual, visual));
+        }
+
+        return stints;
+    }
+
+    private IReadOnlyList<StintSummary> BuildStintsFromBoundaries(
+        IReadOnlyList<TyreStintSnapshot> boundaries,
+        StintSummarySource source,
+        RaceAnalysisConfidence confidence,
+        int completedLaps)
+    {
+        var stints = new List<StintSummary>();
+        var previousEndLap = 0;
+        foreach (var boundary in boundaries)
+        {
+            var startLap = previousEndLap + 1;
+            var endLap = NormalizeStintEndLap(boundary.EndLap, completedLaps, startLap);
+            if (endLap < startLap)
+            {
+                continue;
+            }
+
+            var notes = BuildStintBoundaryNote(source, boundary.EndLap, endLap);
+            stints.Add(new StintSummary(
+                StintIndex: stints.Count + 1,
+                StartLap: startLap,
+                EndLap: endLap,
+                LapCount: endLap - startLap + 1,
+                ActualTyreCompound: boundary.ActualTyreCompound,
+                VisualTyreCompound: boundary.VisualTyreCompound,
+                StartTyreAge: GetTyreAge(startLap),
+                EndTyreAge: GetTyreAge(endLap),
+                Source: source,
+                Confidence: confidence,
+                Notes: notes));
+            previousEndLap = endLap;
+        }
+
+        return stints;
+    }
+
+    private IReadOnlyList<StintSummary> BuildCompoundChangeStints(int completedLaps)
+    {
+        var compoundLaps = _lapSummaries
+            .Where(pair => pair.Value.HasCompound)
+            .OrderBy(pair => pair.Key)
+            .ToArray();
+        if (compoundLaps.Length == 0)
+        {
+            return [];
+        }
+
+        var stints = new List<StintSummary>();
+        var startLap = compoundLaps[0].Key;
+        var currentActual = compoundLaps[0].Value.ActualTyreCompound;
+        var currentVisual = compoundLaps[0].Value.VisualTyreCompound;
+
+        for (var index = 1; index < compoundLaps.Length; index++)
+        {
+            var lapNumber = compoundLaps[index].Key;
+            var lap = compoundLaps[index].Value;
+            if (lap.ActualTyreCompound == currentActual && lap.VisualTyreCompound == currentVisual)
+            {
+                continue;
+            }
+
+            stints.Add(CreateInferredStint(
+                stints.Count + 1,
+                startLap,
+                lapNumber - 1,
+                currentActual,
+                currentVisual,
+                StintSummarySource.CompoundChangeInference,
+                RaceAnalysisConfidence.Medium,
+                "inferred from player compound changes; pit stop evidence is incomplete."));
+            startLap = lapNumber;
+            currentActual = lap.ActualTyreCompound;
+            currentVisual = lap.VisualTyreCompound;
+        }
+
+        var finalEndLap = completedLaps > 0 ? completedLaps : compoundLaps[^1].Key;
+        stints.Add(CreateInferredStint(
+            stints.Count + 1,
+            startLap,
+            finalEndLap,
+            currentActual,
+            currentVisual,
+            StintSummarySource.CompoundChangeInference,
+            RaceAnalysisConfidence.Medium,
+            "inferred from player compound changes; pit stop evidence is incomplete."));
+        return stints;
+    }
+
+    private IReadOnlyList<StintSummary> BuildPitStopInferredStints(int completedLaps)
+    {
+        var pitStops = BuildPitStopSummaries()
+            .Where(summary => summary.Confidence != RaceAnalysisConfidence.Low)
+            .OrderBy(summary => summary.PitLap)
+            .ToArray();
+        if (pitStops.Length == 0 || completedLaps <= 0)
+        {
+            return [];
+        }
+
+        var stints = new List<StintSummary>();
+        var startLap = 1;
+        foreach (var pitStop in pitStops)
+        {
+            var endLap = Math.Max(startLap, pitStop.PitLap - 1);
+            stints.Add(CreateInferredStint(
+                stints.Count + 1,
+                startLap,
+                endLap,
+                actualTyreCompound: null,
+                visualTyreCompound: null,
+                StintSummarySource.PitStopInference,
+                RaceAnalysisConfidence.Medium,
+                "inferred from pit stop evidence; tyre compound data is unavailable."));
+            startLap = pitStop.PitLap;
+        }
+
+        stints.Add(CreateInferredStint(
+            stints.Count + 1,
+            startLap,
+            completedLaps,
+            actualTyreCompound: null,
+            visualTyreCompound: null,
+            StintSummarySource.PitStopInference,
+            RaceAnalysisConfidence.Medium,
+            "inferred from pit stop evidence; tyre compound data is unavailable."));
+        return stints;
+    }
+
+    private StintSummary CreateInferredStint(
+        int stintIndex,
+        int startLap,
+        int endLap,
+        int? actualTyreCompound,
+        int? visualTyreCompound,
+        StintSummarySource source,
+        RaceAnalysisConfidence confidence,
+        string notes)
+    {
+        return new StintSummary(
+            StintIndex: stintIndex,
+            StartLap: startLap,
+            EndLap: endLap,
+            LapCount: endLap - startLap + 1,
+            ActualTyreCompound: actualTyreCompound,
+            VisualTyreCompound: visualTyreCompound,
+            StartTyreAge: GetTyreAge(startLap),
+            EndTyreAge: GetTyreAge(endLap),
+            Source: source,
+            Confidence: confidence,
+            Notes: notes);
+    }
+
+    private PitStopSummary CreatePitStopSummary(
+        int pitLap,
+        RaceAnalysisConfidence confidence,
+        string notes)
+    {
+        var before = FindLapAtOrBefore(pitLap - 1);
+        var current = FindLapAtOrBefore(pitLap);
+        var after = FindLapAtOrAfter(pitLap + 1) ?? current;
+        var compoundBefore = FindLapWithCompoundAtOrBefore(pitLap - 1);
+        var compoundAfter = FindLapWithCompoundAtOrAfter(pitLap) ?? compoundBefore;
+        var tyreAgeBefore = compoundBefore?.TyreAgeLaps;
+        var tyreAgeAfter = compoundAfter?.TyreAgeLaps;
+        var positionBefore = before?.Position;
+        var positionAfter = current?.Position ?? after?.Position;
+        var positionLost = positionBefore is not null && positionAfter is not null
+            ? positionAfter.Value - positionBefore.Value
+            : (int?)null;
+
+        return new PitStopSummary(
+            PitLap: pitLap,
+            EntryLapTimeInMs: current?.LapTimeInMs ?? current?.LastLapTimeInMs,
+            ExitLapTimeInMs: after?.LapTimeInMs ?? after?.LastLapTimeInMs,
+            CompoundBefore: FormatCompound(compoundBefore),
+            CompoundAfter: FormatCompound(compoundAfter),
+            TyreAgeBefore: tyreAgeBefore,
+            TyreAgeAfter: tyreAgeAfter,
+            PositionBefore: positionBefore,
+            PositionAfter: positionAfter,
+            PositionLost: positionLost,
+            EstimatedPitLossInMs: null,
+            Confidence: confidence,
+            Notes: notes + " Estimated pit loss unavailable; no reliable baseline.");
+    }
+
+    private IReadOnlyList<PitStopSummary> BuildPossibleSlowLapPitStops(
+        KeyValuePair<int, RaceLapAccumulator>[] orderedLaps)
+    {
+        var summaries = new List<PitStopSummary>();
+        for (var index = 1; index < orderedLaps.Length - 1; index++)
+        {
+            var previous = orderedLaps[index - 1].Value;
+            var current = orderedLaps[index].Value;
+            var next = orderedLaps[index + 1].Value;
+            if (previous.LapTimeInMs is null || current.LapTimeInMs is null || next.LapTimeInMs is null)
+            {
+                continue;
+            }
+
+            var neighborBaseline = Math.Max(previous.LapTimeInMs.Value, next.LapTimeInMs.Value);
+            var positionLost = previous.Position is not null && current.Position is not null
+                ? current.Position.Value - previous.Position.Value
+                : 0;
+            if (current.LapTimeInMs.Value <= neighborBaseline + 25000 || positionLost <= 0)
+            {
+                continue;
+            }
+
+            summaries.Add(CreatePitStopSummary(
+                orderedLaps[index].Key,
+                RaceAnalysisConfidence.Low,
+                "possible pit stop inferred only from slow lap and position loss; not confirmed."));
+            break;
+        }
+
+        return summaries;
+    }
+
+    private bool HasTyreChangedAround(int pitLap)
+    {
+        var before = FindLapWithCompoundAtOrBefore(pitLap - 1);
+        var after = FindLapWithCompoundAtOrAfter(pitLap);
+        if (before is null || after is null)
+        {
+            return false;
+        }
+
+        if (before.ActualTyreCompound != after.ActualTyreCompound ||
+            before.VisualTyreCompound != after.VisualTyreCompound)
+        {
+            return true;
+        }
+
+        return before.TyreAgeLaps is not null &&
+               after.TyreAgeLaps is not null &&
+               after.TyreAgeLaps.Value < before.TyreAgeLaps.Value;
+    }
+
+    private int GetCompletedLapCount()
+    {
+        var finalLaps = _playerFinalClassification?.NumLaps ?? 0;
+        return finalLaps > 0 ? finalLaps : MaxPlayerLapNumber;
+    }
+
+    private int NormalizeStintEndLap(byte rawEndLap, int completedLaps, int startLap)
+    {
+        var endLap = rawEndLap is 0 or 255
+            ? completedLaps
+            : rawEndLap;
+        if (completedLaps > 0)
+        {
+            endLap = Math.Min(endLap, completedLaps);
+        }
+
+        return Math.Max(endLap, startLap);
+    }
+
+    private static string BuildStintBoundaryNote(StintSummarySource source, byte rawEndLap, int endLap)
+    {
+        var prefix = source switch
+        {
+            StintSummarySource.SessionHistory => "confirmed from SessionHistory.",
+            StintSummarySource.FinalClassification => "confirmed from FinalClassification.",
+            _ => "inferred."
+        };
+
+        return rawEndLap == 255
+            ? $"{prefix} raw end lap 255 truncated to completed lap {endLap}."
+            : prefix;
+    }
+
+    private int? GetTyreAge(int lapNumber)
+    {
+        return _lapSummaries.TryGetValue(lapNumber, out var lap)
+            ? lap.TyreAgeLaps
+            : null;
+    }
+
+    private RaceLapAccumulator? FindLapAtOrBefore(int lapNumber)
+    {
+        return _lapSummaries
+            .Where(pair => pair.Key <= lapNumber)
+            .OrderByDescending(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .FirstOrDefault();
+    }
+
+    private RaceLapAccumulator? FindLapAtOrAfter(int lapNumber)
+    {
+        return _lapSummaries
+            .Where(pair => pair.Key >= lapNumber)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .FirstOrDefault();
+    }
+
+    private RaceLapAccumulator? FindLapWithCompoundAtOrBefore(int lapNumber)
+    {
+        return _lapSummaries
+            .Where(pair => pair.Key <= lapNumber && pair.Value.HasCompound)
+            .OrderByDescending(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .FirstOrDefault();
+    }
+
+    private RaceLapAccumulator? FindLapWithCompoundAtOrAfter(int lapNumber)
+    {
+        return _lapSummaries
+            .Where(pair => pair.Key >= lapNumber && pair.Value.HasCompound)
+            .OrderBy(pair => pair.Key)
+            .Select(pair => pair.Value)
+            .FirstOrDefault();
+    }
+
+    private static string? FormatCompound(RaceLapAccumulator? lap)
+    {
+        return lap?.HasCompound == true
+            ? $"visual {lap.VisualTyreCompound} / actual {lap.ActualTyreCompound}"
+            : null;
     }
 
     private static bool TryGetPlayerCar<T>(T[] cars, byte playerCarIndex, out T car)
@@ -291,6 +754,10 @@ public sealed class RawLogSessionSummary
 
     private sealed class RaceLapAccumulator
     {
+        public uint? LastLapTimeInMs { get; set; }
+
+        public uint? CurrentLapTimeInMs { get; set; }
+
         public uint? LapTimeInMs { get; set; }
 
         public int? Position { get; set; }
@@ -299,6 +766,35 @@ public sealed class RawLogSessionSummary
 
         public int? ResultStatus { get; set; }
 
+        public int? PitStatus { get; set; }
+
+        public int? NumPitStops { get; set; }
+
+        public bool IsPitLaneTimerActive { get; set; }
+
+        public int? PitLaneTimeInLaneInMs { get; set; }
+
+        public int? PitStopTimerInMs { get; set; }
+
+        public int? ActualTyreCompound { get; set; }
+
+        public int? VisualTyreCompound { get; set; }
+
+        public int? TyreAgeLaps { get; set; }
+
         public long SampleCount { get; set; }
+
+        public bool HasCompound => ActualTyreCompound is not null || VisualTyreCompound is not null;
+
+        public bool HasPitEvidence =>
+            PitStatus.GetValueOrDefault() > 0 ||
+            IsPitLaneTimerActive ||
+            PitLaneTimeInLaneInMs.GetValueOrDefault() > 0 ||
+            PitStopTimerInMs.GetValueOrDefault() > 0;
     }
+
+    private sealed record TyreStintSnapshot(
+        byte EndLap,
+        byte ActualTyreCompound,
+        byte VisualTyreCompound);
 }

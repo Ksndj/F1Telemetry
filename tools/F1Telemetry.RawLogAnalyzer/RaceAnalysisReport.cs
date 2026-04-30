@@ -12,6 +12,8 @@ public sealed record RaceAnalysisReport(
     RaceSessionSummary SessionSummary,
     PlayerRaceSummary PlayerRaceSummary,
     IReadOnlyList<RaceLapSummary> LapSummaries,
+    IReadOnlyList<StintSummary> StintSummaries,
+    IReadOnlyList<PitStopSummary> PitStopSummaries,
     IReadOnlyList<string> DataQualityWarnings);
 
 /// <summary>
@@ -50,3 +52,59 @@ public sealed record RaceLapSummary(
     bool? IsValid,
     int? ResultStatus,
     long SampleCount);
+
+/// <summary>
+/// Describes the confidence level shared by race-derived analysis summaries.
+/// </summary>
+public enum RaceAnalysisConfidence
+{
+    High,
+    Medium,
+    Low
+}
+
+/// <summary>
+/// Describes which evidence source produced a stint summary.
+/// </summary>
+public enum StintSummarySource
+{
+    SessionHistory,
+    FinalClassification,
+    CompoundChangeInference,
+    PitStopInference,
+    Unknown
+}
+
+/// <summary>
+/// Contains one aggregated tyre stint without high-frequency telemetry samples.
+/// </summary>
+public sealed record StintSummary(
+    int StintIndex,
+    int StartLap,
+    int EndLap,
+    int LapCount,
+    int? ActualTyreCompound,
+    int? VisualTyreCompound,
+    int? StartTyreAge,
+    int? EndTyreAge,
+    StintSummarySource Source,
+    RaceAnalysisConfidence Confidence,
+    string Notes);
+
+/// <summary>
+/// Contains one aggregated pit stop candidate with confidence and no raw packet payload.
+/// </summary>
+public sealed record PitStopSummary(
+    int PitLap,
+    uint? EntryLapTimeInMs,
+    uint? ExitLapTimeInMs,
+    string? CompoundBefore,
+    string? CompoundAfter,
+    int? TyreAgeBefore,
+    int? TyreAgeAfter,
+    int? PositionBefore,
+    int? PositionAfter,
+    int? PositionLost,
+    int? EstimatedPitLossInMs,
+    RaceAnalysisConfidence Confidence,
+    string Notes);

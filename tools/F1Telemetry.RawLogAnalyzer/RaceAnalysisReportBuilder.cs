@@ -38,6 +38,8 @@ public static class RaceAnalysisReportBuilder
             SessionSummary: sessionSummary,
             PlayerRaceSummary: session.BuildPlayerRaceSummary(),
             LapSummaries: session.BuildRaceLapSummaries(),
+            StintSummaries: session.BuildStintSummaries(),
+            PitStopSummaries: session.BuildPitStopSummaries(),
             DataQualityWarnings: BuildWarnings(result, session));
     }
 
