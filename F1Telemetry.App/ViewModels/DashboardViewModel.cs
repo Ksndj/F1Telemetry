@@ -2408,7 +2408,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         PostRaceAiStatusText = completion.ShouldGenerate
             ? "正赛已完成，等待生成赛后 AI 总结。"
             : completion.ShouldStage
-                ? "正赛尚未完成；如中途退出，将暂存并等待完赛后总结。"
+                ? "正赛尚未完成；如中途退出，本次运行会暂存并等待完赛后总结。"
                 : completion.StatusText;
 
         OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
@@ -2504,9 +2504,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         _lastStagedPostRaceAiKey = key;
-        PostRaceAiStatusText = $"正赛未完整结束，已暂存：{reason}";
+        PostRaceAiStatusText = $"正赛未完整结束，本次运行已暂存：{reason}";
         EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
-        EnqueueEventLog("AI", "正赛 AI 总结已暂存，等待完赛后再生成。");
+        EnqueueEventLog("AI", "正赛 AI 总结已在本次运行暂存，等待完赛后再生成。");
     }
 
     private string BuildPostRaceAiSummaryKey(SessionState sessionState, int lapNumber, bool isManual)
