@@ -64,9 +64,11 @@ public sealed class RawLogAnalyzerService
         while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
         {
             result.TotalLines++;
-            ProcessLine(line, result.TotalLines, dispatcher, result);
+            ProcessLine(line, result.TotalLines, dispatcher, result, options.SessionUid);
         }
 
+        var selectedSession = SelectRaceSession(result, options.SessionUid);
+        result.RaceReport = RaceAnalysisReportBuilder.Build(result, selectedSession, DateTimeOffset.UtcNow);
         var markdown = RawLogMarkdownReportWriter.Build(result);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
         await File.WriteAllTextAsync(reportPath, markdown, cancellationToken).ConfigureAwait(false);
@@ -92,7 +94,8 @@ public sealed class RawLogAnalyzerService
         string line,
         long lineNumber,
         PacketDispatcher dispatcher,
-        RawLogAnalysisResult result)
+        RawLogAnalysisResult result,
+        ulong? requestedSessionUid)
     {
         if (string.IsNullOrWhiteSpace(line))
         {
@@ -135,28 +138,33 @@ public sealed class RawLogAnalyzerService
                 return;
             }
 
+            if (ShouldSkipSession(header.SessionUid, requestedSessionUid))
+            {
+                return;
+            }
+
             var receivedAt = ReadTimestamp(root);
             var session = result.GetOrCreateSession(header.SessionUid);
             session.ObserveDatagram(header, receivedAt);
 
             if (!header.IsKnownPacketId)
             {
-            result.UnknownPacketIdCount++;
-            Increment(result.UnknownPacketIdCounts, header.RawPacketId);
-            session.UnknownPacketIdCount++;
-        }
-        else
-        {
-            Increment(result.PacketIdCounts, header.PacketId);
-            if (!SupportedTypedPacketIds.Contains(header.PacketId))
-            {
-                result.UnsupportedPacketIdCount++;
-                Increment(result.UnsupportedPacketIdCounts, header.PacketId);
-                session.UnsupportedPacketIdCount++;
+                result.UnknownPacketIdCount++;
+                Increment(result.UnknownPacketIdCounts, header.RawPacketId);
+                session.UnknownPacketIdCount++;
             }
-        }
+            else
+            {
+                Increment(result.PacketIdCounts, header.PacketId);
+                if (!SupportedTypedPacketIds.Contains(header.PacketId))
+                {
+                    result.UnsupportedPacketIdCount++;
+                    Increment(result.UnsupportedPacketIdCounts, header.PacketId);
+                    session.UnsupportedPacketIdCount++;
+                }
+            }
 
-        var datagram = new UdpDatagram(payload, new IPEndPoint(IPAddress.Loopback, 0), receivedAt);
+            var datagram = new UdpDatagram(payload, new IPEndPoint(IPAddress.Loopback, 0), receivedAt);
             if (!dispatcher.TryDispatch(datagram, out _))
             {
                 result.DispatchFailureCount++;
@@ -248,7 +256,48 @@ public sealed class RawLogAnalyzerService
             case EventPacket packet:
                 session.ApplyEventPacket(packet);
                 break;
+            case SessionHistoryPacket packet:
+                session.ApplySessionHistoryPacket(packet, parsedPacket.Header);
+                break;
+            case FinalClassificationPacket packet:
+                session.ApplyFinalClassificationPacket(packet, parsedPacket.Header);
+                break;
         }
+    }
+
+    private static RawLogSessionSummary SelectRaceSession(
+        RawLogAnalysisResult result,
+        ulong? requestedSessionUid)
+    {
+        if (requestedSessionUid is not null)
+        {
+            if (result.Sessions.TryGetValue(requestedSessionUid.Value, out var requestedSession)
+                && RaceAnalysisReportBuilder.IsValidRaceSession(requestedSession))
+            {
+                return requestedSession;
+            }
+
+            throw new InvalidOperationException(
+                $"No valid Race session was found for sessionUid {requestedSessionUid.Value}.");
+        }
+
+        var selectedSession = result.Sessions.Values
+            .Where(RaceAnalysisReportBuilder.IsValidRaceSession)
+            .OrderByDescending(session => session.DatagramCount)
+            .FirstOrDefault();
+
+        return selectedSession ?? throw new InvalidOperationException(
+            "No valid Race session was found. A Race session requires sessionType=15 and sessionUid != 0.");
+    }
+
+    private static bool ShouldSkipSession(ulong sessionUid, ulong? requestedSessionUid)
+    {
+        if (sessionUid == 0)
+        {
+            return true;
+        }
+
+        return requestedSessionUid is not null && sessionUid != requestedSessionUid.Value;
     }
 
     private static string ResolveReportPath(string inputPath, string? outputPath)

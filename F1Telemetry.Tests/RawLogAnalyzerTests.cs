@@ -11,15 +11,18 @@ namespace F1Telemetry.Tests;
 public sealed class RawLogAnalyzerTests
 {
     [Fact]
-    public async Task AnalyzeAsync_SplitsSessionsAndAggregatesKeyPackets()
+    public async Task AnalyzeAsync_WritesRaceAnalysisReportSkeletonForSelectedSession()
     {
         var inputPath = CreateTempJsonlPath();
         var outputPath = Path.ChangeExtension(inputPath, ".md");
         var statusPayload = Convert.ToBase64String(BuildCarStatusPacket(1001UL, fuelInTank: 5.5f, actualCompound: 16, visualCompound: 17));
         var lines = new[]
         {
-            BuildRecord(BuildSessionPacket(1001UL, trackId: 12, sessionType: 10, totalLaps: 5)),
-            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 3, totalDistance: 1234.5f)),
+            BuildRecord(BuildSessionPacket(0UL, trackId: 1, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 70)),
+            BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 1234.5f, position: 5, resultStatus: 2)),
+            BuildRecord(BuildSessionHistoryPacket(1001UL, numLaps: 1, firstLapTimeInMs: 84289)),
+            BuildRecord(BuildFinalClassificationPacket(1001UL, position: 4, numLaps: 3, gridPosition: 8, points: 12, bestLapTimeInMs: 84289, penaltiesTime: 5, numPenalties: 1)),
             BuildRecord(BuildCarTelemetryPacket(1001UL, speed: 321, throttle: 0.75f)),
             BuildRecord(BuildCarStatusPacket(1001UL, fuelInTank: 5.5f, actualCompound: 16, visualCompound: 17)),
             BuildRecord(BuildCarDamagePacket(1001UL, tyreWear: 12.5f)),
@@ -30,16 +33,30 @@ public sealed class RawLogAnalyzerTests
         await File.WriteAllLinesAsync(inputPath, lines);
         var analyzer = new RawLogAnalyzerService();
 
-        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath));
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
 
-        Assert.Equal(8, result.TotalLines);
-        Assert.Equal(8, result.ParsedPacketCount);
-        Assert.Equal(2, result.Sessions.Count);
+        Assert.Equal(11, result.TotalLines);
+        Assert.NotNull(result.RaceReport);
+        Assert.Equal(1001UL, result.RaceReport.SessionUid);
+        Assert.Equal("synthetic.jsonl", result.RaceReport.InputFile);
+        Assert.Equal(9, result.RaceReport.SessionSummary.TrackId);
+        Assert.Equal(15, result.RaceReport.SessionSummary.SessionType);
+        Assert.Equal(70, result.RaceReport.SessionSummary.TotalLaps);
+        Assert.Equal(4, result.RaceReport.PlayerRaceSummary.FinalPosition);
+        Assert.Equal(8, result.RaceReport.PlayerRaceSummary.GridPosition);
+        Assert.Equal(3, result.RaceReport.PlayerRaceSummary.CompletedLaps);
+        Assert.Equal(12, result.RaceReport.PlayerRaceSummary.Points);
+        Assert.Equal(84289U, result.RaceReport.PlayerRaceSummary.BestLapTimeInMs);
+        Assert.Equal(5, result.RaceReport.PlayerRaceSummary.PenaltiesTimeSeconds);
+        Assert.Single(result.RaceReport.LapSummaries);
+        Assert.Equal(1, result.RaceReport.LapSummaries[0].LapNumber);
+        Assert.Equal(84289U, result.RaceReport.LapSummaries[0].LapTimeInMs);
+        Assert.Equal(1, result.RaceReport.LapSummaries[0].SampleCount);
         Assert.True(result.Sessions.TryGetValue(1001UL, out var firstSession));
-        Assert.Equal(12, firstSession.TrackId);
-        Assert.Equal(10, firstSession.SessionType);
-        Assert.Equal(5, firstSession.TotalLaps);
-        Assert.Equal(3, firstSession.MaxPlayerLapNumber);
+        Assert.Equal(9, firstSession.TrackId);
+        Assert.Equal(15, firstSession.SessionType);
+        Assert.Equal(70, firstSession.TotalLaps);
+        Assert.Equal(1, firstSession.MaxPlayerLapNumber);
         Assert.Equal(1234.5f, firstSession.MaxPlayerTotalDistance, precision: 2);
         Assert.Equal(321, firstSession.MaxPlayerSpeed);
         Assert.Equal(0.75f, firstSession.MaxPlayerThrottle, precision: 3);
@@ -48,16 +65,23 @@ public sealed class RawLogAnalyzerTests
         Assert.Equal(12.5f, firstSession.MaxPlayerTyreWear, precision: 3);
         Assert.Contains("visual 17 / actual 16", firstSession.TyreCompoundPairs);
         Assert.Equal(1, firstSession.EventCodeCounts["SSTA"]);
-        Assert.Equal(2, result.PacketIdCounts[PacketId.Session]);
+        Assert.Equal(1, result.PacketIdCounts[PacketId.Session]);
         Assert.Equal(outputPath, result.ReportPath);
         Assert.True(File.Exists(outputPath));
 
         var markdown = await File.ReadAllTextAsync(outputPath);
-        Assert.Contains("Session 1001", markdown);
-        Assert.Contains("TrackId: 12", markdown);
-        Assert.Contains("Fuel in tank: 5.5 -> 5.5", markdown);
+        Assert.Contains("# Race Analysis Report", markdown);
+        Assert.Contains("## Session Summary", markdown);
+        Assert.Contains("## Player Summary", markdown);
+        Assert.Contains("## Lap Summaries", markdown);
+        Assert.Contains("## Data Quality Warnings", markdown);
+        Assert.Contains("SessionUid: 1001", markdown);
+        Assert.Contains("TrackId: 9", markdown);
+        Assert.Contains("Final position: 4", markdown);
         Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(statusPayload, markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("CarTelemetry[]", markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Motion[]", markdown, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -70,13 +94,13 @@ public sealed class RawLogAnalyzerTests
             "{ this is not json",
             "{\"payloadBase64\":\"%%%\"}",
             BuildRecord(BuildUnknownPacket(3003UL, packetId: 99)),
-            BuildRecord(BuildSessionPacket(3003UL, trackId: 1, sessionType: 1, totalLaps: 3), declaredLength: 9999),
+            BuildRecord(BuildSessionPacket(3003UL, trackId: 1, sessionType: 15, totalLaps: 3), declaredLength: 9999),
             BuildRecord(BuildHeaderOnlyKnownPacket(3003UL, PacketId.Session))
         };
         await File.WriteAllLinesAsync(inputPath, lines);
         var analyzer = new RawLogAnalyzerService();
 
-        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath));
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 3003UL));
 
         Assert.Equal(5, result.TotalLines);
         Assert.Equal(1, result.InvalidJsonLineCount);
@@ -93,6 +117,75 @@ public sealed class RawLogAnalyzerTests
         Assert.Contains("Unknown packet ids: 1", markdown);
         Assert.Contains("Payload length mismatches: 1", markdown);
         Assert.Contains("Packet parse failures: 1", markdown);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_AutoSelectsLargestRaceSessionAndIgnoresSessionZero()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        var lines = new[]
+        {
+            BuildRecord(BuildSessionPacket(0UL, trackId: 1, sessionType: 15, totalLaps: 1)),
+            BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 70)),
+            BuildRecord(BuildSessionPacket(2002UL, trackId: 10, sessionType: 15, totalLaps: 50)),
+            BuildRecord(BuildLapDataPacket(2002UL, currentLap: 1, totalDistance: 300f, position: 12, resultStatus: 2)),
+            BuildRecord(BuildLapDataPacket(2002UL, currentLap: 2, totalDistance: 600f, position: 11, resultStatus: 2)),
+            BuildRecord(BuildFinalClassificationPacket(2002UL, position: 11, numLaps: 2, gridPosition: 12, points: 0, bestLapTimeInMs: 90000, penaltiesTime: 0, numPenalties: 0))
+        };
+        await File.WriteAllLinesAsync(inputPath, lines);
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath));
+
+        Assert.NotNull(result.RaceReport);
+        Assert.Equal(2002UL, result.RaceReport.SessionUid);
+        Assert.Equal(10, result.RaceReport.SessionSummary.TrackId);
+        Assert.Equal(2, result.RaceReport.LapSummaries.Count);
+        Assert.NotEqual(0UL, result.RaceReport.SessionSummary.SessionUid);
+    }
+
+    [Fact]
+    public async Task AnalyzeAsync_ThrowsClearErrorWhenNoRaceSessionExists()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        await File.WriteAllLinesAsync(
+            inputPath,
+            new[]
+            {
+                BuildRecord(BuildSessionPacket(1001UL, trackId: 12, sessionType: 10, totalLaps: 5)),
+                BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f))
+            });
+        var analyzer = new RawLogAnalyzerService();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath)));
+
+        Assert.Contains("No valid Race session", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Fact]
+    public async Task ProgramMain_AcceptsSessionUidArgumentAndWritesRaceReport()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        await File.WriteAllLinesAsync(
+            inputPath,
+            new[]
+            {
+                BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 70)),
+                BuildRecord(BuildLapDataPacket(1001UL, currentLap: 1, totalDistance: 100f)),
+                BuildRecord(BuildFinalClassificationPacket(1001UL, position: 21, numLaps: 67, gridPosition: 8, points: 0, bestLapTimeInMs: 84289, penaltiesTime: 40, numPenalties: 4))
+            });
+
+        var exitCode = await Program.Main(["--input", inputPath, "--output", outputPath, "--session-uid", "1001"]);
+
+        Assert.Equal(0, exitCode);
+        var markdown = await File.ReadAllTextAsync(outputPath);
+        Assert.Contains("# Race Analysis Report", markdown);
+        Assert.Contains("SessionUid: 1001", markdown);
     }
 
     private static string CreateTempJsonlPath()
@@ -137,7 +230,12 @@ public sealed class RawLogAnalyzerTests
         });
     }
 
-    private static byte[] BuildLapDataPacket(ulong sessionUid, byte currentLap, float totalDistance)
+    private static byte[] BuildLapDataPacket(
+        ulong sessionUid,
+        byte currentLap,
+        float totalDistance,
+        byte position = 1,
+        byte resultStatus = 2)
     {
         return BuildPacket(sessionUid, PacketId.LapData, UdpPacketConstants.LapDataBodySize, body =>
         {
@@ -155,8 +253,72 @@ public sealed class RawLogAnalyzerTests
             ProtocolTestData.WriteFloat(body, ref offset, 123.4f);
             ProtocolTestData.WriteFloat(body, ref offset, totalDistance);
             ProtocolTestData.WriteFloat(body, ref offset, 0);
-            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, position);
             ProtocolTestData.WriteByte(body, ref offset, currentLap);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, position);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, resultStatus);
+        });
+    }
+
+    private static byte[] BuildSessionHistoryPacket(ulong sessionUid, byte numLaps, uint firstLapTimeInMs)
+    {
+        return BuildPacket(sessionUid, PacketId.SessionHistory, UdpPacketConstants.SessionHistoryBodySize, body =>
+        {
+            var offset = 0;
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, numLaps);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteUInt32(body, ref offset, firstLapTimeInMs);
+            ProtocolTestData.WriteUInt16(body, ref offset, 30000);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteUInt16(body, ref offset, 31000);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteUInt16(body, ref offset, 23289);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 0x0F);
+        });
+    }
+
+    private static byte[] BuildFinalClassificationPacket(
+        ulong sessionUid,
+        byte position,
+        byte numLaps,
+        byte gridPosition,
+        byte points,
+        uint bestLapTimeInMs,
+        byte penaltiesTime,
+        byte numPenalties)
+    {
+        return BuildPacket(sessionUid, PacketId.FinalClassification, UdpPacketConstants.FinalClassificationBodySize, body =>
+        {
+            var offset = 0;
+            ProtocolTestData.WriteByte(body, ref offset, 1);
+            ProtocolTestData.WriteByte(body, ref offset, position);
+            ProtocolTestData.WriteByte(body, ref offset, numLaps);
+            ProtocolTestData.WriteByte(body, ref offset, gridPosition);
+            ProtocolTestData.WriteByte(body, ref offset, points);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteByte(body, ref offset, 3);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
+            ProtocolTestData.WriteUInt32(body, ref offset, bestLapTimeInMs);
+            WriteDouble(body, ref offset, 5678.9d);
+            ProtocolTestData.WriteByte(body, ref offset, penaltiesTime);
+            ProtocolTestData.WriteByte(body, ref offset, numPenalties);
+            ProtocolTestData.WriteByte(body, ref offset, 0);
         });
     }
 
@@ -248,5 +410,11 @@ public sealed class RawLogAnalyzerTests
         destination[6] = packetId;
         BinaryPrimitives.WriteUInt64LittleEndian(destination.Slice(7, sizeof(ulong)), sessionUid);
         destination[27] = 0;
+    }
+
+    private static void WriteDouble(Span<byte> destination, ref int offset, double value)
+    {
+        BinaryPrimitives.WriteInt64LittleEndian(destination.Slice(offset, sizeof(double)), BitConverter.DoubleToInt64Bits(value));
+        offset += sizeof(double);
     }
 }
