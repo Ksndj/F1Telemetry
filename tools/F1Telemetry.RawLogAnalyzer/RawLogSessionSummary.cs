@@ -11,6 +11,11 @@ public sealed class RawLogSessionSummary
     private const float TyreWearDisagreementThresholdPercent = 5f;
     private const uint AttackDefenseGapThresholdMs = 1_000;
     private const uint TrafficImpactGapThresholdMs = 1_500;
+    private const float LowFuelWarningThresholdLaps = 1.5f;
+    private const float LowFuelCriticalThresholdLaps = 0.5f;
+    private const float HighTyreWearThresholdPercent = 70f;
+    private const float LowErsWarningThresholdMJ = 1.0f;
+    private const float LowErsCriticalThresholdMJ = 0.5f;
 
     internal RawLogSessionSummary(ulong sessionUid)
     {
@@ -69,10 +74,17 @@ public sealed class RawLogSessionSummary
 
     public SortedSet<string> TyreCompoundPairs { get; } = new(StringComparer.Ordinal);
 
+    internal IReadOnlyList<string> DataQualityWarnings => _dataQualityWarnings;
+
     private readonly SortedDictionary<int, RaceLapAccumulator> _lapSummaries = new();
     private readonly List<TyreStintSnapshot> _sessionHistoryTyreStints = [];
+    private readonly List<TimelineEventAccumulator> _timelineEvents = [];
+    private readonly List<string> _dataQualityWarnings = [];
+    private readonly Dictionary<int, sbyte> _lastMarshalZoneFlags = new();
     private FinalClassificationData? _playerFinalClassification;
+    private byte? _lastSafetyCarStatus;
     private int _latestPlayerLapNumber;
+    private long _timelineSequence;
 
     internal void ObserveDatagram(PacketHeader header, DateTimeOffset timestamp)
     {
@@ -92,11 +104,13 @@ public sealed class RawLogSessionSummary
             : LastSeenUtc;
     }
 
-    internal void ApplySessionPacket(SessionPacket packet)
+    internal void ApplySessionPacket(SessionPacket packet, DateTimeOffset timestamp)
     {
         TrackId = packet.TrackId;
         SessionType = packet.SessionType;
         TotalLaps = packet.TotalLaps;
+        ApplySafetyCarStatus(packet.SafetyCarStatus, timestamp);
+        ApplyMarshalZoneFlags(packet, timestamp);
     }
 
     internal void ApplyLapDataPacket(LapDataPacket packet, PacketHeader header)
@@ -249,10 +263,79 @@ public sealed class RawLogSessionSummary
         }
     }
 
-    internal void ApplyEventPacket(EventPacket packet)
+    internal void ApplyEventPacket(EventPacket packet, PacketHeader header, DateTimeOffset timestamp)
     {
         EventCodeCounts.TryGetValue(packet.RawEventCode, out var current);
         EventCodeCounts[packet.RawEventCode] = current + 1;
+
+        switch (packet.Code)
+        {
+            case EventCode.SessionStarted:
+                AddTimelineEvent(
+                    RaceEventTimelineType.Start,
+                    RaceEventTimelineSeverity.Info,
+                    RaceEventTimelineSource.UdpEvent,
+                    "Session start event decoded.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: 0,
+                    timestamp: timestamp);
+                break;
+            case EventCode.LightsOut:
+                AddTimelineEvent(
+                    RaceEventTimelineType.Start,
+                    RaceEventTimelineSeverity.Info,
+                    RaceEventTimelineSource.UdpEvent,
+                    "Lights out event decoded.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: 0,
+                    timestamp: timestamp);
+                break;
+            case EventCode.RedFlag:
+                AddTimelineEvent(
+                    RaceEventTimelineType.RedFlag,
+                    RaceEventTimelineSeverity.Critical,
+                    RaceEventTimelineSource.UdpEvent,
+                    "Red flag event decoded.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: null,
+                    timestamp: timestamp);
+                break;
+            case EventCode.SafetyCar:
+                ApplySafetyCarEventPacket(packet.Detail as SafetyCarEventDetail, timestamp);
+                break;
+            case EventCode.Overtake:
+                ApplyOvertakeEventPacket(packet.Detail as OvertakeEventDetail, header.PlayerCarIndex, timestamp);
+                break;
+            case EventCode.Penalty:
+                ApplyPenaltyEventPacket(packet.Detail as PenaltyEventDetail, timestamp);
+                break;
+            case EventCode.DriveThroughPenaltyServed:
+                ApplyDriveThroughServedEventPacket(packet.Detail as DriveThroughPenaltyServedEventDetail, timestamp);
+                break;
+            case EventCode.StopGoPenaltyServed:
+                ApplyStopGoServedEventPacket(packet.Detail as StopGoPenaltyServedEventDetail, timestamp);
+                break;
+            case EventCode.Retirement:
+                ApplyRetirementEventPacket(packet.Detail as RetirementEventDetail, timestamp);
+                break;
+            case EventCode.RaceWinner:
+                ApplyRaceWinnerEventPacket(packet.Detail as RaceWinnerEventDetail, timestamp);
+                break;
+            case EventCode.ChequeredFlag:
+                AddTimelineEvent(
+                    RaceEventTimelineType.FinalClassification,
+                    RaceEventTimelineSeverity.Info,
+                    RaceEventTimelineSource.UdpEvent,
+                    "Chequered flag event decoded.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: GetFinishTimelineLap(),
+                    timestamp: timestamp);
+                break;
+        }
     }
 
     internal void ApplySessionHistoryPacket(SessionHistoryPacket packet, PacketHeader header)
@@ -289,7 +372,7 @@ public sealed class RawLogSessionSummary
                 lap.LapTimeInMs = lapHistory.LapTimeInMs;
             }
 
-            lap.IsValid = lapHistory.IsLapValid;
+            lap.IsValid = lap.IsValid == false ? false : lapHistory.IsLapValid;
         }
     }
 
@@ -669,6 +752,63 @@ public sealed class RawLogSessionSummary
             Notes: BuildGapSummaryNotes(observed));
     }
 
+    internal IReadOnlyList<RaceEventTimelineEntry> BuildRaceEventTimeline(
+        IReadOnlyList<RaceLapSummary> lapSummaries,
+        IReadOnlyList<PitStopSummary> pitStopSummaries,
+        IReadOnlyList<TyreUsageSummary> tyreUsageSummaries)
+    {
+        var events = new List<TimelineEventAccumulator>(_timelineEvents);
+        var sequence = _timelineSequence;
+
+        foreach (var pitStop in pitStopSummaries)
+        {
+            AddTimelineEvent(
+                events,
+                ref sequence,
+                pitStop.PitLap,
+                null,
+                RaceEventTimelineType.PitStop,
+                RaceEventTimelineSeverity.Warning,
+                RaceEventTimelineSource.DerivedSummary,
+                $"Pit stop detected on lap {pitStop.PitLap}.",
+                relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                confidence: pitStop.Confidence);
+
+            if (!string.IsNullOrWhiteSpace(pitStop.CompoundBefore) &&
+                !string.IsNullOrWhiteSpace(pitStop.CompoundAfter) &&
+                !string.Equals(pitStop.CompoundBefore, pitStop.CompoundAfter, StringComparison.Ordinal))
+            {
+                AddTimelineEvent(
+                    events,
+                    ref sequence,
+                    pitStop.PitLap,
+                    null,
+                    RaceEventTimelineType.TyreChange,
+                    RaceEventTimelineSeverity.Info,
+                    RaceEventTimelineSource.DerivedSummary,
+                    $"Tyre compound changed from {pitStop.CompoundBefore} to {pitStop.CompoundAfter}.",
+                    relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                    confidence: pitStop.Confidence);
+            }
+        }
+
+        AddFirstLowFuelEvent(events, ref sequence);
+        AddFirstHighTyreWearEvent(events, ref sequence, tyreUsageSummaries);
+        AddFirstLowErsEvent(events, ref sequence);
+        AddInvalidLapEvents(events, ref sequence, lapSummaries);
+        AddPositionLossEvents(events, ref sequence, lapSummaries);
+        AddFinalClassificationEvent(events, ref sequence);
+
+        var completedLaps = GetCompletedLapCount();
+        return events
+            .Where(item => ShouldKeepTimelineEvent(item.Entry, completedLaps))
+            .OrderBy(item => item.Entry.Lap)
+            .ThenBy(item => item.Entry.TimestampUtc)
+            .ThenBy(item => item.Sequence)
+            .Select(item => item.Entry)
+            .ToArray();
+    }
+
     private static void ApplyGapData(LapDataPacket packet, LapDataEntry playerCar, RaceLapAccumulator lap)
     {
         if (playerCar.CarPosition == 0)
@@ -931,6 +1071,485 @@ public sealed class RawLogSessionSummary
     {
         var totalMs = (uint)(car.DeltaToCarInFrontMinutes * 60_000) + car.DeltaToCarInFrontInMs;
         return totalMs == 0 ? null : totalMs;
+    }
+
+    private void ApplySafetyCarStatus(byte safetyCarStatus, DateTimeOffset timestamp)
+    {
+        if (_lastSafetyCarStatus == safetyCarStatus)
+        {
+            return;
+        }
+
+        _lastSafetyCarStatus = safetyCarStatus;
+        switch (safetyCarStatus)
+        {
+            case 0:
+            case 3:
+                return;
+            case 1:
+                AddTimelineEvent(
+                    RaceEventTimelineType.SafetyCar,
+                    RaceEventTimelineSeverity.Warning,
+                    RaceEventTimelineSource.SessionStatus,
+                    "Safety car status changed to full safety car.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: null,
+                    timestamp: timestamp);
+                return;
+            case 2:
+                AddTimelineEvent(
+                    RaceEventTimelineType.VirtualSafetyCar,
+                    RaceEventTimelineSeverity.Warning,
+                    RaceEventTimelineSource.SessionStatus,
+                    "Safety car status changed to virtual safety car.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.High,
+                    lapNumber: null,
+                    timestamp: timestamp);
+                return;
+            default:
+                AddDataQualityWarning($"Unknown safety car status: {safetyCarStatus}; no safety event was emitted.");
+                return;
+        }
+    }
+
+    private void ApplyMarshalZoneFlags(SessionPacket packet, DateTimeOffset timestamp)
+    {
+        var zoneCount = Math.Min(packet.NumMarshalZones, packet.MarshalZones.Length);
+        for (var index = 0; index < zoneCount; index++)
+        {
+            var zoneFlag = packet.MarshalZones[index].ZoneFlag;
+            if (!IsKnownMarshalZoneFlag(zoneFlag))
+            {
+                AddDataQualityWarning($"Unknown marshal zone flag: {zoneFlag}; no marshal-zone event was emitted.");
+                continue;
+            }
+
+            if (_lastMarshalZoneFlags.TryGetValue(index, out var previousFlag) && previousFlag == zoneFlag)
+            {
+                continue;
+            }
+
+            _lastMarshalZoneFlags[index] = zoneFlag;
+            switch (zoneFlag)
+            {
+                case 3:
+                    AddTimelineEvent(
+                        RaceEventTimelineType.YellowFlag,
+                        RaceEventTimelineSeverity.Warning,
+                        RaceEventTimelineSource.SessionStatus,
+                        $"Yellow flag in marshal zone {index}.",
+                        relatedVehicleIndex: null,
+                        confidence: RaceAnalysisConfidence.High,
+                        lapNumber: null,
+                        timestamp: timestamp);
+                    break;
+                case 4:
+                    AddTimelineEvent(
+                        RaceEventTimelineType.RedFlag,
+                        RaceEventTimelineSeverity.Critical,
+                        RaceEventTimelineSource.SessionStatus,
+                        $"Red flag in marshal zone {index}.",
+                        relatedVehicleIndex: null,
+                        confidence: RaceAnalysisConfidence.High,
+                        lapNumber: null,
+                        timestamp: timestamp);
+                    break;
+            }
+        }
+    }
+
+    private void ApplySafetyCarEventPacket(SafetyCarEventDetail? detail, DateTimeOffset timestamp)
+    {
+        var eventType = detail?.SafetyCarType == 2
+            ? RaceEventTimelineType.VirtualSafetyCar
+            : RaceEventTimelineType.SafetyCar;
+        var message = eventType == RaceEventTimelineType.VirtualSafetyCar
+            ? "Virtual safety car UDP event decoded."
+            : "Safety car UDP event decoded.";
+
+        AddTimelineEvent(
+            eventType,
+            RaceEventTimelineSeverity.Warning,
+            RaceEventTimelineSource.UdpEvent,
+            message,
+            relatedVehicleIndex: null,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: null,
+            timestamp: timestamp);
+    }
+
+    private void ApplyOvertakeEventPacket(OvertakeEventDetail? detail, byte playerCarIndex, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        if (detail.OvertakingVehicleIndex == playerCarIndex)
+        {
+            AddTimelineEvent(
+                RaceEventTimelineType.Overtake,
+                RaceEventTimelineSeverity.Info,
+                RaceEventTimelineSource.UdpEvent,
+                $"Player overtook vehicle {detail.BeingOvertakenVehicleIndex}.",
+                relatedVehicleIndex: detail.BeingOvertakenVehicleIndex,
+                confidence: RaceAnalysisConfidence.High,
+                lapNumber: null,
+                timestamp: timestamp);
+            return;
+        }
+
+        if (detail.BeingOvertakenVehicleIndex == playerCarIndex)
+        {
+            AddTimelineEvent(
+                RaceEventTimelineType.PositionLost,
+                RaceEventTimelineSeverity.Warning,
+                RaceEventTimelineSource.UdpEvent,
+                $"Player was overtaken by vehicle {detail.OvertakingVehicleIndex}.",
+                relatedVehicleIndex: detail.OvertakingVehicleIndex,
+                confidence: RaceAnalysisConfidence.High,
+                lapNumber: null,
+                timestamp: timestamp);
+        }
+    }
+
+    private void ApplyPenaltyEventPacket(PenaltyEventDetail? detail, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            RaceEventTimelineType.Penalty,
+            RaceEventTimelineSeverity.Warning,
+            RaceEventTimelineSource.UdpEvent,
+            $"Penalty decoded for vehicle {detail.VehicleIndex}: penalty {detail.PenaltyType}, infringement {detail.InfringementType}, {detail.Time}s.",
+            relatedVehicleIndex: detail.VehicleIndex,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: detail.LapNumber == 0 ? null : detail.LapNumber,
+            timestamp: timestamp);
+    }
+
+    private void ApplyDriveThroughServedEventPacket(DriveThroughPenaltyServedEventDetail? detail, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            RaceEventTimelineType.Penalty,
+            RaceEventTimelineSeverity.Info,
+            RaceEventTimelineSource.UdpEvent,
+            $"Drive-through penalty served by vehicle {detail.VehicleIndex}.",
+            relatedVehicleIndex: detail.VehicleIndex,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: null,
+            timestamp: timestamp);
+    }
+
+    private void ApplyStopGoServedEventPacket(StopGoPenaltyServedEventDetail? detail, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            RaceEventTimelineType.Penalty,
+            RaceEventTimelineSeverity.Info,
+            RaceEventTimelineSource.UdpEvent,
+            $"Stop-go penalty served by vehicle {detail.VehicleIndex}: {detail.StopTime:0.###}s stop.",
+            relatedVehicleIndex: detail.VehicleIndex,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: null,
+            timestamp: timestamp);
+    }
+
+    private void ApplyRetirementEventPacket(RetirementEventDetail? detail, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            RaceEventTimelineType.Retirement,
+            RaceEventTimelineSeverity.Warning,
+            RaceEventTimelineSource.UdpEvent,
+            $"Retirement decoded for vehicle {detail.VehicleIndex}; reason {detail.Reason}.",
+            relatedVehicleIndex: detail.VehicleIndex,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: null,
+            timestamp: timestamp);
+    }
+
+    private void ApplyRaceWinnerEventPacket(RaceWinnerEventDetail? detail, DateTimeOffset timestamp)
+    {
+        if (detail is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            RaceEventTimelineType.RaceWinner,
+            RaceEventTimelineSeverity.Info,
+            RaceEventTimelineSource.UdpEvent,
+            $"Race winner decoded: vehicle {detail.VehicleIndex}.",
+            relatedVehicleIndex: detail.VehicleIndex,
+            confidence: RaceAnalysisConfidence.High,
+            lapNumber: GetFinishTimelineLap(),
+            timestamp: timestamp);
+    }
+
+    private static bool IsKnownMarshalZoneFlag(sbyte zoneFlag)
+    {
+        return zoneFlag is >= -1 and <= 4;
+    }
+
+    private void AddDataQualityWarning(string warning)
+    {
+        if (!_dataQualityWarnings.Contains(warning, StringComparer.Ordinal))
+        {
+            _dataQualityWarnings.Add(warning);
+        }
+    }
+
+    private void AddTimelineEvent(
+        RaceEventTimelineType eventType,
+        RaceEventTimelineSeverity severity,
+        RaceEventTimelineSource source,
+        string message,
+        int? relatedVehicleIndex,
+        RaceAnalysisConfidence confidence,
+        int? lapNumber,
+        DateTimeOffset timestamp)
+    {
+        _timelineEvents.Add(new TimelineEventAccumulator(
+            new RaceEventTimelineEntry(
+                Lap: lapNumber ?? GetCurrentTimelineLap(),
+                TimestampUtc: NormalizeTimelineTimestamp(timestamp),
+                EventType: eventType,
+                Severity: severity,
+                Source: source,
+                Message: message,
+                RelatedVehicleIndex: relatedVehicleIndex,
+                Confidence: confidence),
+            _timelineSequence++));
+    }
+
+    private static void AddTimelineEvent(
+        ICollection<TimelineEventAccumulator> events,
+        ref long sequence,
+        int lapNumber,
+        DateTimeOffset? timestamp,
+        RaceEventTimelineType eventType,
+        RaceEventTimelineSeverity severity,
+        RaceEventTimelineSource source,
+        string message,
+        int? relatedVehicleIndex,
+        RaceAnalysisConfidence confidence)
+    {
+        events.Add(new TimelineEventAccumulator(
+            new RaceEventTimelineEntry(
+                Lap: lapNumber,
+                TimestampUtc: timestamp,
+                EventType: eventType,
+                Severity: severity,
+                Source: source,
+                Message: message,
+                RelatedVehicleIndex: relatedVehicleIndex,
+                Confidence: confidence),
+            sequence++));
+    }
+
+    private static DateTimeOffset? NormalizeTimelineTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp == DateTimeOffset.MinValue ? null : timestamp;
+    }
+
+    private int GetCurrentTimelineLap()
+    {
+        return _latestPlayerLapNumber > 0 ? _latestPlayerLapNumber : 0;
+    }
+
+    private int GetFinishTimelineLap()
+    {
+        var completedLaps = GetCompletedLapCount();
+        return completedLaps > 0 ? completedLaps + 1 : GetCurrentTimelineLap();
+    }
+
+    private void AddFirstLowFuelEvent(ICollection<TimelineEventAccumulator> events, ref long sequence)
+    {
+        foreach (var pair in _lapSummaries.Where(IsCompletedRaceLap).OrderBy(pair => pair.Key))
+        {
+            if (pair.Value.FuelRemainingLaps is not { } remainingLaps ||
+                remainingLaps >= LowFuelWarningThresholdLaps)
+            {
+                continue;
+            }
+
+            var severity = remainingLaps < LowFuelCriticalThresholdLaps
+                ? RaceEventTimelineSeverity.Critical
+                : RaceEventTimelineSeverity.Warning;
+            AddTimelineEvent(
+                events,
+                ref sequence,
+                pair.Key,
+                null,
+                RaceEventTimelineType.LowFuel,
+                severity,
+                RaceEventTimelineSource.DerivedSummary,
+                $"Low fuel trend detected: {remainingLaps:0.##} laps remaining.",
+                relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                confidence: RaceAnalysisConfidence.High);
+            return;
+        }
+    }
+
+    private void AddFirstHighTyreWearEvent(
+        ICollection<TimelineEventAccumulator> events,
+        ref long sequence,
+        IReadOnlyList<TyreUsageSummary> tyreUsageSummaries)
+    {
+        foreach (var pair in _lapSummaries.Where(IsCompletedRaceLap).OrderBy(pair => pair.Key))
+        {
+            if (pair.Value.PrimaryTyreWearPercent is not { } tyreWear ||
+                tyreWear < HighTyreWearThresholdPercent)
+            {
+                continue;
+            }
+
+            var stint = tyreUsageSummaries.FirstOrDefault(summary =>
+                pair.Key >= summary.StartLap && pair.Key <= summary.EndLap);
+            AddTimelineEvent(
+                events,
+                ref sequence,
+                pair.Key,
+                null,
+                RaceEventTimelineType.HighTyreWear,
+                RaceEventTimelineSeverity.Warning,
+                RaceEventTimelineSource.DerivedSummary,
+                $"High tyre wear trend detected: max player tyre wear {tyreWear:0.#}%.",
+                relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                confidence: stint?.Confidence ?? RaceAnalysisConfidence.High);
+            return;
+        }
+    }
+
+    private void AddFirstLowErsEvent(ICollection<TimelineEventAccumulator> events, ref long sequence)
+    {
+        foreach (var pair in _lapSummaries.Where(IsCompletedRaceLap).OrderBy(pair => pair.Key))
+        {
+            if (ToMegajoules(pair.Value.ErsStoreEnergyJoules) is not { } storeEnergyMJ ||
+                storeEnergyMJ >= LowErsWarningThresholdMJ)
+            {
+                continue;
+            }
+
+            var severity = storeEnergyMJ < LowErsCriticalThresholdMJ
+                ? RaceEventTimelineSeverity.Critical
+                : RaceEventTimelineSeverity.Warning;
+            AddTimelineEvent(
+                events,
+                ref sequence,
+                pair.Key,
+                null,
+                RaceEventTimelineType.LowErs,
+                severity,
+                RaceEventTimelineSource.DerivedSummary,
+                $"Low ERS trend detected: store energy {storeEnergyMJ:0.###} MJ.",
+                relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                confidence: RaceAnalysisConfidence.High);
+            return;
+        }
+    }
+
+    private void AddInvalidLapEvents(
+        ICollection<TimelineEventAccumulator> events,
+        ref long sequence,
+        IEnumerable<RaceLapSummary> lapSummaries)
+    {
+        foreach (var lap in lapSummaries.Where(lap => lap.IsValid == false).OrderBy(lap => lap.LapNumber))
+        {
+            AddTimelineEvent(
+                events,
+                ref sequence,
+                lap.LapNumber,
+                null,
+                RaceEventTimelineType.InvalidLap,
+                RaceEventTimelineSeverity.Warning,
+                RaceEventTimelineSource.DerivedSummary,
+                $"Invalid player lap detected on lap {lap.LapNumber}.",
+                relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+                confidence: RaceAnalysisConfidence.High);
+        }
+    }
+
+    private void AddPositionLossEvents(
+        ICollection<TimelineEventAccumulator> events,
+        ref long sequence,
+        IEnumerable<RaceLapSummary> lapSummaries)
+    {
+        RaceLapSummary? previous = null;
+        foreach (var current in lapSummaries
+                     .Where(lap => lap.Position is not null)
+                     .OrderBy(lap => lap.LapNumber))
+        {
+            if (previous?.Position is { } previousPosition &&
+                current.Position is { } currentPosition &&
+                currentPosition > previousPosition)
+            {
+                AddTimelineEvent(
+                    events,
+                    ref sequence,
+                    current.LapNumber,
+                    null,
+                    RaceEventTimelineType.PositionLost,
+                    RaceEventTimelineSeverity.Warning,
+                    RaceEventTimelineSource.DerivedSummary,
+                    $"Player position changed from P{previousPosition} to P{currentPosition}.",
+                    relatedVehicleIndex: null,
+                    confidence: RaceAnalysisConfidence.Medium);
+            }
+
+            previous = current;
+        }
+    }
+
+    private void AddFinalClassificationEvent(ICollection<TimelineEventAccumulator> events, ref long sequence)
+    {
+        if (_playerFinalClassification is null)
+        {
+            return;
+        }
+
+        AddTimelineEvent(
+            events,
+            ref sequence,
+            GetFinishTimelineLap(),
+            null,
+            RaceEventTimelineType.FinalClassification,
+            RaceEventTimelineSeverity.Info,
+            RaceEventTimelineSource.DerivedSummary,
+            $"Final classification decoded: P{_playerFinalClassification.Position}, {_playerFinalClassification.NumLaps} completed laps, {_playerFinalClassification.Points} points.",
+            relatedVehicleIndex: PlayerCarIndex >= 0 ? PlayerCarIndex : null,
+            confidence: RaceAnalysisConfidence.High);
+    }
+
+    private static bool ShouldKeepTimelineEvent(RaceEventTimelineEntry entry, int completedLaps)
+    {
+        if (completedLaps <= 0 || entry.Lap == 0)
+        {
+            return true;
+        }
+
+        return entry.EventType is RaceEventTimelineType.FinalClassification or RaceEventTimelineType.RaceWinner
+            ? entry.Lap <= completedLaps + 1
+            : entry.Lap <= completedLaps;
     }
 
     private void AddTyreCompoundPair(byte visualCompound, byte actualCompound)
@@ -1549,6 +2168,10 @@ public sealed class RawLogSessionSummary
         byte EndLap,
         byte ActualTyreCompound,
         byte VisualTyreCompound);
+
+    private sealed record TimelineEventAccumulator(
+        RaceEventTimelineEntry Entry,
+        long Sequence);
 
     private sealed record GapLapSnapshot(
         int LapNumber,

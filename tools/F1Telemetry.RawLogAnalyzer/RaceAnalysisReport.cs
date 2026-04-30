@@ -18,6 +18,7 @@ public sealed record RaceAnalysisReport(
     FuelTrendSummary FuelTrendSummary,
     ErsTrendSummary ErsTrendSummary,
     GapTrendSummary GapTrendSummary,
+    IReadOnlyList<RaceEventTimelineEntry> RaceEventTimeline,
     IReadOnlyList<string> DataQualityWarnings);
 
 /// <summary>
@@ -106,6 +107,50 @@ public enum TrafficImpactType
     FrontTraffic,
     RearPressure,
     Sandwich
+}
+
+/// <summary>
+/// Describes key race timeline event categories emitted by the offline analyzer.
+/// </summary>
+public enum RaceEventTimelineType
+{
+    Start,
+    PitStop,
+    TyreChange,
+    YellowFlag,
+    SafetyCar,
+    VirtualSafetyCar,
+    RedFlag,
+    Overtake,
+    PositionLost,
+    InvalidLap,
+    LowFuel,
+    HighTyreWear,
+    LowErs,
+    Penalty,
+    Retirement,
+    RaceWinner,
+    FinalClassification
+}
+
+/// <summary>
+/// Describes the severity assigned to one timeline event.
+/// </summary>
+public enum RaceEventTimelineSeverity
+{
+    Info,
+    Warning,
+    Critical
+}
+
+/// <summary>
+/// Describes the source that produced one timeline event.
+/// </summary>
+public enum RaceEventTimelineSource
+{
+    UdpEvent,
+    SessionStatus,
+    DerivedSummary
 }
 
 /// <summary>
@@ -260,3 +305,16 @@ public sealed record TrafficImpactLapSummary(
     TrafficImpactType ImpactType,
     GapAnalysisConfidence Confidence,
     string Notes);
+
+/// <summary>
+/// Contains one key race timeline event without raw UDP payload data.
+/// </summary>
+public sealed record RaceEventTimelineEntry(
+    int Lap,
+    DateTimeOffset? TimestampUtc,
+    RaceEventTimelineType EventType,
+    RaceEventTimelineSeverity Severity,
+    RaceEventTimelineSource Source,
+    string Message,
+    int? RelatedVehicleIndex,
+    RaceAnalysisConfidence Confidence);

@@ -6,6 +6,8 @@ namespace F1Telemetry.RawLogAnalyzer;
 
 internal static class RawLogMarkdownReportWriter
 {
+    private const int RaceSessionType = 15;
+
     public static string Build(RawLogAnalysisResult result)
     {
         if (result.RaceReport is null)
@@ -34,6 +36,7 @@ internal static class RawLogMarkdownReportWriter
         AppendFuelTrendSummary(builder, report.FuelTrendSummary);
         AppendErsTrendSummary(builder, report.ErsTrendSummary);
         AppendGapTrendSummary(builder, report.GapTrendSummary);
+        AppendRaceEventTimeline(builder, report);
         AppendDataQualityWarnings(builder, report.DataQualityWarnings);
         return builder.ToString();
     }
@@ -260,6 +263,34 @@ internal static class RawLogMarkdownReportWriter
         foreach (var lap in trafficImpactLaps)
         {
             builder.AppendLine($"| {lap.LapNumber} | {FormatOptional(lap.Position)} | {FormatGapSeconds(lap.GapFrontMs)} | {FormatGapSeconds(lap.GapBehindMs)} | {lap.ImpactType} | {lap.Confidence} | {lap.Notes} |");
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendRaceEventTimeline(StringBuilder builder, RaceAnalysisReport report)
+    {
+        builder.AppendLine("## Race Event Timeline");
+        builder.AppendLine();
+
+        if (report.SessionSummary.SessionType != RaceSessionType)
+        {
+            builder.AppendLine("- Notes: 非正赛样本，事件线仅供调试");
+            builder.AppendLine();
+        }
+
+        if (report.RaceEventTimeline.Count == 0)
+        {
+            builder.AppendLine("- No key race events were decoded.");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine("| Lap | Timestamp UTC | Type | Severity | Source | Related vehicle | Confidence | Message |");
+        builder.AppendLine("| ---: | --- | --- | --- | --- | ---: | --- | --- |");
+        foreach (var entry in report.RaceEventTimeline)
+        {
+            builder.AppendLine($"| {entry.Lap} | {FormatTimestamp(entry.TimestampUtc)} | {entry.EventType} | {entry.Severity} | {entry.Source} | {FormatOptional(entry.RelatedVehicleIndex)} | {entry.Confidence} | {entry.Message} |");
         }
 
         builder.AppendLine();
