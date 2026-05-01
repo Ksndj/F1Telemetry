@@ -133,6 +133,29 @@ public sealed class StateAggregatorTests
         Assert.Empty(state.Opponents);
     }
 
+    /// <summary>
+    /// Verifies that final classification marks the session as completed for post-race AI gating.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_FinalClassification_MarksSessionComplete()
+    {
+        var aggregator = new StateAggregator();
+
+        aggregator.ApplyPacket(CreateParsedPacket(CreateSessionPacket(), playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(CreateFinalClassificationPacket(playerIndex: 3), playerCarIndex: 3));
+
+        var state = aggregator.SessionStateStore.CaptureState();
+
+        Assert.True(state.HasFinalClassification);
+        Assert.NotNull(state.FinalClassificationReceivedAt);
+        Assert.Equal((byte)4, state.PlayerFinalClassificationPosition);
+        Assert.Equal((byte)29, state.PlayerFinalClassificationLaps);
+        Assert.Equal((byte)3, state.PlayerFinalClassificationStatus);
+        Assert.Equal((uint)1, state.SeasonLinkIdentifier);
+        Assert.Equal((uint)1, state.WeekendLinkIdentifier);
+        Assert.Equal((uint)1, state.SessionLinkIdentifier);
+    }
+
     private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
     {
         var header = new PacketHeader(
@@ -163,8 +186,35 @@ public sealed class StateAggregatorTests
             SessionHistoryPacket => (byte)PacketId.SessionHistory,
             CarTelemetryPacket => (byte)PacketId.CarTelemetry,
             CarStatusPacket => (byte)PacketId.CarStatus,
+            FinalClassificationPacket => (byte)PacketId.FinalClassification,
             _ => throw new ArgumentOutOfRangeException(nameof(packet))
         };
+    }
+
+    private static FinalClassificationPacket CreateFinalClassificationPacket(int playerIndex)
+    {
+        var cars = new FinalClassificationData[22];
+        for (var index = 0; index < cars.Length; index++)
+        {
+            cars[index] = new FinalClassificationData(
+                Position: (byte)(index + 1),
+                NumLaps: 29,
+                GridPosition: (byte)(index + 1),
+                Points: 0,
+                NumPitStops: 1,
+                ResultStatus: index == playerIndex ? (byte)3 : (byte)0,
+                ResultReason: 0,
+                BestLapTimeInMs: 90_000,
+                TotalRaceTime: 5400d,
+                PenaltiesTime: 0,
+                NumPenalties: 0,
+                NumTyreStints: 1,
+                TyreStintsActual: new byte[8],
+                TyreStintsVisual: new byte[8],
+                TyreStintsEndLaps: new byte[8]);
+        }
+
+        return new FinalClassificationPacket((byte)cars.Length, cars);
     }
 
     private static SessionPacket CreateSessionPacket()

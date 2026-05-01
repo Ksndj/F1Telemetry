@@ -41,6 +41,26 @@ public sealed record SessionState
     public byte? TotalLaps { get; init; }
 
     /// <summary>
+    /// Gets the career season link identifier from the latest session packet.
+    /// </summary>
+    public uint? SeasonLinkIdentifier { get; init; }
+
+    /// <summary>
+    /// Gets the race-weekend link identifier from the latest session packet.
+    /// </summary>
+    public uint? WeekendLinkIdentifier { get; init; }
+
+    /// <summary>
+    /// Gets the session link identifier from the latest session packet.
+    /// </summary>
+    public uint? SessionLinkIdentifier { get; init; }
+
+    /// <summary>
+    /// Gets the number of sessions in the current weekend when known.
+    /// </summary>
+    public byte? NumSessionsInWeekend { get; init; }
+
+    /// <summary>
     /// Gets the remaining session time in seconds.
     /// </summary>
     public ushort? SessionTimeLeft { get; init; }
@@ -74,6 +94,31 @@ public sealed record SessionState
     /// Gets the most recent event code when known.
     /// </summary>
     public string? LastEventCode { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether a final classification packet was observed for this session.
+    /// </summary>
+    public bool HasFinalClassification { get; init; }
+
+    /// <summary>
+    /// Gets the timestamp when final classification was observed.
+    /// </summary>
+    public DateTimeOffset? FinalClassificationReceivedAt { get; init; }
+
+    /// <summary>
+    /// Gets the player's final classified position when available.
+    /// </summary>
+    public byte? PlayerFinalClassificationPosition { get; init; }
+
+    /// <summary>
+    /// Gets the player's final classified lap count when available.
+    /// </summary>
+    public byte? PlayerFinalClassificationLaps { get; init; }
+
+    /// <summary>
+    /// Gets the player's raw final classification status when available.
+    /// </summary>
+    public byte? PlayerFinalClassificationStatus { get; init; }
 
     /// <summary>
     /// Gets the latest player car snapshot.
