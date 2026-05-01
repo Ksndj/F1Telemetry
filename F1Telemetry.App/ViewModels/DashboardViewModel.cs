@@ -111,6 +111,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _overviewBrakeText = "-";
     private string _overviewDrsText = "-";
     private string _overviewTyreWearText = "-";
+    private string _overviewDamageText = "等待 CarDamage 包";
     private string _overviewKeyOpponentText = "-";
     private string _overviewSessionFocusText = SessionModeFormatter.FormatFocus(SessionMode.Unknown);
     private string _overviewRecentAiSuggestionText = "-";
@@ -1163,6 +1164,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the overview player-car damage summary.
+    /// </summary>
+    public string OverviewDamageText
+    {
+        get => _overviewDamageText;
+        private set => SetProperty(ref _overviewDamageText, value);
+    }
+
+    /// <summary>
     /// Gets the overview tyre temperature placeholder.
     /// </summary>
     public string OverviewTyreTemperatureText => "暂未接入";
@@ -1860,6 +1870,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             OverviewBrakeText = "-";
             OverviewDrsText = "-";
             OverviewTyreWearText = "-";
+            OverviewDamageText = "等待 CarDamage 包";
             return;
         }
 
@@ -1881,6 +1892,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OverviewBrakeText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Brake.ToString("P0", CultureInfo.InvariantCulture);
         OverviewDrsText = playerCar.IsDrsEnabled is null ? "-" : playerCar.IsDrsEnabled.Value ? "On" : "Off";
         OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"平均 {playerCar.TyreWear.Value:0.0}%";
+        OverviewDamageText = DamageSummaryFormatter.Format(playerCar.Damage, "等待 CarDamage 包");
     }
 
     private void RebuildOpponentCars(IReadOnlyList<CarSnapshot> opponents, CarSnapshot? playerCar)
@@ -2614,6 +2626,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             GapToFrontInMs = playerCar?.DeltaToCarInFrontInMs,
             GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
             TelemetryAnalysisSummary = telemetryAnalysisSummary,
+            DamageSummary = DamageSummaryFormatter.Format(playerCar?.Damage),
             RecentEvents = _recentAiEvents.ToArray()
         };
     }

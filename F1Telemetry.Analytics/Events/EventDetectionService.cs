@@ -58,6 +58,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 DetectPlayerLapInvalidated(previousState, sessionState);
                 DetectLowFuel(previousState, sessionState);
                 DetectHighTyreWear(previousState, sessionState);
+                DetectPlayerDamage(previousState, sessionState);
             }
 
             CleanupPitCandidates(sessionState.UpdatedAt);
@@ -281,6 +282,93 @@ public sealed class EventDetectionService : IEventDetectionService
                 }))
         {
             _highTyreWearTyreKeys.Add(tyreKey);
+        }
+    }
+
+    private void DetectPlayerDamage(SessionState previousState, SessionState currentState)
+    {
+        var previousPlayer = previousState.PlayerCar;
+        var currentPlayer = currentState.PlayerCar;
+        var currentDamage = currentPlayer?.Damage;
+        if (currentPlayer is null || currentDamage is null)
+        {
+            return;
+        }
+
+        var previousDamage = previousPlayer?.Damage;
+        foreach (var pair in currentDamage.Components.OrderBy(pair => pair.Key))
+        {
+            var component = pair.Key;
+            var damagePercent = pair.Value;
+            var currentSeverity = DamageSnapshot.Classify(damagePercent);
+            var previousSeverity = previousDamage?.GetSeverity(component) ?? DamageSeverity.None;
+            if (currentSeverity == DamageSeverity.None || currentSeverity <= previousSeverity)
+            {
+                continue;
+            }
+
+            EmitEvent(
+                eventType: EventType.CarDamage,
+                severity: MapDamageEventSeverity(currentSeverity),
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)currentPlayer.CurrentLapNumber,
+                vehicleIdx: currentPlayer.CarIndex,
+                driverName: currentPlayer.DriverName,
+                message: $"{FormatDamageComponent(component)} {damagePercent}%（{FormatDamageSeverity(currentSeverity)}损伤）。",
+                dedupKey: $"damage:{component}:{currentSeverity}",
+                payload: new
+                {
+                    currentPlayer.CarIndex,
+                    currentPlayer.CurrentLapNumber,
+                    Component = component.ToString(),
+                    DamagePercent = damagePercent,
+                    Severity = currentSeverity.ToString(),
+                    PreviousSeverity = previousSeverity.ToString()
+                });
+        }
+
+        if (previousDamage?.DrsFault != true && currentDamage.DrsFault)
+        {
+            EmitFaultEvent(
+                currentState,
+                currentPlayer,
+                EventType.DrsFault,
+                "DRS 故障，避免依赖尾翼开启。",
+                "drs",
+                new { currentPlayer.CarIndex, currentPlayer.CurrentLapNumber, currentDamage.DrsFault });
+        }
+
+        if (previousDamage?.ErsFault != true && currentDamage.ErsFault)
+        {
+            EmitFaultEvent(
+                currentState,
+                currentPlayer,
+                EventType.ErsFault,
+                "ERS 故障，优先管理电量输出。",
+                "ers",
+                new { currentPlayer.CarIndex, currentPlayer.CurrentLapNumber, currentDamage.ErsFault });
+        }
+
+        if (previousDamage?.EngineBlown != true && currentDamage.EngineBlown)
+        {
+            EmitFaultEvent(
+                currentState,
+                currentPlayer,
+                EventType.EngineFailure,
+                "引擎爆缸，立即保护车辆。",
+                "engine-blown",
+                new { currentPlayer.CarIndex, currentPlayer.CurrentLapNumber, currentDamage.EngineBlown });
+        }
+
+        if (previousDamage?.EngineSeized != true && currentDamage.EngineSeized)
+        {
+            EmitFaultEvent(
+                currentState,
+                currentPlayer,
+                EventType.EngineFailure,
+                "引擎卡死，立即停车避险。",
+                "engine-seized",
+                new { currentPlayer.CarIndex, currentPlayer.CurrentLapNumber, currentDamage.EngineSeized });
         }
     }
 
@@ -740,6 +828,69 @@ public sealed class EventDetectionService : IEventDetectionService
     private static string BuildTyreDedupKey(CarSnapshot carSnapshot)
     {
         return $"{carSnapshot.CarIndex}:{carSnapshot.NumPitStops ?? 0}:{carSnapshot.VisualTyreCompound?.ToString() ?? "-"}:{carSnapshot.ActualTyreCompound?.ToString() ?? "-"}";
+    }
+
+    private void EmitFaultEvent(
+        SessionState currentState,
+        CarSnapshot currentPlayer,
+        EventType eventType,
+        string message,
+        string faultKey,
+        object payload)
+    {
+        EmitEvent(
+            eventType: eventType,
+            severity: EventSeverity.Warning,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)currentPlayer.CurrentLapNumber,
+            vehicleIdx: currentPlayer.CarIndex,
+            driverName: currentPlayer.DriverName,
+            message: message,
+            dedupKey: $"damage:fault:{faultKey}",
+            payload: payload);
+    }
+
+    private static EventSeverity MapDamageEventSeverity(DamageSeverity severity)
+    {
+        return severity >= DamageSeverity.Moderate ? EventSeverity.Warning : EventSeverity.Information;
+    }
+
+    private static string FormatDamageComponent(DamageComponent component)
+    {
+        return component switch
+        {
+            DamageComponent.TyreDamage => "轮胎",
+            DamageComponent.BrakeDamage => "刹车",
+            DamageComponent.TyreBlister => "轮胎起泡",
+            DamageComponent.FrontLeftWing => "前翼左侧",
+            DamageComponent.FrontRightWing => "前翼右侧",
+            DamageComponent.RearWing => "尾翼",
+            DamageComponent.Floor => "底板",
+            DamageComponent.Diffuser => "扩散器",
+            DamageComponent.Sidepod => "侧箱",
+            DamageComponent.Gearbox => "变速箱",
+            DamageComponent.Engine => "引擎",
+            DamageComponent.EngineMguhWear => "MGU-H",
+            DamageComponent.EngineEsWear => "电池",
+            DamageComponent.EngineCeWear => "电控",
+            DamageComponent.EngineIceWear => "内燃机",
+            DamageComponent.EngineMgukWear => "MGU-K",
+            DamageComponent.EngineTcWear => "涡轮",
+            _ => component.ToString()
+        };
+    }
+
+    private static string FormatDamageSeverity(DamageSeverity severity)
+    {
+        return severity switch
+        {
+            DamageSeverity.Minor => "轻微",
+            DamageSeverity.Light => "轻度",
+            DamageSeverity.Moderate => "中度",
+            DamageSeverity.Severe => "严重",
+            DamageSeverity.Critical => "危急",
+            _ => "无"
+        };
     }
 
     private static bool IsKnownMarshalZoneFlag(sbyte zoneFlag)

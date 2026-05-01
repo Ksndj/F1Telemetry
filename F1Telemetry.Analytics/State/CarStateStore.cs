@@ -198,6 +198,7 @@ public sealed class CarStateStore
                 FrontLeftWingDamage = null,
                 FrontRightWingDamage = null,
                 RearWingDamage = null,
+                Damage = null,
                 WorldPositionX = null,
                 WorldPositionY = null,
                 WorldPositionZ = null

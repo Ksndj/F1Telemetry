@@ -86,6 +86,11 @@ public static class OverviewEventSummaryFormatter
             return 84;
         }
 
+        if (ContainsSignificantDamage(message))
+        {
+            return 88;
+        }
+
         if (ContainsAny(message, "高胎磨", "胎磨", "磨损"))
         {
             return 82;
@@ -120,6 +125,19 @@ public static class OverviewEventSummaryFormatter
     private static bool ContainsAny(string value, params string[] terms)
     {
         return terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsSignificantDamage(string message)
+    {
+        return ContainsAny(
+            message,
+            "中度损伤",
+            "严重损伤",
+            "危急",
+            "DRS 故障",
+            "ERS 故障",
+            "引擎爆缸",
+            "引擎卡死");
     }
 
     private static string Truncate(string value, int maxLength)

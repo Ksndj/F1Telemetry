@@ -185,6 +185,12 @@
                                 </StackPanel>
                             </Border>
                         </UniformGrid>
+                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="损伤" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewDamageText}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Grid>

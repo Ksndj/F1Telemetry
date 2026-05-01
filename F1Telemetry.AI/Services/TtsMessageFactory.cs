@@ -62,8 +62,9 @@ public sealed class TtsMessageFactory
         var type = MapEventType(raceEvent.EventType);
         var id = BuildEventIdentifier(raceEvent);
         var cooldown = BuildEventCooldown(raceEvent.EventType, options);
+        var cooldownKey = BuildEventCooldownKey(raceEvent, type);
         if (ShouldApplyFactoryCooldown(raceEvent.EventType) &&
-            IsCoolingDownOrMarkCreated($"event:{type}", cooldown, DateTimeOffset.UtcNow))
+            IsCoolingDownOrMarkCreated(cooldownKey, cooldown, DateTimeOffset.UtcNow))
         {
             return null;
         }
@@ -146,6 +147,10 @@ public sealed class TtsMessageFactory
                 $"flag:lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.HighTyreWear =>
                 $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.CarDamage or EventType.DrsFault or EventType.ErsFault or EventType.EngineFailure =>
+                string.IsNullOrWhiteSpace(raceEvent.DedupKey)
+                    ? $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}"
+                    : raceEvent.DedupKey.Trim(),
             _ =>
                 $"lap{FormatOptionalInt(raceEvent.LapNumber)}"
         };
@@ -167,6 +172,10 @@ public sealed class TtsMessageFactory
             EventType.AttackWindow => "attack_window",
             EventType.DefenseWindow => "defense_window",
             EventType.LowErs => "low_ers",
+            EventType.CarDamage => "car_damage",
+            EventType.DrsFault => "drs_fault",
+            EventType.ErsFault => "ers_fault",
+            EventType.EngineFailure => "engine_failure",
             _ => "event"
         };
     }
@@ -179,6 +188,10 @@ public sealed class TtsMessageFactory
                 TtsPriority.High,
             EventType.LowFuel or EventType.HighTyreWear or EventType.AttackWindow or EventType.DefenseWindow =>
                 TtsPriority.High,
+            EventType.EngineFailure =>
+                TtsPriority.High,
+            EventType.CarDamage or EventType.DrsFault or EventType.ErsFault =>
+                TtsPriority.Normal,
             EventType.FrontCarPitted or EventType.RearCarPitted or EventType.LowErs =>
                 TtsPriority.Normal,
             _ => severity == EventSeverity.Warning ? TtsPriority.High : TtsPriority.Normal
@@ -201,7 +214,18 @@ public sealed class TtsMessageFactory
             or EventType.HighTyreWear
             or EventType.LowErs
             or EventType.AttackWindow
-            or EventType.DefenseWindow;
+            or EventType.DefenseWindow
+            or EventType.CarDamage
+            or EventType.DrsFault
+            or EventType.ErsFault
+            or EventType.EngineFailure;
+    }
+
+    private static string BuildEventCooldownKey(RaceEvent raceEvent, string mappedType)
+    {
+        return raceEvent.EventType is EventType.CarDamage or EventType.DrsFault or EventType.ErsFault or EventType.EngineFailure
+            ? $"event:{mappedType}:{BuildEventIdentifier(raceEvent)}"
+            : $"event:{mappedType}";
     }
 
     private bool IsCoolingDownOrMarkCreated(string cooldownKey, TimeSpan cooldown, DateTimeOffset now)

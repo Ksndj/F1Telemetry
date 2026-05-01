@@ -2,6 +2,7 @@ using System.IO;
 using System.Xml.Linq;
 using F1Telemetry.App.Logging;
 using F1Telemetry.App.ViewModels;
+using F1Telemetry.Core.Formatting;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -169,6 +170,29 @@ public sealed class EventSummaryAndLogCategoryTests
     }
 
     /// <summary>
+    /// Verifies severe damage can reach Overview while minor damage does not displace key warnings.
+    /// </summary>
+    [Fact]
+    public void BuildSummaries_WithDamageEvents_PrioritizesSevereDamageOnly()
+    {
+        var logs = new[]
+        {
+            CreateLog("RaceEvent", "前翼左侧轻微损伤 5%。"),
+            CreateLog("RaceEvent", "前翼左侧严重损伤 65%。"),
+            CreateLog("RaceEvent", "高胎磨警告：右后磨损过高。"),
+            CreateLog("RaceEvent", "低油警告：预计剩余 0.6 圈。"),
+            CreateLog("RaceEvent", "进站提醒：前车已进站。"),
+            CreateLog("RaceEvent", "黄旗：前方事故。")
+        };
+
+        var summaries = OverviewEventSummaryFormatter.BuildSummaries(logs, maxCount: 4);
+
+        Assert.Equal(4, summaries.Count);
+        Assert.Contains(summaries, summary => summary.Message.Contains("严重损伤", StringComparison.Ordinal));
+        Assert.DoesNotContain(summaries, summary => summary.Message.Contains("轻微损伤", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// Verifies that fastest lap and collision stay above low-priority overtake events.
     /// </summary>
     [Fact]
@@ -220,6 +244,28 @@ public sealed class EventSummaryAndLogCategoryTests
 
         Assert.Contains("ItemsSource=\"{Binding OverviewEventSummaries}\"", text, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsSource=\"{Binding EventLogs}\"", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that Overview exposes the player damage summary binding.
+    /// </summary>
+    [Fact]
+    public void OverviewView_BindsDamageSummary()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "OverviewView.xaml"));
+        var text = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("Text=\"损伤\"", text, StringComparison.Ordinal);
+        Assert.Contains("OverviewDamageText", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the damage formatter supplies the Overview empty-state text when CarDamage has not arrived.
+    /// </summary>
+    [Fact]
+    public void DamageSummaryFormatter_WithMissingPacket_ReturnsOverviewEmptyState()
+    {
+        Assert.Equal("等待 CarDamage 包", DamageSummaryFormatter.Format(null, "等待 CarDamage 包"));
     }
 
     /// <summary>
