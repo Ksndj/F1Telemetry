@@ -50,7 +50,8 @@ public static class DamageSummaryFormatter
                          Severity = DamageSnapshot.Classify(pair.Value)
                      })
                      .Where(item => item.Severity > DamageSeverity.None)
-                     .OrderByDescending(item => item.Severity)
+                     .OrderBy(item => IsDrivetrainWearComponent(item.Component) ? 1 : 0)
+                     .ThenByDescending(item => item.Severity)
                      .ThenByDescending(item => item.DamagePercent)
                      .Take(MaxDisplayedComponents))
         {
@@ -73,16 +74,28 @@ public static class DamageSummaryFormatter
             DamageComponent.Floor => "底板",
             DamageComponent.Diffuser => "扩散器",
             DamageComponent.Sidepod => "侧箱",
-            DamageComponent.Gearbox => "变速箱",
-            DamageComponent.Engine => "引擎",
-            DamageComponent.EngineMguhWear => "MGU-H",
-            DamageComponent.EngineEsWear => "电池",
-            DamageComponent.EngineCeWear => "电控",
-            DamageComponent.EngineIceWear => "内燃机",
-            DamageComponent.EngineMgukWear => "MGU-K",
-            DamageComponent.EngineTcWear => "涡轮",
+            DamageComponent.Gearbox => "变速箱磨损",
+            DamageComponent.Engine => "引擎磨损",
+            DamageComponent.EngineMguhWear => "MGU-H 磨损",
+            DamageComponent.EngineEsWear => "电池磨损",
+            DamageComponent.EngineCeWear => "电控磨损",
+            DamageComponent.EngineIceWear => "内燃机磨损",
+            DamageComponent.EngineMgukWear => "MGU-K 磨损",
+            DamageComponent.EngineTcWear => "涡轮磨损",
             _ => component.ToString()
         };
+    }
+
+    private static bool IsDrivetrainWearComponent(DamageComponent component)
+    {
+        return component is DamageComponent.Gearbox
+            or DamageComponent.Engine
+            or DamageComponent.EngineMguhWear
+            or DamageComponent.EngineEsWear
+            or DamageComponent.EngineCeWear
+            or DamageComponent.EngineIceWear
+            or DamageComponent.EngineMgukWear
+            or DamageComponent.EngineTcWear;
     }
 
     private static string FormatSeverity(DamageSeverity severity)

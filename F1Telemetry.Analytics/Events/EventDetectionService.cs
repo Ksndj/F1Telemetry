@@ -299,6 +299,11 @@ public sealed class EventDetectionService : IEventDetectionService
         foreach (var pair in currentDamage.Components.OrderBy(pair => pair.Key))
         {
             var component = pair.Key;
+            if (IsDrivetrainWearComponent(component))
+            {
+                continue;
+            }
+
             var damagePercent = pair.Value;
             var currentSeverity = DamageSnapshot.Classify(damagePercent);
             var previousSeverity = previousDamage?.GetSeverity(component) ?? DamageSeverity.None;
@@ -878,6 +883,18 @@ public sealed class EventDetectionService : IEventDetectionService
             DamageComponent.EngineTcWear => "涡轮",
             _ => component.ToString()
         };
+    }
+
+    private static bool IsDrivetrainWearComponent(DamageComponent component)
+    {
+        return component is DamageComponent.Gearbox
+            or DamageComponent.Engine
+            or DamageComponent.EngineMguhWear
+            or DamageComponent.EngineEsWear
+            or DamageComponent.EngineCeWear
+            or DamageComponent.EngineIceWear
+            or DamageComponent.EngineMgukWear
+            or DamageComponent.EngineTcWear;
     }
 
     private static string FormatDamageSeverity(DamageSeverity severity)
