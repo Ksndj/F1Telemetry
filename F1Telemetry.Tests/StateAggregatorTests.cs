@@ -107,6 +107,39 @@ public sealed class StateAggregatorTests
     }
 
     /// <summary>
+    /// Verifies that CarDamage packets create a detailed damage snapshot for the player car only.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarDamageStoresPlayerDamageSnapshotOnly()
+    {
+        var aggregator = new StateAggregator();
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarDamagePacket(BuildDamageCars(playerIndex: 3, visibleOpponentIndex: 5)),
+            playerCarIndex: 3));
+
+        var state = aggregator.SessionStateStore.CaptureState();
+        var player = Assert.IsType<CarSnapshot>(state.PlayerCar);
+        var visibleOpponent = Assert.Single(state.Opponents, car => car.CarIndex == 5);
+
+        Assert.NotNull(player.Damage);
+        Assert.Equal(30, player.Damage!.GetDamage(DamageComponent.FrontLeftWing));
+        Assert.Equal(DamageSeverity.Moderate, player.Damage.GetSeverity(DamageComponent.FrontLeftWing));
+        Assert.Equal(12, player.Damage.GetDamage(DamageComponent.BrakeDamage));
+        Assert.Equal(82, player.Damage.GetDamage(DamageComponent.EngineIceWear));
+        Assert.True(player.Damage.DrsFault);
+        Assert.True(player.Damage.ErsFault);
+        Assert.False(player.Damage.EngineBlown);
+
+        Assert.Null(visibleOpponent.Damage);
+        Assert.Equal(30f, player.TyreWear);
+        Assert.Equal((byte)30, player.FrontLeftWingDamage);
+    }
+
+    /// <summary>
     /// Verifies that resetting the session store clears metadata and cached car snapshots between sessions.
     /// </summary>
     [Fact]
@@ -163,6 +196,7 @@ public sealed class StateAggregatorTests
             SessionHistoryPacket => (byte)PacketId.SessionHistory,
             CarTelemetryPacket => (byte)PacketId.CarTelemetry,
             CarStatusPacket => (byte)PacketId.CarStatus,
+            CarDamagePacket => (byte)PacketId.CarDamage,
             _ => throw new ArgumentOutOfRangeException(nameof(packet))
         };
     }
@@ -393,5 +427,71 @@ public sealed class StateAggregatorTests
         }
 
         return cars;
+    }
+
+    private static CarDamageData[] BuildDamageCars(int playerIndex, int visibleOpponentIndex)
+    {
+        var cars = new CarDamageData[22];
+
+        for (var index = 0; index < cars.Length; index++)
+        {
+            cars[index] = CreateDamageData(
+                tyreWear: index == playerIndex ? 30f : 8f,
+                frontLeftWingDamage: 0,
+                brakeDamage: 0,
+                engineIceWear: 0,
+                drsFault: false,
+                ersFault: false);
+        }
+
+        cars[playerIndex] = CreateDamageData(
+            tyreWear: 30f,
+            frontLeftWingDamage: 30,
+            brakeDamage: 12,
+            engineIceWear: 82,
+            drsFault: true,
+            ersFault: true);
+        cars[visibleOpponentIndex] = CreateDamageData(
+            tyreWear: 40f,
+            frontLeftWingDamage: 45,
+            brakeDamage: 18,
+            engineIceWear: 70,
+            drsFault: true,
+            ersFault: true);
+
+        return cars;
+    }
+
+    private static CarDamageData CreateDamageData(
+        float tyreWear,
+        byte frontLeftWingDamage,
+        byte brakeDamage,
+        byte engineIceWear,
+        bool drsFault,
+        bool ersFault)
+    {
+        return new CarDamageData(
+            TyreWear: new WheelSet<float>(tyreWear, tyreWear, tyreWear, tyreWear),
+            TyreDamage: new WheelSet<byte>(0, 0, 0, 0),
+            BrakesDamage: new WheelSet<byte>(brakeDamage, brakeDamage, brakeDamage, brakeDamage),
+            TyreBlisters: new WheelSet<byte>(0, 0, 0, 0),
+            FrontLeftWingDamage: frontLeftWingDamage,
+            FrontRightWingDamage: 0,
+            RearWingDamage: 0,
+            FloorDamage: 0,
+            DiffuserDamage: 0,
+            SidepodDamage: 0,
+            DrsFault: drsFault,
+            ErsFault: ersFault,
+            GearBoxDamage: 0,
+            EngineDamage: 0,
+            EngineMguhWear: 0,
+            EngineEsWear: 0,
+            EngineCeWear: 0,
+            EngineIceWear: engineIceWear,
+            EngineMgukWear: 0,
+            EngineTcWear: 0,
+            EngineBlown: false,
+            EngineSeized: false);
     }
 }

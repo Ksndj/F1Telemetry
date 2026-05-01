@@ -85,7 +85,7 @@ public sealed class StateAggregator : IStateAggregator
                 ApplyCarStatus(packet, receivedAt);
                 break;
             case CarDamagePacket packet:
-                ApplyCarDamage(packet, receivedAt);
+                ApplyCarDamage(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
                 break;
             case MotionPacket packet:
                 ApplyMotion(packet, receivedAt);
@@ -262,7 +262,7 @@ public sealed class StateAggregator : IStateAggregator
             receivedAt);
     }
 
-    private void ApplyCarDamage(CarDamagePacket packet, DateTimeOffset receivedAt)
+    private void ApplyCarDamage(CarDamagePacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
     {
         for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
         {
@@ -273,6 +273,7 @@ public sealed class StateAggregator : IStateAggregator
             }
 
             var car = packet.Cars[carIndex];
+            var isPlayerCar = carIndex == playerCarIndex;
             SessionStateStore.CarStateStore.UpdateCar(
                 carIndex,
                 snapshot => snapshot with
@@ -280,10 +281,54 @@ public sealed class StateAggregator : IStateAggregator
                     TyreWear = (car.TyreWear.RearLeft + car.TyreWear.RearRight + car.TyreWear.FrontLeft + car.TyreWear.FrontRight) / 4f,
                     FrontLeftWingDamage = car.FrontLeftWingDamage,
                     FrontRightWingDamage = car.FrontRightWingDamage,
-                    RearWingDamage = car.RearWingDamage
+                    RearWingDamage = car.RearWingDamage,
+                    Damage = isPlayerCar ? BuildDamageSnapshot(car, receivedAt) : snapshot.Damage
                 },
                 receivedAt);
         }
+    }
+
+    private static DamageSnapshot BuildDamageSnapshot(CarDamageData car, DateTimeOffset receivedAt)
+    {
+        return new DamageSnapshot
+        {
+            Timestamp = receivedAt,
+            AverageTyreWear = (car.TyreWear.RearLeft + car.TyreWear.RearRight + car.TyreWear.FrontLeft + car.TyreWear.FrontRight) / 4f,
+            Components = new Dictionary<DamageComponent, byte>
+            {
+                [DamageComponent.TyreDamage] = MaxWheelValue(car.TyreDamage),
+                [DamageComponent.BrakeDamage] = MaxWheelValue(car.BrakesDamage),
+                [DamageComponent.TyreBlister] = MaxWheelValue(car.TyreBlisters),
+                [DamageComponent.FrontLeftWing] = NormalizePercent(car.FrontLeftWingDamage),
+                [DamageComponent.FrontRightWing] = NormalizePercent(car.FrontRightWingDamage),
+                [DamageComponent.RearWing] = NormalizePercent(car.RearWingDamage),
+                [DamageComponent.Floor] = NormalizePercent(car.FloorDamage),
+                [DamageComponent.Diffuser] = NormalizePercent(car.DiffuserDamage),
+                [DamageComponent.Sidepod] = NormalizePercent(car.SidepodDamage),
+                [DamageComponent.Gearbox] = NormalizePercent(car.GearBoxDamage),
+                [DamageComponent.Engine] = NormalizePercent(car.EngineDamage),
+                [DamageComponent.EngineMguhWear] = NormalizePercent(car.EngineMguhWear),
+                [DamageComponent.EngineEsWear] = NormalizePercent(car.EngineEsWear),
+                [DamageComponent.EngineCeWear] = NormalizePercent(car.EngineCeWear),
+                [DamageComponent.EngineIceWear] = NormalizePercent(car.EngineIceWear),
+                [DamageComponent.EngineMgukWear] = NormalizePercent(car.EngineMgukWear),
+                [DamageComponent.EngineTcWear] = NormalizePercent(car.EngineTcWear)
+            },
+            DrsFault = car.DrsFault,
+            ErsFault = car.ErsFault,
+            EngineBlown = car.EngineBlown,
+            EngineSeized = car.EngineSeized
+        };
+    }
+
+    private static byte MaxWheelValue(WheelSet<byte> values)
+    {
+        return NormalizePercent(Math.Max(Math.Max(values.RearLeft, values.RearRight), Math.Max(values.FrontLeft, values.FrontRight)));
+    }
+
+    private static byte NormalizePercent(byte value)
+    {
+        return value > 100 ? (byte)100 : value;
     }
 
     private void ApplyMotion(MotionPacket packet, DateTimeOffset receivedAt)

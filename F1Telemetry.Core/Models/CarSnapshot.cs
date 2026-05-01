@@ -186,6 +186,11 @@ public sealed record CarSnapshot
     public byte? RearWingDamage { get; init; }
 
     /// <summary>
+    /// Gets the latest detailed damage snapshot when visible.
+    /// </summary>
+    public DamageSnapshot? Damage { get; init; }
+
+    /// <summary>
     /// Gets the latest world X position when visible.
     /// </summary>
     public float? WorldPositionX { get; init; }
