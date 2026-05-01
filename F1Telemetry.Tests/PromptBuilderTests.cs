@@ -144,10 +144,29 @@ public sealed class PromptBuilderTests
         Assert.Contains("不要建议进站加油", combinedPrompt, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies that compact damage summaries enter the AI prompt without exposing raw UDP details.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_IncludesCompactDamageSummaryOnly()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(damageSummary: "前翼左侧 30%（中度）；DRS 故障"));
+        var combinedPrompt = prompt.SystemMessage + Environment.NewLine + prompt.UserMessage;
+
+        Assert.Contains("Damage summary:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("前翼左侧 30%（中度）；DRS 故障", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("35", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("ttsText", combinedPrompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("packet", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("udp", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static AIAnalysisContext CreateContext(
         bool includeRecentCollections = true,
         SessionMode sessionMode = SessionMode.Race,
-        float fuelRemainingLaps = 5.1f)
+        float fuelRemainingLaps = 5.1f,
+        string damageSummary = "")
     {
         return new AIAnalysisContext
         {
@@ -170,6 +189,7 @@ public sealed class PromptBuilderTests
             GapToFrontInMs = 1_250,
             GapToBehindInMs = 980,
             TelemetryAnalysisSummary = "当前圈最高速度 312 km/h；最大油门 100%；最大刹车 72%；近 2 圈燃油 1.18-1.24 L。",
+            DamageSummary = damageSummary,
             RecentEvents = includeRecentCollections
                 ? ["Rear car pitted."]
                 : null!

@@ -2283,6 +2283,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             GapToFrontInMs = playerCar?.DeltaToCarInFrontInMs,
             GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
             TelemetryAnalysisSummary = telemetryAnalysisSummary,
+            DamageSummary = DamageSummaryFormatter.Format(playerCar?.Damage),
             RecentEvents = _recentAiEvents.ToArray()
         };
     }

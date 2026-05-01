@@ -79,6 +79,11 @@ public sealed record AIAnalysisContext
     public string TelemetryAnalysisSummary { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the compact player-car damage summary derived from CarDamage state.
+    /// </summary>
+    public string DamageSummary { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the recent race events in summary form.
     /// </summary>
     public IReadOnlyList<string> RecentEvents { get; init; } = Array.Empty<string>();
