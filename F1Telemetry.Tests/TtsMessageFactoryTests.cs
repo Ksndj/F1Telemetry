@@ -200,6 +200,64 @@ public sealed class TtsMessageFactoryTests
     }
 
     /// <summary>
+    /// Verifies player damage speech uses the event deduplication key and factory cooldown.
+    /// </summary>
+    [Fact]
+    public void CreateForRaceEvent_DamageEventUsesDedupKeyCooldown()
+    {
+        var factory = new TtsMessageFactory();
+        var raceEvent = new RaceEvent
+        {
+            EventType = EventType.CarDamage,
+            LapNumber = 12,
+            VehicleIdx = 3,
+            Severity = EventSeverity.Warning,
+            Message = "前翼左侧严重损伤。",
+            DedupKey = "damage:FrontLeftWing:Severe"
+        };
+        var options = new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 };
+
+        var first = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Race);
+        var second = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Race);
+
+        Assert.NotNull(first);
+        Assert.Null(second);
+        Assert.Equal("car_damage", first!.Type);
+        Assert.Equal("event:car_damage:damage:FrontLeftWing:Severe", first.DedupKey);
+        Assert.Equal(TtsPriority.Normal, first.Priority);
+        Assert.Equal(TimeSpan.FromSeconds(30), first.Cooldown);
+    }
+
+    /// <summary>
+    /// Verifies critical player-car fault events can become spoken TTS messages.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.DrsFault, "drs_fault")]
+    [InlineData(EventType.ErsFault, "ers_fault")]
+    [InlineData(EventType.EngineFailure, "engine_failure")]
+    public void CreateForRaceEvent_DamageFaultsEnterTts(EventType eventType, string expectedType)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = eventType,
+                LapNumber = 12,
+                VehicleIdx = 3,
+                Severity = EventSeverity.Warning,
+                Message = "关键故障。",
+                DedupKey = $"damage:fault:{expectedType}"
+            },
+            new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 },
+            SessionMode.Race);
+
+        Assert.NotNull(message);
+        Assert.Equal(expectedType, message!.Type);
+        Assert.StartsWith($"event:{expectedType}:damage:fault:", message.DedupKey, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies AI speech is limited to one message per lap before reaching the queue.
     /// </summary>
     [Fact]
