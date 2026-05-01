@@ -81,6 +81,79 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
+    /// Verifies that crossing into a higher damage severity emits a player-car damage event.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerDamageCrossesSeverity_EmitsCarDamageEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(frontLeftWingDamage: 0) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(frontLeftWingDamage: 30) }));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents());
+        Assert.Equal(EventType.CarDamage, raceEvent.EventType);
+        Assert.Equal(EventSeverity.Warning, raceEvent.Severity);
+        Assert.Equal(15, raceEvent.LapNumber);
+        Assert.Equal(3, raceEvent.VehicleIdx);
+        Assert.Contains("前翼左侧", raceEvent.Message, StringComparison.Ordinal);
+        Assert.Contains("中度", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that repeated damage observations within the same severity band do not emit duplicates.
+    /// </summary>
+    [Fact]
+    public void Observe_RepeatedSameDamageSeverity_DeduplicatesEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(frontLeftWingDamage: 0) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(frontLeftWingDamage: 30) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.8f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(frontLeftWingDamage: 35) }));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        var raceEvent = Assert.Single(detectedEvents);
+        Assert.Equal(EventType.CarDamage, raceEvent.EventType);
+    }
+
+    /// <summary>
+    /// Verifies that DRS and ERS fault flags emit fault events once when they first appear.
+    /// </summary>
+    [Fact]
+    public void Observe_DrsAndErsFaults_EmitFaultEventsOnce()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(drsFault: false, ersFault: false) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(drsFault: true, ersFault: true) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.8f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(drsFault: true, ersFault: true) }));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        Assert.Contains(detectedEvents, raceEvent => raceEvent.EventType == EventType.DrsFault);
+        Assert.Contains(detectedEvents, raceEvent => raceEvent.EventType == EventType.ErsFault);
+        Assert.Equal(2, detectedEvents.Count);
+    }
+
+    /// <summary>
     /// Verifies that repeated low-fuel observations on the same lap do not emit duplicates.
     /// </summary>
     [Fact]
@@ -423,6 +496,22 @@ public sealed class EventDetectionServiceTests
             ActualTyreCompound = actualTyreCompound,
             IsCurrentLapValid = true,
             UpdatedAt = updatedAt ?? DateTimeOffset.UtcNow
+        };
+    }
+
+    private static DamageSnapshot CreateDamageSnapshot(
+        byte frontLeftWingDamage = 0,
+        bool drsFault = false,
+        bool ersFault = false)
+    {
+        return new DamageSnapshot
+        {
+            Components = new Dictionary<DamageComponent, byte>
+            {
+                [DamageComponent.FrontLeftWing] = frontLeftWingDamage
+            },
+            DrsFault = drsFault,
+            ErsFault = ersFault
         };
     }
 }

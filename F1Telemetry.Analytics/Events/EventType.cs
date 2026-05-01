@@ -31,6 +31,26 @@ public enum EventType
     HighTyreWear,
 
     /// <summary>
+    /// Indicates that the player's car has entered a higher damage severity band.
+    /// </summary>
+    CarDamage,
+
+    /// <summary>
+    /// Indicates that the player's DRS fault flag became active.
+    /// </summary>
+    DrsFault,
+
+    /// <summary>
+    /// Indicates that the player's ERS fault flag became active.
+    /// </summary>
+    ErsFault,
+
+    /// <summary>
+    /// Indicates that the player's engine has a critical blown or seized failure.
+    /// </summary>
+    EngineFailure,
+
+    /// <summary>
     /// Indicates that a full safety car status is active.
     /// </summary>
     SafetyCar,
