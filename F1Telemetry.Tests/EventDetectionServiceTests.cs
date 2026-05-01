@@ -154,6 +154,24 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
+    /// Verifies power-unit wear does not produce an immediate spoken damage event.
+    /// </summary>
+    [Fact]
+    public void Observe_PowerUnitWearCrossesSeverity_DoesNotEmitImmediateDamageEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(engineDamage: 0, gearboxDamage: 0) }));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)
+                with { Damage = CreateDamageSnapshot(engineDamage: 68, gearboxDamage: 36) }));
+
+        Assert.Empty(service.DrainPendingEvents());
+    }
+
+    /// <summary>
     /// Verifies that repeated low-fuel observations on the same lap do not emit duplicates.
     /// </summary>
     [Fact]
@@ -501,6 +519,8 @@ public sealed class EventDetectionServiceTests
 
     private static DamageSnapshot CreateDamageSnapshot(
         byte frontLeftWingDamage = 0,
+        byte engineDamage = 0,
+        byte gearboxDamage = 0,
         bool drsFault = false,
         bool ersFault = false)
     {
@@ -508,7 +528,9 @@ public sealed class EventDetectionServiceTests
         {
             Components = new Dictionary<DamageComponent, byte>
             {
-                [DamageComponent.FrontLeftWing] = frontLeftWingDamage
+                [DamageComponent.FrontLeftWing] = frontLeftWingDamage,
+                [DamageComponent.Engine] = engineDamage,
+                [DamageComponent.Gearbox] = gearboxDamage
             },
             DrsFault = drsFault,
             ErsFault = ersFault

@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using F1Telemetry.App.Logging;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Formatting;
+using F1Telemetry.Core.Models;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -266,6 +267,30 @@ public sealed class EventSummaryAndLogCategoryTests
     public void DamageSummaryFormatter_WithMissingPacket_ReturnsOverviewEmptyState()
     {
         Assert.Equal("等待 CarDamage 包", DamageSummaryFormatter.Format(null, "等待 CarDamage 包"));
+    }
+
+    /// <summary>
+    /// Verifies drivetrain wear is kept behind direct damage in compact AI and Overview summaries.
+    /// </summary>
+    [Fact]
+    public void DamageSummaryFormatter_WithDirectDamageAndDrivetrainWear_DowngradesWearText()
+    {
+        var summary = DamageSummaryFormatter.Format(new DamageSnapshot
+        {
+            Components = new Dictionary<DamageComponent, byte>
+            {
+                [DamageComponent.Engine] = 68,
+                [DamageComponent.Gearbox] = 36,
+                [DamageComponent.FrontLeftWing] = 53
+            }
+        });
+
+        Assert.Contains("前翼左侧 53%（严重）", summary, StringComparison.Ordinal);
+        Assert.Contains("引擎磨损 68%（严重）", summary, StringComparison.Ordinal);
+        Assert.Contains("变速箱磨损 36%（中度）", summary, StringComparison.Ordinal);
+        Assert.True(
+            summary.IndexOf("前翼左侧", StringComparison.Ordinal) <
+            summary.IndexOf("引擎磨损", StringComparison.Ordinal));
     }
 
     /// <summary>
