@@ -22,6 +22,7 @@ public sealed class PromptBuilderTests
         var prompt = builder.BuildMessages(CreateContext());
 
         Assert.Contains("valid JSON", prompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("post-race", prompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("exactly these keys", prompt.SystemMessage, StringComparison.OrdinalIgnoreCase);
 
         foreach (var key in new[]

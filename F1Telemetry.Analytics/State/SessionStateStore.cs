@@ -40,6 +40,10 @@ public sealed class SessionStateStore
             TrackTemperature = metadata.TrackTemperature,
             AirTemperature = metadata.AirTemperature,
             TotalLaps = metadata.TotalLaps,
+            SeasonLinkIdentifier = metadata.SeasonLinkIdentifier,
+            WeekendLinkIdentifier = metadata.WeekendLinkIdentifier,
+            SessionLinkIdentifier = metadata.SessionLinkIdentifier,
+            NumSessionsInWeekend = metadata.NumSessionsInWeekend,
             SessionTimeLeft = metadata.SessionTimeLeft,
             SessionDuration = metadata.SessionDuration,
             PitSpeedLimit = metadata.PitSpeedLimit,
@@ -47,6 +51,11 @@ public sealed class SessionStateStore
             MarshalZoneFlags = new Dictionary<int, sbyte>(metadata.MarshalZoneFlags),
             ActiveCarCount = metadata.ActiveCarCount,
             LastEventCode = metadata.LastEventCode,
+            HasFinalClassification = metadata.HasFinalClassification,
+            FinalClassificationReceivedAt = metadata.FinalClassificationReceivedAt,
+            PlayerFinalClassificationPosition = metadata.PlayerFinalClassificationPosition,
+            PlayerFinalClassificationLaps = metadata.PlayerFinalClassificationLaps,
+            PlayerFinalClassificationStatus = metadata.PlayerFinalClassificationStatus,
             PlayerCar = CarStateStore.CapturePlayerCar(),
             Opponents = CarStateStore.CaptureOpponents(),
             Cars = CarStateStore.CaptureAllCars(),
@@ -84,6 +93,10 @@ public sealed class SessionStateStore
         ushort sessionDuration,
         byte pitSpeedLimit,
         byte safetyCarStatus,
+        uint seasonLinkIdentifier,
+        uint weekendLinkIdentifier,
+        uint sessionLinkIdentifier,
+        byte numSessionsInWeekend,
         IReadOnlyDictionary<int, sbyte> marshalZoneFlags,
         DateTimeOffset updatedAt)
     {
@@ -99,6 +112,10 @@ public sealed class SessionStateStore
             SessionDuration = sessionDuration,
             PitSpeedLimit = pitSpeedLimit,
             SafetyCarStatus = safetyCarStatus,
+            SeasonLinkIdentifier = seasonLinkIdentifier,
+            WeekendLinkIdentifier = weekendLinkIdentifier,
+            SessionLinkIdentifier = sessionLinkIdentifier,
+            NumSessionsInWeekend = numSessionsInWeekend,
             MarshalZoneFlags = new Dictionary<int, sbyte>(marshalZoneFlags),
             UpdatedAt = updatedAt
         });
@@ -118,6 +135,23 @@ public sealed class SessionStateStore
         UpdateMetadata(metadata => metadata with
         {
             LastEventCode = lastEventCode,
+            UpdatedAt = updatedAt
+        });
+    }
+
+    internal void SetFinalClassification(
+        byte? playerPosition,
+        byte? playerLaps,
+        byte? playerResultStatus,
+        DateTimeOffset updatedAt)
+    {
+        UpdateMetadata(metadata => metadata with
+        {
+            HasFinalClassification = true,
+            FinalClassificationReceivedAt = updatedAt,
+            PlayerFinalClassificationPosition = playerPosition,
+            PlayerFinalClassificationLaps = playerLaps,
+            PlayerFinalClassificationStatus = playerResultStatus,
             UpdatedAt = updatedAt
         });
     }
@@ -145,6 +179,14 @@ public sealed class SessionStateStore
 
         public byte? TotalLaps { get; init; }
 
+        public uint? SeasonLinkIdentifier { get; init; }
+
+        public uint? WeekendLinkIdentifier { get; init; }
+
+        public uint? SessionLinkIdentifier { get; init; }
+
+        public byte? NumSessionsInWeekend { get; init; }
+
         public ushort? SessionTimeLeft { get; init; }
 
         public ushort? SessionDuration { get; init; }
@@ -158,6 +200,16 @@ public sealed class SessionStateStore
         public byte? ActiveCarCount { get; init; }
 
         public string? LastEventCode { get; init; }
+
+        public bool HasFinalClassification { get; init; }
+
+        public DateTimeOffset? FinalClassificationReceivedAt { get; init; }
+
+        public byte? PlayerFinalClassificationPosition { get; init; }
+
+        public byte? PlayerFinalClassificationLaps { get; init; }
+
+        public byte? PlayerFinalClassificationStatus { get; init; }
 
         public DateTimeOffset UpdatedAt { get; init; }
     }

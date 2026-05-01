@@ -99,7 +99,9 @@ public sealed class StateAggregator : IStateAggregator
             case SessionHistoryPacket packet:
                 ApplySessionHistory(packet, receivedAt);
                 break;
-            case FinalClassificationPacket:
+            case FinalClassificationPacket packet:
+                ApplyFinalClassification(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
+                break;
             case LapPositionsPacket:
             case MotionExPacket:
                 break;
@@ -129,8 +131,27 @@ public sealed class StateAggregator : IStateAggregator
             sessionDuration: packet.SessionDuration,
             pitSpeedLimit: packet.PitSpeedLimit,
             safetyCarStatus: packet.SafetyCarStatus,
+            seasonLinkIdentifier: packet.SeasonLinkIdentifier,
+            weekendLinkIdentifier: packet.WeekendLinkIdentifier,
+            sessionLinkIdentifier: packet.SessionLinkIdentifier,
+            numSessionsInWeekend: packet.NumSessionsInWeekend,
             marshalZoneFlags: BuildMarshalZoneFlags(packet),
             updatedAt: receivedAt);
+    }
+
+    private void ApplyFinalClassification(FinalClassificationPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
+    {
+        FinalClassificationData? playerClassification = null;
+        if (playerCarIndex < packet.Cars.Length)
+        {
+            playerClassification = packet.Cars[playerCarIndex];
+        }
+
+        SessionStateStore.SetFinalClassification(
+            playerClassification?.Position,
+            playerClassification?.NumLaps,
+            playerClassification?.ResultStatus,
+            receivedAt);
     }
 
     private void ApplyParticipants(ParticipantsPacket packet, DateTimeOffset receivedAt)
