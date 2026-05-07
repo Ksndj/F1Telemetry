@@ -44,7 +44,7 @@ public sealed class DeepSeekAnalysisServiceTests
   "choices": [
     {
       "message": {
-        "content": "{\"summary\":\"pace ok\",\"tyreAdvice\":\"stay out\",\"fuelAdvice\":\"target +0.2\",\"trafficAdvice\":\"watch front gap\",\"ttsText\":\"pace is okay\"}"
+        "content": "{\"summary\":\"pace ok\",\"tyreAdvice\":\"stay out\",\"fuelAdvice\":\"target +0.2\",\"trafficAdvice\":\"watch front gap\",\"ttsText\":\"节奏正常\"}"
       }
     }
   ]
@@ -60,7 +60,38 @@ public sealed class DeepSeekAnalysisServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("pace ok", result.Summary);
-        Assert.Equal("pace is okay", result.TtsText);
+        Assert.Equal("节奏正常", result.TtsText);
+    }
+
+    /// <summary>
+    /// Verifies English-heavy AI speech is replaced before it reaches TTS.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_EnglishHeavyTtsText_ReplacesSpeechWithChineseFallback()
+    {
+        const string completionJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "content": "{\"summary\":\"pace ok\",\"tyreAdvice\":\"stay out\",\"fuelAdvice\":\"target +0.2\",\"trafficAdvice\":\"watch front gap\",\"ttsText\":\"Box this lap and push now\"}"
+      }
+    }
+  ]
+}
+""";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(completionJson, Encoding.UTF8, "application/json")
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = "configured" });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("pace ok", result.Summary);
+        Assert.Equal("AI 播报暂不可用，请查看日志。", result.TtsText);
+        Assert.DoesNotContain("Box this lap", result.TtsText, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -10,6 +10,7 @@ namespace F1Telemetry.AI.Services;
 /// </summary>
 public sealed class DeepSeekAnalysisService : IAIAnalysisService
 {
+    private const string NonChineseTtsTextReplacement = "AI 播报暂不可用，请查看日志。";
     private const string RefuelingAdviceReplacement = "燃油偏低，请省油并控制油耗；维修区无法加燃油。";
     private static readonly string[] RefuelingAdviceSignals =
     [
@@ -100,7 +101,7 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
                 TyreAdvice = NormalizeResultText(result.TyreAdvice),
                 FuelAdvice = NormalizeResultText(result.FuelAdvice),
                 TrafficAdvice = NormalizeResultText(result.TrafficAdvice),
-                TtsText = NormalizeResultText(result.TtsText)
+                TtsText = NormalizeTtsText(result.TtsText)
             };
         }
         catch (JsonException ex)
@@ -138,6 +139,42 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
 
         var trimmed = text.Trim();
         return ContainsRefuelingAdvice(trimmed) ? RefuelingAdviceReplacement : trimmed;
+    }
+
+    private static string NormalizeTtsText(string? text)
+    {
+        var normalized = NormalizeResultText(text);
+        return HasTooMuchEnglishForSpeech(normalized) ? NonChineseTtsTextReplacement : normalized;
+    }
+
+    private static bool HasTooMuchEnglishForSpeech(string text)
+    {
+        var asciiLetterCount = 0;
+        var cjkLetterCount = 0;
+
+        foreach (var character in text)
+        {
+            if (IsAsciiLetter(character))
+            {
+                asciiLetterCount++;
+            }
+            else if (IsCjkCharacter(character))
+            {
+                cjkLetterCount++;
+            }
+        }
+
+        return asciiLetterCount >= 8 && asciiLetterCount > cjkLetterCount * 2;
+    }
+
+    private static bool IsAsciiLetter(char character)
+    {
+        return character is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
+    }
+
+    private static bool IsCjkCharacter(char character)
+    {
+        return character is >= '\u4E00' and <= '\u9FFF';
     }
 
     private static bool ContainsRefuelingAdvice(string text)
