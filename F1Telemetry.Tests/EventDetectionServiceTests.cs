@@ -256,6 +256,8 @@ public sealed class EventDetectionServiceTests
 
         var raceEvent = Assert.Single(detectedEvents);
         Assert.Equal(EventType.SafetyCar, raceEvent.EventType);
+        Assert.Equal("安全车出动，保持 delta 并注意前车。", raceEvent.Message);
+        Assert.DoesNotContain("Safety car", raceEvent.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -273,7 +275,9 @@ public sealed class EventDetectionServiceTests
 
         var detectedEvents = service.DrainPendingEvents();
 
-        Assert.Contains(detectedEvents, raceEvent => raceEvent.EventType == EventType.YellowFlag);
+        var yellowFlag = Assert.Single(detectedEvents, raceEvent => raceEvent.EventType == EventType.YellowFlag);
+        Assert.Contains("黄旗", yellowFlag.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Yellow flag", yellowFlag.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(detectedEvents, raceEvent => raceEvent.EventType == EventType.DataQualityWarning);
         Assert.Equal(2, detectedEvents.Count);
     }
@@ -314,6 +318,10 @@ public sealed class EventDetectionServiceTests
 
         var firstWindowEvents = service.DrainPendingEvents();
         Assert.Equal(2, firstWindowEvents.Count(raceEvent => raceEvent.EventType is EventType.AttackWindow or EventType.DefenseWindow));
+        Assert.Contains(firstWindowEvents, raceEvent => raceEvent.EventType == EventType.AttackWindow && raceEvent.Message.Contains("攻击窗口", StringComparison.Ordinal));
+        Assert.Contains(firstWindowEvents, raceEvent => raceEvent.EventType == EventType.DefenseWindow && raceEvent.Message.Contains("注意防守", StringComparison.Ordinal));
+        Assert.DoesNotContain(firstWindowEvents, raceEvent => raceEvent.Message.Contains("Attack window", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(firstWindowEvents, raceEvent => raceEvent.Message.Contains("Defense window", StringComparison.OrdinalIgnoreCase));
 
         service.Observe(CreateStateWithMetadata(
             sessionType: 15,
@@ -332,6 +340,36 @@ public sealed class EventDetectionServiceTests
 
         var rearmedEvents = service.DrainPendingEvents();
         Assert.Equal(2, rearmedEvents.Count(raceEvent => raceEvent.EventType is EventType.AttackWindow or EventType.DefenseWindow));
+    }
+
+    /// <summary>
+    /// Verifies low-ERS risk speech uses a Chinese broadcast message.
+    /// </summary>
+    [Fact]
+    public void Observe_LowErs_EmitsChineseBroadcastText()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions
+        {
+            LowErsStoreEnergyThresholdJoules = 1_000_000f
+        });
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 6.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, ersStoreEnergy: 1_500_000f)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 5.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, ersStoreEnergy: 500_000f)));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents());
+        Assert.Equal(EventType.LowErs, raceEvent.EventType);
+        Assert.Contains("ERS 剩余 500000 焦耳", raceEvent.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Low ERS", raceEvent.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

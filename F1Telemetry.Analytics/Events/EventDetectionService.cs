@@ -186,7 +186,7 @@ public sealed class EventDetectionService : IEventDetectionService
             lapNumber: lapNumber,
             vehicleIdx: currentPlayer.CarIndex,
             driverName: currentPlayer.DriverName,
-            message: $"Lap {lapNumber?.ToString() ?? "-"} 已无效。",
+            message: $"第 {lapNumber?.ToString() ?? "-"} 圈已无效。",
             dedupKey: $"lap-invalid:{lapNumber}",
             payload: new
             {
@@ -399,7 +399,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
                     vehicleIdx: null,
                     driverName: null,
-                    message: "Safety car deployed.",
+                    message: "安全车出动，保持 delta 并注意前车。",
                     dedupKey: "safety-car:full",
                     payload: new { SafetyCarStatus = safetyCarStatus });
                 return;
@@ -411,7 +411,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
                     vehicleIdx: null,
                     driverName: null,
-                    message: "Virtual safety car deployed.",
+                    message: "虚拟安全车出动，保持 delta。",
                     dedupKey: "safety-car:virtual",
                     payload: new { SafetyCarStatus = safetyCarStatus });
                 return;
@@ -420,7 +420,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     key: $"safety-car-status:{safetyCarStatus}",
                     timestamp: currentState.UpdatedAt,
                     lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
-                    message: $"Unknown safety car status {safetyCarStatus}; no safety TTS event was emitted.");
+                    message: $"未知安全车状态 {safetyCarStatus}，已跳过安全车播报。");
                 return;
         }
     }
@@ -437,7 +437,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     key: $"marshal-zone:{zoneIndex}:{zoneFlag}",
                     timestamp: currentState.UpdatedAt,
                     lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
-                    message: $"Unknown marshal zone flag {zoneFlag} in zone {zoneIndex}; no flag TTS event was emitted.");
+                    message: $"旗区 {zoneIndex} 出现未知旗帜状态 {zoneFlag}，已跳过旗帜播报。");
                 continue;
             }
 
@@ -457,7 +457,7 @@ public sealed class EventDetectionService : IEventDetectionService
                         lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
                         vehicleIdx: null,
                         driverName: null,
-                        message: $"Yellow flag in marshal zone {zoneIndex}.",
+                        message: $"黄旗，旗区 {zoneIndex}，注意减速。",
                         dedupKey: $"marshal-zone:{zoneIndex}:yellow",
                         payload: new { ZoneIndex = zoneIndex, ZoneFlag = zoneFlag });
                     break;
@@ -469,7 +469,7 @@ public sealed class EventDetectionService : IEventDetectionService
                         lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
                         vehicleIdx: null,
                         driverName: null,
-                        message: $"Red flag in marshal zone {zoneIndex}.",
+                        message: $"红旗，旗区 {zoneIndex}，准备减速停车。",
                         dedupKey: $"marshal-zone:{zoneIndex}:red",
                         payload: new { ZoneIndex = zoneIndex, ZoneFlag = zoneFlag });
                     break;
@@ -505,7 +505,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "gap-front-missing",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Front gap timing is unavailable; attack-window TTS was skipped.");
+                message: "前车差距数据不可用，已跳过攻击窗口播报。");
             return;
         }
 
@@ -524,7 +524,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 lapNumber: (int?)player.CurrentLapNumber,
                 vehicleIdx: player.CarIndex,
                 driverName: player.DriverName,
-                message: $"Attack window: front gap {gapFrontMs} ms.",
+                message: $"前车差距 {gapFrontMs} 毫秒，进入攻击窗口。",
                 dedupKey: "gap:attack-window",
                 payload: new
                 {
@@ -565,7 +565,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "gap-behind-missing-adjacent",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Adjacent rear-car evidence is unavailable; defense-window TTS was skipped.");
+                message: "后车数据不可用，已跳过防守窗口播报。");
             return;
         }
 
@@ -576,7 +576,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "gap-behind-lap-mismatch",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Adjacent rear car is not on the same lap; defense-window TTS was skipped.");
+                message: "后车不在同一圈，已跳过防守窗口播报。");
             return;
         }
 
@@ -587,7 +587,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "gap-behind-timing-missing",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Rear gap timing is unavailable; defense-window TTS was skipped.");
+                message: "后车差距数据不可用，已跳过防守窗口播报。");
             return;
         }
 
@@ -606,7 +606,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 lapNumber: (int?)player.CurrentLapNumber,
                 vehicleIdx: rearCar.CarIndex,
                 driverName: rearCar.DriverName,
-                message: $"Defense window: rear gap {gapBehindMs} ms.",
+                message: $"后车差距 {gapBehindMs} 毫秒，注意防守。",
                 dedupKey: "gap:defense-window",
                 payload: new
                 {
@@ -636,7 +636,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "ers-store-missing",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "ERS store energy is unavailable; low-ERS TTS was skipped.");
+                message: "ERS 电量数据不可用，已跳过低 ERS 播报。");
             return;
         }
 
@@ -658,7 +658,7 @@ public sealed class EventDetectionService : IEventDetectionService
             lapNumber: (int?)player.CurrentLapNumber,
             vehicleIdx: player.CarIndex,
             driverName: player.DriverName,
-            message: $"Low ERS: store energy {ersStoreEnergy:0} J.",
+            message: $"ERS 剩余 {ersStoreEnergy:0} 焦耳，注意省电。",
             dedupKey: "low-ers",
             payload: new
             {
@@ -685,7 +685,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "fuel-remaining-missing",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Fuel remaining laps are unavailable; low-fuel TTS risk was skipped.");
+                message: "剩余燃油圈数不可用，已跳过低油风险播报。");
         }
 
         if (player.TyreWear is null)
@@ -694,7 +694,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 key: "tyre-wear-missing",
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
-                message: "Tyre wear is unavailable; high-tyre-wear TTS risk was skipped.");
+                message: "轮胎磨损数据不可用，已跳过高胎磨风险播报。");
         }
     }
 
