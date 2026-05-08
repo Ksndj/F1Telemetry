@@ -118,7 +118,7 @@ public sealed class WindowsTtsService : ITtsService, IDisposable
                     }
 
                     ApplyConfiguration(speechSynthesizer, voiceName, volume, rate);
-                    speechSynthesizer.Speak(workItem.Text);
+                    speechSynthesizer.Speak(BuildSpeechPrompt(workItem.Text));
                     workItem.TrySetCompleted();
                 }
                 catch (OperationCanceledException)
@@ -138,6 +138,13 @@ public sealed class WindowsTtsService : ITtsService, IDisposable
                 workItem.TrySetException(new InvalidOperationException("Windows speech synthesis is unavailable.", ex));
             }
         }
+    }
+
+    internal static PromptBuilder BuildSpeechPrompt(string text)
+    {
+        var promptBuilder = new PromptBuilder();
+        promptBuilder.AppendText(text, PromptVolume.ExtraLoud);
+        return promptBuilder;
     }
 
     private static void ApplyConfiguration(SpeechSynthesizer speechSynthesizer, string voiceName, int volume, int rate)

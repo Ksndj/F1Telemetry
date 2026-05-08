@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Formatting;
 using F1Telemetry.App.ViewModels;
@@ -173,6 +174,43 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies that the top status progress text does not display a lap beyond the configured race length.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_BuildLapText_CapsCurrentLapAtTotalLaps()
+    {
+        var text = InvokeDashboardLapText(
+            new SessionState { TotalLaps = 15 },
+            new CarSnapshot { CurrentLapNumber = 17 });
+
+        Assert.Equal("第 15 圈 / 共 15 圈", text);
+        Assert.DoesNotContain("17", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that the player card current-lap field no longer duplicates total-lap progress.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_UpdatePlayerCard_ShowsOnlyCurrentLap()
+    {
+        var viewModel = Assert.IsType<DashboardViewModel>(
+            RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
+
+        InvokeUpdatePlayerCard(
+            viewModel,
+            new SessionState { TotalLaps = 15 },
+            new CarSnapshot
+            {
+                CarIndex = 0,
+                CurrentLapNumber = 17,
+                DriverName = "Driver"
+            });
+
+        Assert.Equal("第 17 圈", viewModel.PlayerCurrentLapText);
+        Assert.DoesNotContain("/ 15", viewModel.PlayerCurrentLapText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that opponent rows use readable tyre and telemetry-restricted text.
     /// </summary>
     [Fact]
@@ -278,5 +316,19 @@ public sealed class DisplaySemanticFormatterTests
         var method = typeof(DashboardViewModel).GetMethod("BuildTyreText", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return Assert.IsType<string>(method!.Invoke(null, new object?[] { playerCar }));
+    }
+
+    private static string InvokeDashboardLapText(SessionState sessionState, CarSnapshot? playerCar)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildLapText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState, playerCar }));
+    }
+
+    private static void InvokeUpdatePlayerCard(DashboardViewModel viewModel, SessionState sessionState, CarSnapshot? playerCar)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("UpdatePlayerCard", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object?[] { sessionState, playerCar });
     }
 }

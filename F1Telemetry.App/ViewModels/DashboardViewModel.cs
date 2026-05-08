@@ -1877,7 +1877,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         PlayerName = string.IsNullOrWhiteSpace(playerCar.DriverName)
             ? $"车辆 {playerCar.CarIndex}"
             : playerCar.DriverName!;
-        PlayerCurrentLapText = $"Lap {playerCar.CurrentLapNumber?.ToString() ?? "-"} / {sessionState.TotalLaps?.ToString() ?? "-"}";
+        PlayerCurrentLapText = playerCar.CurrentLapNumber is null ? "-" : $"第 {playerCar.CurrentLapNumber} 圈";
         PlayerLastLapText = FormatLapTime(playerCar.LastLapTimeInMs);
         PlayerBestLapText = FormatLapTime(playerCar.BestLapTimeInMs);
         PlayerPositionText = playerCar.Position is null ? "-" : $"P{playerCar.Position}";
@@ -2810,7 +2810,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return "-";
         }
 
-        return $"第 {playerCar?.CurrentLapNumber?.ToString() ?? "-"} 圈 / 共 {sessionState.TotalLaps?.ToString() ?? "-"} 圈";
+        var currentLapNumber = playerCar?.CurrentLapNumber;
+        if (currentLapNumber is not null &&
+            sessionState.TotalLaps is > 0 &&
+            currentLapNumber > sessionState.TotalLaps)
+        {
+            currentLapNumber = sessionState.TotalLaps;
+        }
+
+        return $"第 {currentLapNumber?.ToString() ?? "-"} 圈 / 共 {sessionState.TotalLaps?.ToString() ?? "-"} 圈";
     }
 
     private static string BuildPlayerGapText(SessionState sessionState, CarSnapshot playerCar)
