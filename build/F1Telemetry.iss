@@ -1,5 +1,5 @@
 #define MyAppName "F1Telemetry"
-#define MyAppVersion "1.5.0"
+#define MyAppVersion "1.5.1"
 #define MyAppExeName "F1Telemetry.App.exe"
 
 [Setup]
@@ -12,7 +12,7 @@ DefaultGroupName=F1Telemetry
 DisableDirPage=no
 ShowLanguageDialog=yes
 OutputDir=output
-OutputBaseFilename=F1Telemetry-1.5.0-win-x64-setup
+OutputBaseFilename=F1Telemetry-1.5.1-win-x64-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
