@@ -76,6 +76,26 @@ public sealed class DashboardEventBusTests
         });
     }
 
+    /// <summary>
+    /// Verifies drained race events are exposed to AI context through the EventBus insight buffer.
+    /// </summary>
+    [Fact]
+    public void BuildAiAnalysisContext_AfterDrainingRaceEvent_UsesEventBusInsightBuffer()
+    {
+        RunOnStaThread(() =>
+        {
+            var raceEvent = CreateRaceEvent();
+            var eventDetectionService = new FakeEventDetectionService(raceEvent);
+            var eventBus = new InMemoryEventBus<RaceEvent>();
+            using var harness = CreateDashboardViewModel(eventDetectionService, eventBus);
+
+            InvokeDrainDetectedRaceEvents(harness.ViewModel);
+            var context = InvokeBuildAiAnalysisContext(harness.ViewModel);
+
+            Assert.Equal(new[] { raceEvent.Message }, context.RecentEvents);
+        });
+    }
+
     private static DashboardViewModelHarness CreateDashboardViewModel(
         IEventDetectionService eventDetectionService,
         IEventBus<RaceEvent> eventBus)
@@ -132,6 +152,30 @@ public sealed class DashboardEventBusTests
 
         Assert.NotNull(method);
         method!.Invoke(viewModel, null);
+    }
+
+    private static AIAnalysisContext InvokeBuildAiAnalysisContext(DashboardViewModel viewModel)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "BuildAiAnalysisContext",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var result = method!.Invoke(
+            viewModel,
+            new object?[]
+            {
+                new SessionState(),
+                null,
+                new LapSummary
+                {
+                    LapNumber = 8,
+                    IsValid = true,
+                    ClosedAt = DateTimeOffset.UtcNow
+                }
+            });
+
+        return Assert.IsType<AIAnalysisContext>(result);
     }
 
     private static void RunOnStaThread(Action action)

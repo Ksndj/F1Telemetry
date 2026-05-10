@@ -58,6 +58,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
     private readonly IEventBus<RaceEvent> _raceEventBus;
+    private readonly RaceEventSpeechSubscriber _raceEventSpeechSubscriber;
+    private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
@@ -73,7 +75,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly object _pendingAiTtsLogsLock = new();
     private readonly object _pendingAiAnalysisLogsLock = new();
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
-    private readonly Queue<string> _recentAiEvents = new();
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
     private readonly RelayCommand _downloadLatestVersionCommand;
@@ -214,6 +215,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
+        _raceEventSpeechSubscriber = new RaceEventSpeechSubscriber(
+            _raceEventBus,
+            _ttsMessageFactory,
+            _ttsQueue,
+            () => SessionModeFormatter.Resolve(_sessionStateStore.CaptureState().SessionType),
+            BuildTtsOptions,
+            LogRaceEventSubscriberWarning);
+        _raceEventInsightBuffer = new RaceEventInsightBuffer(_raceEventBus);
         _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
@@ -1283,6 +1292,22 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         try
         {
+            _raceEventSpeechSubscriber.Dispose();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            _raceEventInsightBuffer.Dispose();
+        }
+        catch
+        {
+        }
+
+        try
+        {
             await _udpListener.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         catch
@@ -1704,7 +1729,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastPersistedLapKey = null;
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
-        _recentAiEvents.Clear();
+        _raceEventInsightBuffer.Reset();
         _ttsMessageFactory.Reset();
         _activeSessionUid = incomingSessionUid;
         ResetChartPanels();
@@ -1732,7 +1757,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void DrainDetectedRaceEvents()
     {
-        var sessionMode = SessionModeFormatter.Resolve(_sessionStateStore.CaptureState().SessionType);
         var raceEvents = _eventDetectionService
             .DrainPendingEvents()
             .OrderByDescending(GetRaceEventDrainPriority)
@@ -1742,12 +1766,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         foreach (var raceEvent in raceEvents)
         {
             EnqueueEventLog(BuildEventCategory(raceEvent), raceEvent.Message);
-            if (raceEvent.EventType != EventType.DataQualityWarning)
-            {
-                AddRecentAiEvent(raceEvent.Message);
-            }
-
-            TryEnqueueRaceEventSpeech(raceEvent, sessionMode);
             _storagePersistenceService.EnqueueRaceEvent(raceEvent);
             PublishRaceEvent(raceEvent);
         }
@@ -1769,25 +1787,36 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
-    private void DrainTtsPlaybackRecords()
-    {
-        foreach (var record in _ttsQueue.DrainPendingRecords())
-        {
-            EnqueueAiTtsLog(record.Source, record.Message);
-        }
-    }
-
-    private void AddRecentAiEvent(string message)
+    private void LogRaceEventSubscriberWarning(string message)
     {
         if (string.IsNullOrWhiteSpace(message))
         {
             return;
         }
 
-        _recentAiEvents.Enqueue(message);
-        while (_recentAiEvents.Count > 8)
+        try
         {
-            _recentAiEvents.Dequeue();
+            var normalizedMessage = message
+                .Replace('\r', ' ')
+                .Replace('\n', ' ')
+                .Trim();
+            if (normalizedMessage.Length > 120)
+            {
+                normalizedMessage = normalizedMessage[..120] + "...";
+            }
+
+            EnqueueAiTtsLog("System", $"EventBus/TTS：{normalizedMessage}");
+        }
+        catch
+        {
+        }
+    }
+
+    private void DrainTtsPlaybackRecords()
+    {
+        foreach (var record in _ttsQueue.DrainPendingRecords())
+        {
+            EnqueueAiTtsLog(record.Source, record.Message);
         }
     }
 
@@ -2572,17 +2601,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         string Evidence,
         string StatusText);
 
-    private void TryEnqueueRaceEventSpeech(RaceEvent raceEvent, SessionMode sessionMode)
-    {
-        var ttsMessage = _ttsMessageFactory.CreateForRaceEvent(raceEvent, BuildTtsOptions(), sessionMode);
-        if (ttsMessage is null)
-        {
-            return;
-        }
-
-        _ttsQueue.TryEnqueue(ttsMessage);
-    }
-
     private void TryEnqueueAiSpeech(LapSummary lastLap, AIAnalysisResult result)
     {
         var ttsMessage = _ttsMessageFactory.CreateForAiResult(lastLap, result, BuildTtsOptions());
@@ -2649,7 +2667,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
             TelemetryAnalysisSummary = telemetryAnalysisSummary,
             DamageSummary = DamageSummaryFormatter.Format(playerCar?.Damage),
-            RecentEvents = _recentAiEvents.ToArray()
+            RecentEvents = _raceEventInsightBuffer.CaptureMessages()
         };
     }
 
