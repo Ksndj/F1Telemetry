@@ -39,4 +39,44 @@ public sealed class EventDetectionOptions
     /// Gets or sets the ERS store threshold in joules below which a low-ERS event is emitted.
     /// </summary>
     public float LowErsStoreEnergyThresholdJoules { get; set; } = 1_000_000f;
+
+    /// <summary>
+    /// Gets or sets how many laps older the directly ahead car's tyres must be before old-tyre risk advice is emitted.
+    /// </summary>
+    public int OldTyreAgeDeltaLapsThreshold { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets how many laps newer the directly behind car's tyres must be before pressure advice is emitted.
+    /// </summary>
+    public int NewTyrePressureAgeDeltaLapsThreshold { get; set; } = 5;
+
+    /// <summary>
+    /// Gets or sets the same-lap gap threshold in milliseconds below which traffic risk advice is emitted.
+    /// </summary>
+    public uint TrafficRiskGapMs { get; set; } = 1_200;
+
+    /// <summary>
+    /// Gets or sets the same-lap front and rear gap threshold in milliseconds required for qualifying clean-air advice.
+    /// </summary>
+    public uint QualifyingCleanAirGapMs { get; set; } = 3_000;
+
+    /// <summary>
+    /// Gets or sets the tyre age in laps at which race pit-window advice can be emitted.
+    /// </summary>
+    public int RacePitWindowTyreAgeLapsThreshold { get; set; } = 12;
+
+    /// <summary>
+    /// Gets or sets the average tyre-wear percentage at which race pit-window advice can be emitted.
+    /// </summary>
+    public float RacePitWindowTyreWearThreshold { get; set; } = 60.0f;
+
+    /// <summary>
+    /// Gets or sets the cooldown in seconds between repeated lightweight advice events.
+    /// </summary>
+    public int AdviceCooldownSeconds { get; set; } = 45;
+
+    /// <summary>
+    /// Gets or sets the cooldown in seconds between repeated safety-car restart advice events.
+    /// </summary>
+    public int SafetyCarRestartCooldownSeconds { get; set; } = 60;
 }

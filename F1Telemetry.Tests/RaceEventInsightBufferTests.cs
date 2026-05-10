@@ -25,6 +25,20 @@ public sealed class RaceEventInsightBufferTests
     }
 
     /// <summary>
+    /// Verifies new race-advice events are retained for recent AI insight context.
+    /// </summary>
+    [Fact]
+    public void CaptureMessages_AfterM6AdviceRaceEventPublished_ReturnsMessage()
+    {
+        var eventBus = new InMemoryEventBus<RaceEvent>();
+        using var buffer = new RaceEventInsightBuffer(eventBus);
+
+        eventBus.Publish(CreateRaceEvent("前车旧胎风险，适合持续施压", EventType.FrontOldTyreRisk));
+
+        Assert.Equal(new[] { "前车旧胎风险，适合持续施压" }, buffer.CaptureMessages());
+    }
+
+    /// <summary>
     /// Verifies data-quality warnings and blank placeholder messages are ignored.
     /// </summary>
     [Fact]
@@ -142,7 +156,7 @@ public sealed class RaceEventInsightBufferTests
         return new RaceEvent
         {
             EventType = eventType,
-            Timestamp = DateTimeOffset.UtcNow,
+            Timestamp = new DateTimeOffset(2026, 5, 10, 10, 0, 0, TimeSpan.Zero),
             Message = message,
             Severity = EventSeverity.Information,
             DedupKey = message

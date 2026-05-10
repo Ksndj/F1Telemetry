@@ -125,8 +125,24 @@ public sealed class TtsMessageFactory
 
     private static bool ShouldSuppressForSessionMode(EventType eventType, SessionMode sessionMode)
     {
-        return eventType is EventType.FrontCarPitted or EventType.RearCarPitted or EventType.AttackWindow or EventType.DefenseWindow
-            && !SessionModeFormatter.AllowsPitWindowSpeech(sessionMode);
+        return eventType switch
+        {
+            EventType.FrontCarPitted
+                or EventType.RearCarPitted
+                or EventType.AttackWindow
+                or EventType.DefenseWindow
+                or EventType.FrontOldTyreRisk
+                or EventType.RearNewTyrePressure
+                or EventType.RacePitWindow =>
+                !SessionModeFormatter.AllowsPitWindowSpeech(sessionMode),
+            EventType.QualifyingCleanAirWindow =>
+                sessionMode is not (SessionMode.Qualifying or SessionMode.SprintQualifying or SessionMode.TimeTrial),
+            EventType.TrafficRisk =>
+                sessionMode is not (SessionMode.Race or SessionMode.SprintRace or SessionMode.Qualifying or SessionMode.SprintQualifying or SessionMode.TimeTrial),
+            EventType.SafetyCarRestart or EventType.RedFlagTyreChange =>
+                sessionMode is not (SessionMode.Race or SessionMode.SprintRace or SessionMode.Unknown),
+            _ => false
+        };
     }
 
     private static string BuildEventIdentifier(RaceEvent raceEvent)
@@ -141,6 +157,17 @@ public sealed class TtsMessageFactory
                 $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.AttackWindow or EventType.DefenseWindow or EventType.LowErs =>
                 $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.FrontOldTyreRisk
+                or EventType.RearNewTyrePressure
+                or EventType.TrafficRisk
+                or EventType.QualifyingCleanAirWindow
+                or EventType.RacePitWindow
+                or EventType.SafetyCarRestart =>
+                $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.RedFlagTyreChange =>
+                string.IsNullOrWhiteSpace(raceEvent.DedupKey) || raceEvent.DedupKey.Trim() == "-"
+                    ? $"lap{FormatOptionalInt(raceEvent.LapNumber)}"
+                    : raceEvent.DedupKey.Trim(),
             EventType.SafetyCar or EventType.VirtualSafetyCar =>
                 raceEvent.EventType.ToString().ToLowerInvariant(),
             EventType.YellowFlag or EventType.RedFlag =>
@@ -176,6 +203,13 @@ public sealed class TtsMessageFactory
             EventType.DrsFault => "drs_fault",
             EventType.ErsFault => "ers_fault",
             EventType.EngineFailure => "engine_failure",
+            EventType.FrontOldTyreRisk => "front_old_tyre_risk",
+            EventType.RearNewTyrePressure => "rear_new_tyre_pressure",
+            EventType.TrafficRisk => "traffic_risk",
+            EventType.QualifyingCleanAirWindow => "qualifying_clean_air_window",
+            EventType.RacePitWindow => "race_pit_window",
+            EventType.SafetyCarRestart => "safety_car_restart",
+            EventType.RedFlagTyreChange => "red_flag_tyre_change",
             _ => "event"
         };
     }
@@ -184,10 +218,24 @@ public sealed class TtsMessageFactory
     {
         return eventType switch
         {
-            EventType.SafetyCar or EventType.VirtualSafetyCar or EventType.YellowFlag or EventType.RedFlag =>
+            EventType.SafetyCar
+                or EventType.VirtualSafetyCar
+                or EventType.YellowFlag
+                or EventType.RedFlag
+                or EventType.SafetyCarRestart
+                or EventType.RedFlagTyreChange =>
                 TtsPriority.High,
-            EventType.LowFuel or EventType.HighTyreWear or EventType.AttackWindow or EventType.DefenseWindow =>
+            EventType.LowFuel
+                or EventType.HighTyreWear
+                or EventType.AttackWindow
+                or EventType.DefenseWindow
+                or EventType.FrontOldTyreRisk
+                or EventType.RearNewTyrePressure
+                or EventType.TrafficRisk
+                or EventType.RacePitWindow =>
                 TtsPriority.High,
+            EventType.QualifyingCleanAirWindow =>
+                TtsPriority.Normal,
             EventType.EngineFailure =>
                 TtsPriority.High,
             EventType.CarDamage or EventType.DrsFault or EventType.ErsFault =>
@@ -215,6 +263,13 @@ public sealed class TtsMessageFactory
             or EventType.LowErs
             or EventType.AttackWindow
             or EventType.DefenseWindow
+            or EventType.FrontOldTyreRisk
+            or EventType.RearNewTyrePressure
+            or EventType.TrafficRisk
+            or EventType.QualifyingCleanAirWindow
+            or EventType.RacePitWindow
+            or EventType.SafetyCarRestart
+            or EventType.RedFlagTyreChange
             or EventType.CarDamage
             or EventType.DrsFault
             or EventType.ErsFault

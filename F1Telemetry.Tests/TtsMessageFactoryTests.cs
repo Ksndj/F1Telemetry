@@ -166,6 +166,43 @@ public sealed class TtsMessageFactoryTests
     }
 
     /// <summary>
+    /// Verifies M6 advice event categories map to concrete TTS message types and priorities.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.FrontOldTyreRisk, "front_old_tyre_risk", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.RearNewTyrePressure, "rear_new_tyre_pressure", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.TrafficRisk, "traffic_risk", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.QualifyingCleanAirWindow, "qualifying_clean_air_window", TtsPriority.Normal, SessionMode.Qualifying)]
+    [InlineData(EventType.RacePitWindow, "race_pit_window", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.SafetyCarRestart, "safety_car_restart", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.RedFlagTyreChange, "red_flag_tyre_change", TtsPriority.High, SessionMode.Race)]
+    public void CreateForRaceEvent_MapsM6AdviceTypes(EventType eventType, string expectedType, TtsPriority expectedPriority, SessionMode sessionMode)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = eventType,
+                LapNumber = 12,
+                VehicleIdx = 3,
+                Severity = EventSeverity.Warning,
+                Message = "M6 advice event"
+            },
+            new TtsOptions
+            {
+                TtsEnabled = true,
+                CooldownSeconds = 8
+            },
+            sessionMode);
+
+        Assert.NotNull(message);
+        Assert.Equal(expectedType, message!.Type);
+        Assert.Equal(expectedPriority, message.Priority);
+        Assert.Equal("M6 advice event", message.Text);
+    }
+
+    /// <summary>
     /// Verifies same-type race risks are cooled down before reaching the TTS queue.
     /// </summary>
     [Fact]
@@ -303,5 +340,79 @@ public sealed class TtsMessageFactoryTests
             SessionMode.Qualifying);
 
         Assert.Null(message);
+    }
+
+    /// <summary>
+    /// Verifies race-only M6 advice is not spoken while qualifying is active.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.FrontOldTyreRisk)]
+    [InlineData(EventType.RearNewTyrePressure)]
+    [InlineData(EventType.RacePitWindow)]
+    public void CreateForRaceEvent_QualifyingMode_FiltersRaceOnlyM6Advice(EventType eventType)
+    {
+        var factory = new TtsMessageFactory();
+        var options = new TtsOptions { TtsEnabled = true };
+        var raceEvent = new RaceEvent
+        {
+            EventType = eventType,
+            LapNumber = 8,
+            Severity = EventSeverity.Warning,
+            Message = "Race-only advice"
+        };
+
+        var qualifyingMessage = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Qualifying);
+        var raceMessage = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Race);
+
+        Assert.Null(qualifyingMessage);
+        Assert.NotNull(raceMessage);
+    }
+
+    /// <summary>
+    /// Verifies qualifying clean-air advice is not spoken in race sessions.
+    /// </summary>
+    [Fact]
+    public void CreateForRaceEvent_RaceMode_FiltersQualifyingOnlyM6Advice()
+    {
+        var factory = new TtsMessageFactory();
+        var options = new TtsOptions { TtsEnabled = true };
+        var raceEvent = new RaceEvent
+        {
+            EventType = EventType.QualifyingCleanAirWindow,
+            LapNumber = 8,
+            Severity = EventSeverity.Information,
+            Message = "Clean air available"
+        };
+
+        var raceMessage = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Race);
+        var qualifyingMessage = factory.CreateForRaceEvent(raceEvent, options, SessionMode.Qualifying);
+
+        Assert.Null(raceMessage);
+        Assert.NotNull(qualifyingMessage);
+    }
+
+    /// <summary>
+    /// Verifies traffic risk can be spoken in both race and qualifying sessions.
+    /// </summary>
+    [Theory]
+    [InlineData(SessionMode.Race)]
+    [InlineData(SessionMode.Qualifying)]
+    public void CreateForRaceEvent_TrafficRisk_AllowsRaceAndQualifying(SessionMode sessionMode)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = EventType.TrafficRisk,
+                LapNumber = 8,
+                Severity = EventSeverity.Warning,
+                Message = "Traffic risk"
+            },
+            new TtsOptions { TtsEnabled = true },
+            sessionMode);
+
+        Assert.NotNull(message);
+        Assert.Equal("traffic_risk", message!.Type);
     }
 }

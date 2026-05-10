@@ -55,6 +55,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     DetectMissingRaceTrendEvidence(sessionState);
                 }
 
+                DetectLightweightAdvice(sessionState);
                 DetectPlayerLapInvalidated(previousState, sessionState);
                 DetectLowFuel(previousState, sessionState);
                 DetectHighTyreWear(previousState, sessionState);
@@ -379,13 +380,37 @@ public sealed class EventDetectionService : IEventDetectionService
 
     private void DetectSafetyCarStatus(SessionState currentState)
     {
-        if (currentState.SafetyCarStatus is not { } safetyCarStatus ||
-            _lastSafetyCarStatus == safetyCarStatus)
+        if (currentState.SafetyCarStatus is not { } safetyCarStatus)
+        {
+            return;
+        }
+
+        var previousSafetyCarStatus = _lastSafetyCarStatus;
+        if (previousSafetyCarStatus == safetyCarStatus)
         {
             return;
         }
 
         _lastSafetyCarStatus = safetyCarStatus;
+        if (IsRaceLikeSession(currentState) && IsActiveSafetyCarStatus(previousSafetyCarStatus) && safetyCarStatus == 0)
+        {
+            EmitEvent(
+                eventType: EventType.SafetyCarRestart,
+                severity: EventSeverity.Warning,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)currentState.PlayerCar?.CurrentLapNumber,
+                vehicleIdx: null,
+                driverName: null,
+                message: "安全车状态解除，准备重启，注意轮胎温度和前后车。",
+                dedupKey: "advice:safety-car-restart",
+                payload: new
+                {
+                    PreviousSafetyCarStatus = previousSafetyCarStatus,
+                    SafetyCarStatus = safetyCarStatus
+                },
+                cooldownSeconds: _options.SafetyCarRestartCooldownSeconds);
+        }
+
         switch (safetyCarStatus)
         {
             case 0:
@@ -441,7 +466,8 @@ public sealed class EventDetectionService : IEventDetectionService
                 continue;
             }
 
-            if (_lastMarshalZoneFlags.TryGetValue(zoneIndex, out var previousFlag) && previousFlag == zoneFlag)
+            var hadPreviousFlag = _lastMarshalZoneFlags.TryGetValue(zoneIndex, out var previousFlag);
+            if (hadPreviousFlag && previousFlag == zoneFlag)
             {
                 continue;
             }
@@ -472,6 +498,11 @@ public sealed class EventDetectionService : IEventDetectionService
                         message: $"红旗，旗区 {zoneIndex}，准备减速停车。",
                         dedupKey: $"marshal-zone:{zoneIndex}:red",
                         payload: new { ZoneIndex = zoneIndex, ZoneFlag = zoneFlag });
+                    if (hadPreviousFlag && previousFlag != 4)
+                    {
+                        DetectRedFlagTyreChange(currentState, zoneIndex, previousFlag, zoneFlag);
+                    }
+
                     break;
             }
         }
@@ -487,6 +518,278 @@ public sealed class EventDetectionService : IEventDetectionService
 
         DetectAttackWindow(currentState, player);
         DetectDefenseWindow(currentState, player);
+    }
+
+    private void DetectLightweightAdvice(SessionState currentState)
+    {
+        if (IsRaceLikeSession(currentState))
+        {
+            DetectFrontOldTyreRisk(currentState);
+            DetectRearNewTyrePressure(currentState);
+            DetectTrafficRisk(currentState);
+            DetectRacePitWindow(currentState);
+            return;
+        }
+
+        if (IsQualifyingLikeSession(currentState))
+        {
+            DetectTrafficRisk(currentState);
+            DetectQualifyingCleanAirWindow(currentState);
+        }
+    }
+
+    private void DetectFrontOldTyreRisk(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null || player.TyresAgeLaps is null)
+        {
+            return;
+        }
+
+        var frontCar = FindDirectFrontCar(currentState, player);
+        if (frontCar is null || frontCar.TyresAgeLaps is null)
+        {
+            return;
+        }
+
+        if (!TryGetSameLapFrontGapMs(player, frontCar, out var gapFrontMs)
+            || gapFrontMs > _options.TrafficRiskGapMs)
+        {
+            return;
+        }
+
+        var tyreAgeDeltaLaps = frontCar.TyresAgeLaps.Value - player.TyresAgeLaps.Value;
+        if (tyreAgeDeltaLaps < _options.OldTyreAgeDeltaLapsThreshold)
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.FrontOldTyreRisk,
+            severity: EventSeverity.Warning,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: frontCar.CarIndex,
+            driverName: frontCar.DriverName,
+            message: $"前车轮胎比你旧 {tyreAgeDeltaLaps} 圈，差距 {gapFrontMs} 毫秒，留意其制动和牵引波动，等待稳定窗口。",
+            dedupKey: "advice:front-old-tyre",
+            payload: new
+            {
+                PlayerCarIndex = player.CarIndex,
+                FrontCarIndex = frontCar.CarIndex,
+                player.CurrentLapNumber,
+                GapFrontMs = gapFrontMs,
+                PlayerTyresAgeLaps = player.TyresAgeLaps,
+                FrontTyresAgeLaps = frontCar.TyresAgeLaps,
+                TyreAgeDeltaLaps = tyreAgeDeltaLaps,
+                ThresholdLaps = _options.OldTyreAgeDeltaLapsThreshold
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
+    }
+
+    private void DetectRearNewTyrePressure(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null || player.TyresAgeLaps is null)
+        {
+            return;
+        }
+
+        var rearCar = FindDirectRearCar(currentState, player);
+        if (rearCar is null || rearCar.TyresAgeLaps is null)
+        {
+            return;
+        }
+
+        if (!TryGetSameLapRearGapMs(player, rearCar, out var gapBehindMs)
+            || gapBehindMs > _options.TrafficRiskGapMs)
+        {
+            return;
+        }
+
+        var tyreAgeDeltaLaps = player.TyresAgeLaps.Value - rearCar.TyresAgeLaps.Value;
+        if (tyreAgeDeltaLaps < _options.NewTyrePressureAgeDeltaLapsThreshold)
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.RearNewTyrePressure,
+            severity: EventSeverity.Warning,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: rearCar.CarIndex,
+            driverName: rearCar.DriverName,
+            message: $"后车轮胎比你新 {tyreAgeDeltaLaps} 圈，差距 {gapBehindMs} 毫秒，注意防守线和出弯牵引。",
+            dedupKey: "advice:rear-new-tyre",
+            payload: new
+            {
+                PlayerCarIndex = player.CarIndex,
+                RearCarIndex = rearCar.CarIndex,
+                player.CurrentLapNumber,
+                GapBehindMs = gapBehindMs,
+                PlayerTyresAgeLaps = player.TyresAgeLaps,
+                RearTyresAgeLaps = rearCar.TyresAgeLaps,
+                TyreAgeDeltaLaps = tyreAgeDeltaLaps,
+                ThresholdLaps = _options.NewTyrePressureAgeDeltaLapsThreshold
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
+    }
+
+    private void DetectTrafficRisk(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null)
+        {
+            return;
+        }
+
+        var frontCar = FindDirectFrontCar(currentState, player);
+        if (frontCar is null
+            || !TryGetSameLapFrontGapMs(player, frontCar, out var gapFrontMs)
+            || gapFrontMs > _options.TrafficRiskGapMs)
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.TrafficRisk,
+            severity: EventSeverity.Warning,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: frontCar.CarIndex,
+            driverName: frontCar.DriverName,
+            message: $"前方同圈车辆差距 {gapFrontMs} 毫秒，注意交通风险并保留安全余量。",
+            dedupKey: "advice:traffic",
+            payload: new
+            {
+                PlayerCarIndex = player.CarIndex,
+                FrontCarIndex = frontCar.CarIndex,
+                player.CurrentLapNumber,
+                GapFrontMs = gapFrontMs,
+                ThresholdMs = _options.TrafficRiskGapMs,
+                SessionMode = SessionModeFormatter.Resolve(currentState.SessionType).ToString()
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
+    }
+
+    private void DetectQualifyingCleanAirWindow(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null || player.Position is null || player.CurrentLapNumber is null)
+        {
+            return;
+        }
+
+        ushort? gapFrontMs = null;
+        var frontCar = FindDirectFrontCar(currentState, player);
+        if (frontCar is not null)
+        {
+            if (frontCar.CurrentLapNumber is null)
+            {
+                return;
+            }
+
+            if (frontCar.CurrentLapNumber == player.CurrentLapNumber)
+            {
+                if (player.DeltaToCarInFrontInMs is not { } knownGapFrontMs)
+                {
+                    return;
+                }
+
+                if (knownGapFrontMs <= _options.QualifyingCleanAirGapMs)
+                {
+                    return;
+                }
+
+                gapFrontMs = knownGapFrontMs;
+            }
+        }
+
+        ushort? gapBehindMs = null;
+        var rearCar = FindDirectRearCar(currentState, player);
+        if (rearCar is not null)
+        {
+            if (rearCar.CurrentLapNumber is null)
+            {
+                return;
+            }
+
+            if (rearCar.CurrentLapNumber == player.CurrentLapNumber)
+            {
+                if (rearCar.DeltaToCarInFrontInMs is not { } knownGapBehindMs)
+                {
+                    return;
+                }
+
+                if (knownGapBehindMs <= _options.QualifyingCleanAirGapMs)
+                {
+                    return;
+                }
+
+                gapBehindMs = knownGapBehindMs;
+            }
+        }
+
+        EmitEvent(
+            eventType: EventType.QualifyingCleanAirWindow,
+            severity: EventSeverity.Information,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: player.CarIndex,
+            driverName: player.DriverName,
+            message: $"前后 {_options.QualifyingCleanAirGapMs} 毫秒内没有同圈车辆，当前是清洁空气窗口，专注完成本圈。",
+            dedupKey: "advice:qualifying-clean-air",
+            payload: new
+            {
+                player.CarIndex,
+                player.CurrentLapNumber,
+                GapFrontMs = gapFrontMs,
+                GapBehindMs = gapBehindMs,
+                ThresholdMs = _options.QualifyingCleanAirGapMs,
+                SessionMode = SessionModeFormatter.Resolve(currentState.SessionType).ToString()
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
+    }
+
+    private void DetectRacePitWindow(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player is null)
+        {
+            return;
+        }
+
+        var tyreAgeTriggered = player.TyresAgeLaps.HasValue
+            && player.TyresAgeLaps.Value >= _options.RacePitWindowTyreAgeLapsThreshold;
+        var tyreWearTriggered = player.TyreWear.HasValue
+            && player.TyreWear.Value >= _options.RacePitWindowTyreWearThreshold;
+        if (!tyreAgeTriggered && !tyreWearTriggered)
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.RacePitWindow,
+            severity: EventSeverity.Information,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: player.CarIndex,
+            driverName: player.DriverName,
+            message: $"{FormatTyreState(player.TyresAgeLaps, player.TyreWear)}，已接近进站窗口，准备或考虑进站时机。",
+            dedupKey: "advice:race-pit-window",
+            payload: new
+            {
+                player.CarIndex,
+                player.CurrentLapNumber,
+                player.TyresAgeLaps,
+                player.TyreWear,
+                TyreAgeThresholdLaps = _options.RacePitWindowTyreAgeLapsThreshold,
+                TyreWearThreshold = _options.RacePitWindowTyreWearThreshold,
+                TyreAgeTriggered = tyreAgeTriggered,
+                TyreWearTriggered = tyreWearTriggered
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
     }
 
     private void DetectAttackWindow(SessionState currentState, CarSnapshot player)
@@ -696,6 +999,41 @@ public sealed class EventDetectionService : IEventDetectionService
                 lapNumber: (int?)player.CurrentLapNumber,
                 message: "轮胎磨损数据不可用，已跳过高胎磨风险播报。");
         }
+    }
+
+    private void DetectRedFlagTyreChange(SessionState currentState, int zoneIndex, sbyte previousFlag, sbyte zoneFlag)
+    {
+        if (!IsRaceLikeSession(currentState))
+        {
+            return;
+        }
+
+        var player = currentState.PlayerCar;
+        if (player is null || (player.TyresAgeLaps is null && player.TyreWear is null))
+        {
+            return;
+        }
+
+        EmitEvent(
+            eventType: EventType.RedFlagTyreChange,
+            severity: EventSeverity.Information,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: (int?)player.CurrentLapNumber,
+            vehicleIdx: player.CarIndex,
+            driverName: player.DriverName,
+            message: $"红旗，旗区 {zoneIndex}。{FormatTyreState(player.TyresAgeLaps, player.TyreWear)}，复盘是否有换胎机会。",
+            dedupKey: $"advice:red-flag-tyre-change:{zoneIndex}:{player.CurrentLapNumber?.ToString() ?? "-"}",
+            payload: new
+            {
+                ZoneIndex = zoneIndex,
+                PreviousFlag = previousFlag,
+                ZoneFlag = zoneFlag,
+                player.CarIndex,
+                player.CurrentLapNumber,
+                player.TyresAgeLaps,
+                player.TyreWear
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
     }
 
     private void RegisterPitCandidate(CarSnapshot? snapshot, PitRelation relation, DateTimeOffset detectedAt)
@@ -915,9 +1253,106 @@ public sealed class EventDetectionService : IEventDetectionService
         return zoneFlag is >= -1 and <= 4;
     }
 
+    private static bool IsActiveSafetyCarStatus(byte? safetyCarStatus)
+    {
+        return safetyCarStatus is 1 or 2;
+    }
+
     private static bool IsRaceLikeSession(SessionState sessionState)
     {
         return SessionModeFormatter.Resolve(sessionState.SessionType) is SessionMode.Race or SessionMode.SprintRace;
+    }
+
+    private static bool IsQualifyingLikeSession(SessionState sessionState)
+    {
+        return SessionModeFormatter.Resolve(sessionState.SessionType) is SessionMode.Qualifying
+            or SessionMode.SprintQualifying
+            or SessionMode.TimeTrial;
+    }
+
+    private static CarSnapshot? FindDirectFrontCar(SessionState currentState, CarSnapshot player)
+    {
+        if (player.Position is not { } playerPosition || playerPosition <= 1)
+        {
+            return null;
+        }
+
+        var frontPosition = playerPosition - 1;
+        return currentState.Cars.FirstOrDefault(car => !car.IsPlayer
+            && car.Position.HasValue
+            && car.Position.Value == frontPosition);
+    }
+
+    private static CarSnapshot? FindDirectRearCar(SessionState currentState, CarSnapshot player)
+    {
+        if (player.Position is not { } playerPosition)
+        {
+            return null;
+        }
+
+        var activeCarCount = currentState.ActiveCarCount.HasValue
+            ? currentState.ActiveCarCount.Value
+            : currentState.Cars.Count;
+        if (activeCarCount > 0 && playerPosition >= activeCarCount)
+        {
+            return null;
+        }
+
+        var rearPosition = playerPosition + 1;
+        return currentState.Cars.FirstOrDefault(car => !car.IsPlayer
+            && car.Position.HasValue
+            && car.Position.Value == rearPosition);
+    }
+
+    private static bool TryGetSameLapFrontGapMs(CarSnapshot player, CarSnapshot frontCar, out ushort gapFrontMs)
+    {
+        gapFrontMs = 0;
+        if (!IsSameLap(player, frontCar) || player.DeltaToCarInFrontInMs is not { } currentGapFrontMs)
+        {
+            return false;
+        }
+
+        gapFrontMs = currentGapFrontMs;
+        return true;
+    }
+
+    private static bool TryGetSameLapRearGapMs(CarSnapshot player, CarSnapshot rearCar, out ushort gapBehindMs)
+    {
+        gapBehindMs = 0;
+        if (!IsSameLap(player, rearCar) || rearCar.DeltaToCarInFrontInMs is not { } currentGapBehindMs)
+        {
+            return false;
+        }
+
+        gapBehindMs = currentGapBehindMs;
+        return true;
+    }
+
+    private static bool IsSameLap(CarSnapshot player, CarSnapshot otherCar)
+    {
+        return player.CurrentLapNumber is { } playerLap
+            && otherCar.CurrentLapNumber is { } otherLap
+            && playerLap == otherLap;
+    }
+
+    private static string FormatTyreState(byte? tyreAgeLaps, float? tyreWear)
+    {
+        if (tyreAgeLaps.HasValue && tyreWear.HasValue)
+        {
+            return $"当前胎龄 {tyreAgeLaps.Value} 圈、平均磨损 {tyreWear.Value:0.0}%";
+        }
+
+        if (tyreAgeLaps.HasValue)
+        {
+            return $"当前胎龄 {tyreAgeLaps.Value} 圈";
+        }
+
+        if (tyreWear.HasValue)
+        {
+            return $"当前平均磨损 {tyreWear.Value:0.0}%";
+        }
+
+        return "当前轮胎状态未知";
     }
 
     private sealed class PitCandidate

@@ -34,6 +34,23 @@ public sealed class RaceEventSpeechSubscriberTests
     }
 
     /// <summary>
+    /// Verifies a new race-advice event published in race mode reaches the TTS speaker.
+    /// </summary>
+    [Fact]
+    public async Task Publish_M6RaceAdviceEventInRace_ReachesTtsSpeaker()
+    {
+        var eventBus = new InMemoryEventBus<RaceEvent>();
+        var speaker = new RecordingSpeaker();
+        using var queue = new TtsQueue(speaker, new TtsOptions { TtsEnabled = true });
+        using var subscriber = CreateSubscriber(eventBus, queue, SessionMode.Race);
+
+        eventBus.Publish(CreateRaceEvent(EventType.FrontOldTyreRisk, "前车旧胎，保持压力。"));
+
+        await WaitUntilAsync(() => speaker.Messages.Contains("前车旧胎，保持压力。"));
+        Assert.Contains("前车旧胎，保持压力。", speaker.Messages.ToArray());
+    }
+
+    /// <summary>
     /// Verifies qualifying sessions keep race pit-window speech out of the TTS queue.
     /// </summary>
     [Theory]
@@ -49,6 +66,22 @@ public sealed class RaceEventSpeechSubscriberTests
         using var subscriber = CreateSubscriber(eventBus, queue, SessionMode.Qualifying, warnings.Add);
 
         eventBus.Publish(CreateRaceEvent(eventType, "Race strategy event."));
+
+        Assert.Empty(warnings);
+    }
+
+    /// <summary>
+    /// Verifies qualifying mode filters new race-only advice before it reaches the TTS queue.
+    /// </summary>
+    [Fact]
+    public void Publish_QualifyingMode_FiltersM6RaceOnlyAdvice()
+    {
+        var eventBus = new InMemoryEventBus<RaceEvent>();
+        var warnings = new List<string>();
+        var queue = CreateDisposedQueue();
+        using var subscriber = CreateSubscriber(eventBus, queue, SessionMode.Qualifying, warnings.Add);
+
+        eventBus.Publish(CreateRaceEvent(EventType.RacePitWindow, "正赛进站窗口。"));
 
         Assert.Empty(warnings);
     }
@@ -166,7 +199,7 @@ public sealed class RaceEventSpeechSubscriberTests
         return new RaceEvent
         {
             EventType = eventType,
-            Timestamp = DateTimeOffset.UtcNow,
+            Timestamp = new DateTimeOffset(2026, 5, 10, 10, 0, 0, TimeSpan.Zero),
             LapNumber = 8,
             VehicleIdx = 12,
             Severity = eventType == EventType.DataQualityWarning

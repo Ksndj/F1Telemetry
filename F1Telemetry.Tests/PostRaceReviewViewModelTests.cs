@@ -128,6 +128,29 @@ public sealed class PostRaceReviewViewModelTests
     }
 
     /// <summary>
+    /// Verifies new race-advice event types have Chinese timeline display text.
+    /// </summary>
+    [Fact]
+    public void EventRow_FromM6AdviceEvent_UsesChineseEventTypeText()
+    {
+        var row = PostRaceReviewEventRowViewModel.FromStoredEvent(new StoredEvent
+        {
+            Id = 42,
+            SessionId = "session-a",
+            EventType = EventType.FrontOldTyreRisk,
+            Severity = EventSeverity.Warning,
+            LapNumber = 18,
+            VehicleIdx = 2,
+            DriverName = "Front Runner",
+            Message = "前车旧胎风险，适合持续施压",
+            CreatedAt = new DateTimeOffset(2026, 5, 10, 10, 0, 0, TimeSpan.Zero)
+        });
+
+        Assert.Equal("前车旧胎风险", row.EventTypeText);
+        Assert.Equal("前车旧胎风险", row.Category);
+    }
+
+    /// <summary>
     /// Verifies repository failures do not escape to UI callers.
     /// </summary>
     [Fact]
