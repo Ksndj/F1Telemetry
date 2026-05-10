@@ -2,12 +2,18 @@
 
 F1Telemetry 是一个 **F1 25 Windows 遥测助手**。它接收游戏 UDP 遥测数据，把实时比赛状态整理成中文概览、AI 分析播报、单圈历史、对手信息、事件日志，并可通过 DeepSeek AI 和 Windows TTS 给出短提示。
 
+当前开发进度：`2.0.0-beta1`，V2 比赛工程台基础功能已完成，进入 beta 验证阶段。
+
 ## 当前主要功能
 
 - UDP 接收：监听 F1 25 遥测端口并解析主要比赛数据。
 - 实时概览：显示赛道、赛制、轮胎、燃油、ERS、前后车差距和关键事件摘要。
 - AI 分析播报：将当前圈速度、油门/刹车、多圈燃油和四轮磨损趋势压缩进 AI 短结论，并通过 TTS 播报关键提醒。
-- 单圈历史：记录最近圈速、有效圈、燃油消耗和轮胎磨损摘要。
+- 单圈历史：记录当前实时会话最近圈速、有效圈、燃油消耗和轮胎磨损摘要。
+- 历史会话浏览：异步加载 SQLite 中的历史 session，并查看选中 session 的单圈列表。
+- 赛后复盘：从历史 laps / events / ai_reports 加载会话摘要、趋势图、事件时间线和 AI 每圈点评。
+- 多会话对比：按同赛道筛选并对比 2-4 个历史 session 的圈速、燃油和 ERS 趋势。
+- 复盘报告导出：从赛后复盘页导出 Markdown / JSON 报告，不包含 API Key 或原始高频 UDP。
 - 对手信息：展示可读化的对手状态、进站、遥测限制和差距。
 - 事件日志：按 System / UDP / RaceEvent / AI / TTS / Storage 分类查看完整日志。
 - AI 分析：使用 DeepSeek OpenAI compatible endpoint 生成短结论。
@@ -1288,6 +1294,20 @@ docs: add V1.5 car damage AI TTS roadmap
 
 ### V2：比赛工程台
 
+#### V2 当前进度
+
+V2-M1 到 V2-M7 已完成并进入 `2.0.0-beta1`：
+
+- V2-M1：EventBus 基础设施完成，`RaceEvent` 已接入兼容式同步 EventBus。
+- V2-M2：TTS 播报和 AI 最近关键事件缓存已从 `IEventBus<RaceEvent>` 消费。
+- V2-M3：历史 session 列表和历史单圈列表已接入 SQLite，加载为异步流程。
+- V2-M4：独立“赛后复盘”页已接入历史 laps / events / ai_reports。
+- V2-M5：多会话对比页已支持同赛道 2-4 个历史 session 的基础趋势对比。
+- V2-M6：实时规则引擎已增加正赛 / 排位赛边界明确的建议事件，并带冷却和去重。
+- V2-M7：赛后复盘 Markdown / JSON 导出完成，版本号已提升到 `2.0.0-beta1`。
+
+V2 beta 阶段剩余工作主要是实车数据验证、UI 细节打磨和发布验收；弯角级分析、完整策略模拟、赛后 AI 长报告和自动发布仍属于 V2 非目标或 V3 后续目标。
+
 #### V2 目标
 
 V2 的目标是把软件从“实时比赛助手”升级为“可复盘、可扩展的比赛工程台”。
@@ -1400,7 +1420,7 @@ Session 列表字段：
 - 圈速趋势。
 - 分段趋势。
 - 燃油趋势。
-- 四轮胎磨趋势。
+- 胎况 / stint 摘要；现有历史单圈未保存四轮胎磨明细时显示不可用状态。
 - ERS 趋势。
 - 关键事件时间线。
 - AI 每圈点评。
@@ -1435,7 +1455,7 @@ ReviewView
 
 - 最佳圈速对比。
 - 平均圈速对比。
-- 胎磨趋势对比。
+- 胎磨对比不可用状态；现有历史单圈未保存四轮胎磨明细，不伪造趋势。
 - 油耗趋势对比。
 - ERS 趋势对比。
 - 同一赛道排位赛 / 正赛表现对比。
@@ -1455,7 +1475,7 @@ ComparisonView
 ├─ Track / Session Filter
 ├─ Selected Sessions
 ├─ Lap Time Comparison
-├─ Tyre Wear Comparison
+├─ Tyre Wear Unavailable State
 ├─ Fuel Usage Comparison
 ├─ ERS Usage Comparison
 └─ Summary Differences
@@ -1480,7 +1500,7 @@ ComparisonView
 
 要求：
 
-- 规则输出统一为 RaceEvent 或 RaceAdvice。
+- 规则输出统一为 RaceEvent，沿用现有 EventBus 消费链路。
 - 每条规则有明确冷却时间。
 - 避免刷屏。
 - AI/TTS 只消费筛选后的关键建议。
@@ -1523,12 +1543,14 @@ V2 可支持基础报告导出：
 要求：
 
 - 不导出 API Key。
-- 不导出原始高频 UDP，除非用户明确选择。
+- 不导出原始高频 UDP。
 - 默认导出摘要数据。
 
 #### V2 建议里程碑
 
 ##### V2-M1：EventBus 基础设施
+
+状态：已完成。
 
 建议分支：
 
@@ -1551,6 +1573,8 @@ feat/v2-eventbus-foundation
 
 ##### V2-M2：TTS / AI 事件流解耦
 
+状态：已完成。
+
 建议分支：
 
 ```text
@@ -1571,6 +1595,8 @@ feat/v2-ai-tts-eventbus-integration
 - ViewModel 职责下降。
 
 ##### V2-M3：历史会话列表
+
+状态：已完成。
 
 建议分支：
 
@@ -1593,6 +1619,8 @@ feat/v2-history-session-browser
 
 ##### V2-M4：赛后复盘页
 
+状态：已完成。
+
 建议分支：
 
 ```text
@@ -1614,6 +1642,8 @@ feat/v2-post-race-review
 
 ##### V2-M5：多会话对比
 
+状态：已完成。
+
 建议分支：
 
 ```text
@@ -1634,6 +1664,8 @@ feat/v2-session-comparison
 
 ##### V2-M6：规则引擎增强
 
+状态：已完成。
+
 建议分支：
 
 ```text
@@ -1653,6 +1685,8 @@ feat/v2-race-advice-rules
 - 排位赛 / 正赛规则不串场。
 
 ##### V2-M7：报告导出
+
+状态：已完成。
 
 建议分支：
 
