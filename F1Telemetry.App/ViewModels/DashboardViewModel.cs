@@ -23,6 +23,7 @@ using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
 using F1Telemetry.Storage.Interfaces;
+using F1Telemetry.Storage.Models;
 using F1Telemetry.TTS;
 using F1Telemetry.TTS.Models;
 using F1Telemetry.TTS.Services;
@@ -166,6 +167,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly object _shutdownGate = new();
     private Task? _shutdownTask;
     private bool _disposed;
+    private bool _hasRequestedHistoryLoad;
 
     /// <summary>
     /// Initializes a new dashboard view model.
@@ -185,6 +187,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="windowsVoiceCatalog">The optional Windows voice catalog used by the settings UI.</param>
     /// <param name="udpRawLogDirectoryService">The optional raw UDP log directory helper used by Settings.</param>
     /// <param name="raceEventBus">The optional V2 event bus used to publish detected race events.</param>
+    /// <param name="historyBrowser">The optional persisted history session browser.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -200,7 +203,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         Dispatcher dispatcher,
         WindowsVoiceCatalog? windowsVoiceCatalog = null,
         IUdpRawLogDirectoryService? udpRawLogDirectoryService = null,
-        IEventBus<RaceEvent>? raceEventBus = null)
+        IEventBus<RaceEvent>? raceEventBus = null,
+        HistorySessionBrowserViewModel? historyBrowser = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -214,6 +218,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
+        HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
         _raceEventSpeechSubscriber = new RaceEventSpeechSubscriber(
             _raceEventBus,
@@ -343,6 +348,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public ObservableCollection<ShellNavigationItemViewModel> ShellNavigationItems { get; }
 
     /// <summary>
+    /// Gets the persisted history session browser.
+    /// </summary>
+    public HistorySessionBrowserViewModel HistoryBrowser { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the sidebar is expanded.
     /// </summary>
     public bool IsSidebarExpanded
@@ -382,6 +392,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(IsPlaceholderNavigationSelected));
                 OnPropertyChanged(nameof(IsLegacyDashboardSelected));
                 OnPropertyChanged(nameof(SelectedShellNavigationTitle));
+                RequestHistoryBrowserRefreshIfNeeded();
             }
         }
     }
@@ -1366,6 +1377,37 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch
         {
         }
+    }
+
+    private void RequestHistoryBrowserRefreshIfNeeded()
+    {
+        if (_hasRequestedHistoryLoad || !IsLapHistorySelected)
+        {
+            return;
+        }
+
+        _hasRequestedHistoryLoad = true;
+        _ = RefreshHistoryBrowserAsync();
+    }
+
+    private async Task RefreshHistoryBrowserAsync()
+    {
+        try
+        {
+            await HistoryBrowser.RefreshSessionsAsync(_lifecycleCts.Token);
+        }
+        catch (OperationCanceledException) when (_lifecycleCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"Failed to refresh history sessions: {ex}");
+        }
+    }
+
+    private static HistorySessionBrowserViewModel CreateNoOpHistoryBrowser()
+    {
+        return new HistorySessionBrowserViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
     }
 
     private void StopUiTimer()
@@ -2947,5 +2989,36 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private static string FormatGapMs(ushort? gapMs)
     {
         return gapMs is null ? "-" : $"{gapMs.Value / 1000d:0.000}s";
+    }
+
+    private sealed class NoOpSessionRepository : ISessionRepository
+    {
+        public Task CreateAsync(StoredSession session, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task EndAsync(string sessionId, DateTimeOffset endedAt, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredSession>> GetRecentAsync(int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredSession>>(Array.Empty<StoredSession>());
+        }
+    }
+
+    private sealed class NoOpLapRepository : ILapRepository
+    {
+        public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLap>>(Array.Empty<StoredLap>());
+        }
     }
 }

@@ -6,93 +6,226 @@
              mc:Ignorable="d"
              d:DesignHeight="680"
              d:DesignWidth="1120">
+    <UserControl.Resources>
+        <DataTemplate x:Key="LapSummaryRowTemplate">
+            <Border Margin="0,0,0,10"
+                    Padding="14"
+                    CornerRadius="14"
+                    Background="#132743">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="72" />
+                        <ColumnDefinition Width="92" />
+                        <ColumnDefinition Width="170" />
+                        <ColumnDefinition Width="88" />
+                        <ColumnDefinition Width="74" />
+                        <ColumnDefinition Width="74" />
+                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="96" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Foreground="White" Text="{Binding LapText}" />
+                    <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding LapTimeText}" />
+                    <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding SectorsText}" />
+                    <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding AverageSpeedText}" />
+                    <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding FuelUsedLitresText}" />
+                    <TextBlock Grid.Column="5" Foreground="#D7E4F3" Text="{Binding ErsUsedText}" />
+                    <TextBlock Grid.Column="6" Foreground="#D7E4F3" Text="{Binding TyreWearDeltaText}" />
+                    <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="{Binding ValidityText}" />
+                    <TextBlock Grid.Column="8" Foreground="#D7E4F3" Text="{Binding TyreWindowText}" />
+                    <TextBlock Grid.Column="9" Foreground="#D7E4F3" Text="{Binding PitWindowText}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <ScrollViewer x:Name="LapHistoryScrollViewer"
                   HorizontalScrollBarVisibility="Auto"
                   VerticalScrollBarVisibility="Auto">
-        <Border MinWidth="980"
+        <Border MinWidth="1120"
                 Padding="20"
                 CornerRadius="20"
                 Background="#0F1B2E">
             <StackPanel>
-                <TextBlock FontSize="20"
-                           FontWeight="SemiBold"
-                           Foreground="White"
-                           Text="单圈历史" />
-                <TextBlock Margin="0,6,0,0"
-                           Foreground="#9AB0C9"
-                           Text="缓存保留整场圈摘要，界面默认显示最近 12 圈，最新圈在最上方。"
-                           TextWrapping="Wrap" />
-
-                <Grid Margin="0,18,0,0">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="14" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="140" />
                     </Grid.ColumnDefinitions>
-
-                    <Border Padding="14"
-                            CornerRadius="14"
-                            Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="Best" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Foreground="White"
-                                       Text="{Binding BestLapSummaryText}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
-
-                    <Border Grid.Column="2"
-                            Padding="14"
-                            CornerRadius="14"
-                            Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="Last" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Foreground="White"
-                                       Text="{Binding LastLapSummaryText}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Border>
+                    <StackPanel>
+                        <TextBlock FontSize="20"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="历史会话" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="#9AB0C9"
+                                   Text="{Binding HistoryBrowser.StatusText, TargetNullValue=历史会话状态待刷新。}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#6F86A3"
+                                   Text="{Binding HistoryBrowser.EmptyStateText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#9AB0C9"
+                                   Text="浏览已缓存的历史 UDP 会话，选择左侧会话后在右侧查看对应圈列表。"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Width="120"
+                            Height="34"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Command="{Binding HistoryBrowser.RefreshSessionsCommand}"
+                            Content="刷新会话" />
                 </Grid>
 
-                <ItemsControl Margin="0,18,0,0"
-                              ItemsSource="{Binding RecentLapSummaries}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,0,0,10"
+                <Border Margin="0,18,0,0"
+                        Padding="16"
+                        CornerRadius="16"
+                        Background="#111F35">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" MinWidth="720" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Padding="12"
+                                CornerRadius="12"
+                                Background="#132743">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Foreground="#7FA5D8"
+                                           Text="会话列表" />
+                                <ListBox Grid.Row="2"
+                                         MinHeight="220"
+                                         Background="Transparent"
+                                         BorderThickness="0"
+                                         HorizontalContentAlignment="Stretch"
+                                         ItemsSource="{Binding HistoryBrowser.HistorySessions}"
+                                         SelectedItem="{Binding HistoryBrowser.SelectedSession, Mode=TwoWay}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,8"
+                                                    Padding="10"
+                                                    CornerRadius="10"
+                                                    Background="#0F1B2E">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="White"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding SummaryText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,5,0,0"
+                                                               Foreground="#D7E4F3"
+                                                               Text="{Binding TrackText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Foreground="#9AB0C9"
+                                                               Text="{Binding SessionTypeText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Foreground="#6F86A3"
+                                                               Text="{Binding StartedAtText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Foreground="#6F86A3"
+                                                               Text="{Binding EndedAtText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Foreground="#6F86A3"
+                                                               Text="{Binding DurationText}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,3,0,0"
+                                                               Foreground="#6F86A3"
+                                                               Text="{Binding SessionUid}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="2"
+                                Padding="12"
+                                CornerRadius="12"
+                                Background="#132743">
+                            <StackPanel>
+                                <TextBlock FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="White"
+                                           Text="历史会话圈列表" />
+                                <TextBlock Margin="0,5,0,0"
+                                           Foreground="#9AB0C9"
+                                           Text="{Binding HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话。}"
+                                           TextWrapping="Wrap" />
+                                <ItemsControl Margin="0,12,0,0"
+                                              ItemTemplate="{StaticResource LapSummaryRowTemplate}"
+                                              ItemsSource="{Binding HistoryBrowser.HistoryLaps}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <Border Margin="0,18,0,0"
+                        Padding="16"
+                        CornerRadius="16"
+                        Background="#111F35">
+                    <StackPanel>
+                        <TextBlock FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="当前实时会话最近圈" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="#9AB0C9"
+                                   Text="这里来自当前正在运行的 UDP 会话/缓存，不会随上方选中的历史会话切换。"
+                                   TextWrapping="Wrap" />
+
+                        <Grid Margin="0,18,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Padding="14"
+                                    CornerRadius="14"
+                                    Background="#132743">
+                                <StackPanel>
+                                    <TextBlock Foreground="#7FA5D8" Text="Best" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="White"
+                                               Text="{Binding BestLapSummaryText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border Grid.Column="2"
                                     Padding="14"
                                     CornerRadius="14"
                                     Background="#132743">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="92" />
-                                        <ColumnDefinition Width="170" />
-                                        <ColumnDefinition Width="88" />
-                                        <ColumnDefinition Width="74" />
-                                        <ColumnDefinition Width="74" />
-                                        <ColumnDefinition Width="76" />
-                                        <ColumnDefinition Width="64" />
-                                        <ColumnDefinition Width="140" />
-                                        <ColumnDefinition Width="96" />
-                                    </Grid.ColumnDefinitions>
-
-                                    <TextBlock Foreground="White" Text="{Binding LapText}" />
-                                    <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding LapTimeText}" />
-                                    <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding SectorsText}" />
-                                    <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding AverageSpeedText}" />
-                                    <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding FuelUsedLitresText}" />
-                                    <TextBlock Grid.Column="5" Foreground="#D7E4F3" Text="{Binding ErsUsedText}" />
-                                    <TextBlock Grid.Column="6" Foreground="#D7E4F3" Text="{Binding TyreWearDeltaText}" />
-                                    <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="{Binding ValidityText}" />
-                                    <TextBlock Grid.Column="8" Foreground="#D7E4F3" Text="{Binding TyreWindowText}" />
-                                    <TextBlock Grid.Column="9" Foreground="#D7E4F3" Text="{Binding PitWindowText}" />
-                                </Grid>
+                                <StackPanel>
+                                    <TextBlock Foreground="#7FA5D8" Text="Last" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Foreground="White"
+                                               Text="{Binding LastLapSummaryText}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
                             </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                        </Grid>
+
+                        <ItemsControl Margin="0,18,0,0"
+                                      ItemTemplate="{StaticResource LapSummaryRowTemplate}"
+                                      ItemsSource="{Binding RecentLapSummaries}" />
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
     </ScrollViewer>

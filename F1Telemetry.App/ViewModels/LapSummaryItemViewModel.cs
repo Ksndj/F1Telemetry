@@ -1,5 +1,6 @@
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Formatting;
+using F1Telemetry.Storage.Models;
 
 namespace F1Telemetry.App.ViewModels;
 
@@ -81,9 +82,42 @@ public sealed class LapSummaryItemViewModel
         };
     }
 
+    /// <summary>
+    /// Creates a UI row from the specified stored lap row.
+    /// </summary>
+    /// <param name="lap">The stored lap row to project.</param>
+    public static LapSummaryItemViewModel FromStoredLap(StoredLap lap)
+    {
+        ArgumentNullException.ThrowIfNull(lap);
+
+        return new LapSummaryItemViewModel
+        {
+            LapText = $"Lap {lap.LapNumber}",
+            LapTimeText = FormatLapTime(lap.LapTimeInMs),
+            SectorsText = $"{FormatLapTime(lap.Sector1TimeInMs)} / {FormatLapTime(lap.Sector2TimeInMs)} / {FormatLapTime(lap.Sector3TimeInMs)}",
+            AverageSpeedText = lap.AverageSpeedKph is null ? "-" : $"{lap.AverageSpeedKph:0} km/h",
+            FuelUsedLitresText = lap.FuelUsedLitres is null ? "-" : $"{lap.FuelUsedLitres:0.00} L",
+            ErsUsedText = lap.ErsUsed is null ? "-" : $"{lap.ErsUsed.Value / 1_000_000f:0.00} MJ",
+            TyreWearDeltaText = "-",
+            ValidityText = lap.IsValid ? "有效" : "无效",
+            TyreWindowText = FormatStoredTyreWindow(lap.StartTyre, lap.EndTyre),
+            PitWindowText = "-"
+        };
+    }
+
     private static string FormatPitState(bool inPit)
     {
         return inPit ? "Pit" : "Track";
+    }
+
+    private static string FormatLapTime(int? milliseconds)
+    {
+        if (milliseconds is null || milliseconds.Value < 0)
+        {
+            return "-";
+        }
+
+        return FormatLapTime((uint)milliseconds.Value);
     }
 
     private static string FormatLapTime(uint? milliseconds)
@@ -97,5 +131,25 @@ public sealed class LapSummaryItemViewModel
         return time.TotalMinutes >= 1
             ? $"{(int)time.TotalMinutes}:{time.Seconds:00}.{time.Milliseconds:000}"
             : $"{time.Seconds}.{time.Milliseconds:000}s";
+    }
+
+    private static string FormatStoredTyreWindow(string? startTyre, string? endTyre)
+    {
+        var startText = FormatStoredTyre(startTyre);
+        var endText = FormatStoredTyre(endTyre);
+
+        return startText == "-" && endText == "-"
+            ? "-"
+            : $"{startText} -> {endText}";
+    }
+
+    private static string FormatStoredTyre(string? tyre)
+    {
+        if (string.IsNullOrWhiteSpace(tyre) || tyre.Trim() == "-" || !tyre.Any(char.IsDigit))
+        {
+            return "-";
+        }
+
+        return TyreCompoundFormatter.FormatRawCompoundText(tyre);
     }
 }

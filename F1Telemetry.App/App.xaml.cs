@@ -44,9 +44,11 @@ public partial class App : Application
             new DeepSeekClient(_aiHttpClient),
             new PromptBuilder());
         var databaseService = new SqliteDatabaseService();
+        var sessionRepository = new SessionRepository(databaseService);
+        var lapRepository = new LapRepository(databaseService);
         var storagePersistenceService = new StoragePersistenceService(
-            new SessionRepository(databaseService),
-            new LapRepository(databaseService),
+            sessionRepository,
+            lapRepository,
             new EventRepository(databaseService),
             new AIReportRepository(databaseService),
             databaseService.InitializeAsync,
@@ -70,7 +72,8 @@ public partial class App : Application
             ttsQueue,
             storagePersistenceService,
             Dispatcher,
-            raceEventBus: raceEventBus);
+            raceEventBus: raceEventBus,
+            historyBrowser: new HistorySessionBrowserViewModel(sessionRepository, lapRepository));
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel
