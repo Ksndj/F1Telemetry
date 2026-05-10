@@ -1,0 +1,275 @@
+<UserControl x:Class="F1Telemetry.App.Views.SessionComparisonView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:F1Telemetry.App.Views.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="720"
+             d:DesignWidth="1180">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+
+        <Style x:Key="SectionCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="#111F35" />
+        </Style>
+
+        <Style x:Key="InnerCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="14" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#132743" />
+        </Style>
+
+        <Style x:Key="SectionTitleStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="MutedTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#9AB0C9" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="LabelTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#7FA5D8" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <Style x:Key="ValueTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
+        <DataTemplate x:Key="CandidateSessionTemplate">
+            <Border Margin="0,0,0,10"
+                    Style="{StaticResource InnerCardStyle}">
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                    <StackPanel Margin="8,0,0,0">
+                        <TextBlock FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="{Binding SummaryText, TargetNullValue=历史会话}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding TrackText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#6F86A3"
+                                   Text="{Binding SessionTypeText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#6F86A3"
+                                   Text="{Binding StartedAtText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </CheckBox>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="SummaryRowTemplate">
+            <Border Margin="0,0,10,10"
+                    MinWidth="220"
+                    Style="{StaticResource InnerCardStyle}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="{Binding SessionLabel}" />
+                    <TextBlock Margin="0,8,0,0"
+                               Style="{StaticResource LabelTextStyle}"
+                               Text="最好圈" />
+                    <TextBlock FontSize="16"
+                               FontWeight="SemiBold"
+                               Style="{StaticResource ValueTextStyle}"
+                               Text="{Binding BestLapText}" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#6F86A3"
+                               Text="{Binding AverageLapText, StringFormat=平均圈速 {0}}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#6F86A3"
+                               Text="{Binding ValidLapCountText, StringFormat=有效圈 {0}}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#6F86A3"
+                               Text="{Binding AverageFuelText, StringFormat=平均燃油 {0}}"
+                               TextWrapping="Wrap" />
+                    <TextBlock Margin="0,4,0,0"
+                               Foreground="#6F86A3"
+                               Text="{Binding AverageErsText, StringFormat=平均 ERS {0}}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer x:Name="SessionComparisonScrollViewer"
+                  HorizontalScrollBarVisibility="Auto"
+                  VerticalScrollBarVisibility="Auto">
+        <Border MinWidth="1120"
+                Padding="20"
+                CornerRadius="20"
+                Background="#0F1B2E">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="340" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" MinWidth="760" />
+                </Grid.ColumnDefinitions>
+
+                <Border Style="{StaticResource SectionCardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="16" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="14" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="14" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                       Text="多会话对比" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="这里对比已保存的历史 UDP 会话，用于赛后横向复盘；不会读取或代表当前正在接收的实时 UDP 会话。" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2">
+                            <TextBlock Style="{StaticResource LabelTextStyle}"
+                                       Text="赛道筛选" />
+                            <ComboBox Margin="0,8,0,0"
+                                      Height="34"
+                                      DisplayMemberPath="SummaryText"
+                                      ItemsSource="{Binding SessionComparison.TrackFilters}"
+                                      SelectedItem="{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}" />
+                        </StackPanel>
+
+                        <Grid Grid.Row="4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="112" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource MutedTextStyle}"
+                                           Text="{Binding SessionComparison.StatusText, TargetNullValue=等待刷新历史会话。}" />
+                                <TextBlock Margin="0,4,0,0"
+                                           Foreground="#6F86A3"
+                                           Text="{Binding SessionComparison.EmptyStateText}"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Width="104"
+                                    Height="34"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Command="{Binding SessionComparison.RefreshCommand}"
+                                    Content="刷新" />
+                        </Grid>
+
+                        <Grid Grid.Row="6">
+                            <ItemsControl ItemTemplate="{StaticResource CandidateSessionTemplate}"
+                                          ItemsSource="{Binding SessionComparison.CandidateSessions}" />
+                            <Border Padding="12,8"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Top"
+                                    CornerRadius="12"
+                                    Background="#19365A"
+                                    Visibility="{Binding SessionComparison.IsLoadingSessions, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Foreground="#D7E4F3"
+                                           Text="正在加载历史会话" />
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="150" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                               Text="差异摘要" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="选择两个或更多历史会话后，这里汇总圈速、燃油、ERS 与轮胎磨损的对比差异。" />
+                                </StackPanel>
+                                <Border Grid.Column="1"
+                                        Padding="12,7"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Top"
+                                        CornerRadius="12"
+                                        Background="#19365A"
+                                        Visibility="{Binding SessionComparison.IsLoadingComparison, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <TextBlock Foreground="#D7E4F3"
+                                               Text="正在计算" />
+                                </Border>
+                            </Grid>
+
+                            <ItemsControl Margin="0,16,0,0"
+                                          ItemTemplate="{StaticResource SummaryRowTemplate}"
+                                          ItemsSource="{Binding SessionComparison.SummaryRows}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,16,0,0"
+                            Style="{StaticResource SectionCardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                       Text="历史趋势对比" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="图表只使用已保存历史会话数据，不随当前实时 UDP 数据刷新。" />
+
+                            <Grid Margin="0,16,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="270" />
+                                    <RowDefinition Height="14" />
+                                    <RowDefinition Height="270" />
+                                    <RowDefinition Height="14" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="10" />
+                                    <RowDefinition Height="270" />
+                                </Grid.RowDefinitions>
+
+                                <controls:TelemetryChartControl DataContext="{Binding SessionComparison.LapTimeComparisonPanel}" />
+                                <controls:TelemetryChartControl Grid.Column="2"
+                                                                DataContext="{Binding SessionComparison.FuelComparisonPanel}" />
+                                <controls:TelemetryChartControl Grid.Row="2"
+                                                                DataContext="{Binding SessionComparison.ErsComparisonPanel}" />
+                                <TextBlock Grid.Row="4"
+                                           Grid.ColumnSpan="3"
+                                           Style="{StaticResource MutedTextStyle}"
+                                           Text="轮胎磨损对比依赖历史记录中的 tyre wear 数据；旧会话或未采集该字段的历史会话会显示为空状态。" />
+                                <controls:TelemetryChartControl Grid.Row="6"
+                                                                Grid.ColumnSpan="3"
+                                                                DataContext="{Binding SessionComparison.TyreWearComparisonPanel}" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </ScrollViewer>
+</UserControl>
