@@ -230,7 +230,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="280" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel>
                                     <TextBlock Style="{StaticResource SectionTitleStyle}"
@@ -239,16 +239,35 @@
                                                Style="{StaticResource MutedTextStyle}"
                                                Text="{Binding PostRaceReview.HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话查看赛后摘要。}" />
                                 </StackPanel>
-                                <Border Grid.Column="1"
-                                        Padding="12,7"
-                                        HorizontalAlignment="Right"
-                                        VerticalAlignment="Top"
-                                        CornerRadius="12"
-                                        Background="#19365A"
-                                        Visibility="{Binding PostRaceReview.IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                    <TextBlock Foreground="#D7E4F3"
-                                               Text="正在加载历史数据" />
-                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            HorizontalAlignment="Right">
+                                    <StackPanel HorizontalAlignment="Right"
+                                                Orientation="Horizontal">
+                                        <Button Width="118"
+                                                Height="34"
+                                                Command="{Binding PostRaceReview.ExportMarkdownCommand}"
+                                                Content="导出 Markdown" />
+                                        <Button Width="104"
+                                                Height="34"
+                                                Margin="8,0,0,0"
+                                                Command="{Binding PostRaceReview.ExportJsonCommand}"
+                                                Content="导出 JSON" />
+                                    </StackPanel>
+                                    <TextBlock Margin="0,8,0,0"
+                                               HorizontalAlignment="Right"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding PostRaceReview.ReportExportStatusText}"
+                                               TextAlignment="Right" />
+                                    <Border Margin="0,8,0,0"
+                                            Padding="12,7"
+                                            HorizontalAlignment="Right"
+                                            CornerRadius="12"
+                                            Background="#19365A"
+                                            Visibility="{Binding PostRaceReview.IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Foreground="#D7E4F3"
+                                                   Text="正在加载历史数据" />
+                                    </Border>
+                                </StackPanel>
                             </Grid>
 
                             <ItemsControl Margin="0,16,0,0"

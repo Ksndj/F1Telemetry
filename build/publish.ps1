@@ -17,10 +17,10 @@ dotnet publish $projectPath `
     -m:1 `
     /p:PublishSingleFile=true `
     /p:IncludeNativeLibrariesForSelfExtract=true `
-    /p:Version=1.5.2 `
-    /p:AssemblyVersion=1.5.2.0 `
-    /p:FileVersion=1.5.2.0 `
-    /p:InformationalVersion=1.5.2 `
+    /p:Version=2.0.0-beta1 `
+    /p:AssemblyVersion=2.0.0.0 `
+    /p:FileVersion=2.0.0.0 `
+    /p:InformationalVersion=2.0.0-beta1 `
     -o $publishDir
 
 if ($LASTEXITCODE -ne 0) {

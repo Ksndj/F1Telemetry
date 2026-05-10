@@ -7,6 +7,7 @@ using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core;
 using F1Telemetry.Core.Eventing;
+using F1Telemetry.App.Services;
 using F1Telemetry.Storage.Repositories;
 using F1Telemetry.Storage.Services;
 using F1Telemetry.TTS.Models;
@@ -82,7 +83,8 @@ public partial class App : Application
                 historyBrowser,
                 lapRepository,
                 eventRepository,
-                aiReportRepository),
+                aiReportRepository,
+                new SaveFilePostRaceReviewReportExportService()),
             sessionComparison: sessionComparison);
         var mainWindow = new MainWindow
         {

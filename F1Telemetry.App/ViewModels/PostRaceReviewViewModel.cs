@@ -1,8 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.IO;
 using System.Windows.Input;
 using F1Telemetry.App.Charts;
+using F1Telemetry.App.Reports;
+using F1Telemetry.App.Services;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -22,12 +25,24 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
     private readonly StoredLapPostRaceChartBuilder _chartBuilder;
+    private readonly PostRaceReviewReportBuilder _reportBuilder;
+    private readonly IPostRaceReviewReportExportService _reportExportService;
     private readonly RelayCommand _refreshCommand;
+    private readonly RelayCommand _exportMarkdownCommand;
+    private readonly RelayCommand _exportJsonCommand;
     private bool _isLoading;
+    private bool _isExportingReport;
     private bool _isRefreshingHistoryBrowser;
     private int _loadVersion;
     private string _statusText = "请选择历史会话进行赛后复盘。";
     private string _emptyStateText = "请选择历史会话进行赛后复盘";
+    private string _reportExportStatusText = "尚未导出复盘报告。";
+    private HistorySessionItemViewModel? _lastLoadedSession;
+    private IReadOnlyList<StoredLap> _lastLoadedLaps = Array.Empty<StoredLap>();
+    private IReadOnlyList<StoredEvent> _lastLoadedEvents = Array.Empty<StoredEvent>();
+    private IReadOnlyList<StoredAiReport> _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+    private IReadOnlyList<PostRaceReviewMetricRowViewModel> _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
+    private IReadOnlyList<PostRaceReviewStintRowViewModel> _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
 
     /// <summary>
     /// Initializes a new post-race review view model.
@@ -36,18 +51,28 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     /// <param name="lapRepository">The stored lap repository.</param>
     /// <param name="eventRepository">The stored event repository.</param>
     /// <param name="aiReportRepository">The stored AI report repository.</param>
+    /// <param name="reportExportService">The optional report export service.</param>
     public PostRaceReviewViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapRepository lapRepository,
         IEventRepository eventRepository,
-        IAIReportRepository aiReportRepository)
+        IAIReportRepository aiReportRepository,
+        IPostRaceReviewReportExportService? reportExportService = null)
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
         _chartBuilder = new StoredLapPostRaceChartBuilder();
-        _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoading);
+        _reportBuilder = new PostRaceReviewReportBuilder();
+        _reportExportService = reportExportService ?? new SaveFilePostRaceReviewReportExportService();
+        _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoading && !IsExportingReport);
+        _exportMarkdownCommand = new RelayCommand(
+            () => _ = ExportReportAsync(PostRaceReviewReportFormat.Markdown),
+            () => !IsLoading && !IsExportingReport);
+        _exportJsonCommand = new RelayCommand(
+            () => _ = ExportReportAsync(PostRaceReviewReportFormat.Json),
+            () => !IsLoading && !IsExportingReport);
 
         SummaryMetricRows = new ObservableCollection<PostRaceReviewMetricRowViewModel>();
         EventTimelineRows = new ObservableCollection<PostRaceReviewEventRowViewModel>();
@@ -73,6 +98,16 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     public ICommand RefreshCommand => _refreshCommand;
 
     /// <summary>
+    /// Gets the command that exports the selected review as Markdown.
+    /// </summary>
+    public ICommand ExportMarkdownCommand => _exportMarkdownCommand;
+
+    /// <summary>
+    /// Gets the command that exports the selected review as JSON.
+    /// </summary>
+    public ICommand ExportJsonCommand => _exportJsonCommand;
+
+    /// <summary>
     /// Gets the shared history browser.
     /// </summary>
     public HistorySessionBrowserViewModel HistoryBrowser { get; }
@@ -92,7 +127,22 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _isLoading, value))
             {
-                _refreshCommand.RaiseCanExecuteChanged();
+                RaiseCommandStatesChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a report export is in progress.
+    /// </summary>
+    public bool IsExportingReport
+    {
+        get => _isExportingReport;
+        private set
+        {
+            if (SetProperty(ref _isExportingReport, value))
+            {
+                RaiseCommandStatesChanged();
             }
         }
     }
@@ -113,6 +163,15 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     {
         get => _emptyStateText;
         private set => SetProperty(ref _emptyStateText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest report export status text.
+    /// </summary>
+    public string ReportExportStatusText
+    {
+        get => _reportExportStatusText;
+        private set => SetProperty(ref _reportExportStatusText, value);
     }
 
     /// <summary>
@@ -296,6 +355,58 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// Exports the selected post-race review in the requested format.
+    /// </summary>
+    /// <param name="format">The report format.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task ExportReportAsync(
+        PostRaceReviewReportFormat format,
+        CancellationToken cancellationToken = default)
+    {
+        if (IsExportingReport)
+        {
+            return;
+        }
+
+        IsExportingReport = true;
+        ReportExportStatusText = "正在导出历史会话复盘报告...";
+
+        try
+        {
+            var reportData = await EnsureReportDataAsync(cancellationToken);
+            if (reportData is null)
+            {
+                return;
+            }
+
+            var content = format == PostRaceReviewReportFormat.Markdown
+                ? _reportBuilder.BuildMarkdown(reportData)
+                : _reportBuilder.BuildJson(reportData);
+            var request = new PostRaceReviewReportExportRequest(
+                format,
+                BuildSuggestedFileName(reportData.Session, format),
+                content);
+
+            var result = await _reportExportService.ExportAsync(request, cancellationToken);
+            ReportExportStatusText = result.Exported
+                ? $"报告已导出：{result.FilePath ?? request.SuggestedFileName}"
+                : "报告导出已取消。";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            ReportExportStatusText = "报告导出已取消。";
+        }
+        catch (Exception ex)
+        {
+            ReportExportStatusText = $"报告导出失败：{ex.Message}";
+        }
+        finally
+        {
+            IsExportingReport = false;
+        }
+    }
+
+    /// <summary>
     /// Releases the history browser subscription.
     /// </summary>
     public void Dispose()
@@ -337,7 +448,10 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         IReadOnlyList<StoredEvent> events,
         IReadOnlyList<StoredAiReport> aiReports)
     {
-        foreach (var row in BuildSummaryMetricRows(selectedSession, laps, events, aiReports))
+        var summaryRows = BuildSummaryMetricRows(selectedSession, laps, events, aiReports);
+        var stintRows = PostRaceReviewStintRowViewModel.BuildFromLaps(laps);
+
+        foreach (var row in summaryRows)
         {
             SummaryMetricRows.Add(row);
         }
@@ -352,10 +466,17 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             AiReportRows.Add(row);
         }
 
-        foreach (var row in PostRaceReviewStintRowViewModel.BuildFromLaps(laps))
+        foreach (var row in stintRows)
         {
             TyreStintSummaryRows.Add(row);
         }
+
+        _lastLoadedSession = selectedSession;
+        _lastLoadedLaps = laps.ToArray();
+        _lastLoadedEvents = events.ToArray();
+        _lastLoadedAiReports = aiReports.ToArray();
+        _lastLoadedSummaryMetrics = summaryRows.ToArray();
+        _lastLoadedStints = stintRows.ToArray();
 
         LapTimeTrendPanel.UpdateFrom(_chartBuilder.BuildLapTimePanel(laps));
         SectorSplitTrendPanel.UpdateFrom(_chartBuilder.BuildSectorSplitPanel(laps));
@@ -461,11 +582,88 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         EventTimelineRows.Clear();
         AiReportRows.Clear();
         TyreStintSummaryRows.Clear();
+        _lastLoadedSession = null;
+        _lastLoadedLaps = Array.Empty<StoredLap>();
+        _lastLoadedEvents = Array.Empty<StoredEvent>();
+        _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+        _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
+        _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
         LapTimeTrendPanel.UpdateFrom(_chartBuilder.BuildLapTimePanel(Array.Empty<StoredLap>()));
         SectorSplitTrendPanel.UpdateFrom(_chartBuilder.BuildSectorSplitPanel(Array.Empty<StoredLap>()));
         FuelTrendPanel.UpdateFrom(_chartBuilder.BuildFuelPanel(Array.Empty<StoredLap>()));
         ErsTrendPanel.UpdateFrom(_chartBuilder.BuildErsPanel(Array.Empty<StoredLap>()));
         TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearUnavailablePanel());
+    }
+
+    private async Task<PostRaceReviewReportData?> EnsureReportDataAsync(CancellationToken cancellationToken)
+    {
+        var selectedSession = SelectedSession;
+        if (selectedSession is null)
+        {
+            await RefreshAsync(cancellationToken);
+            selectedSession = SelectedSession;
+        }
+
+        if (selectedSession is null)
+        {
+            ReportExportStatusText = "请选择历史会话后再导出报告。";
+            return null;
+        }
+
+        if (!HasLoadedSnapshotFor(selectedSession))
+        {
+            await RefreshAsync(cancellationToken);
+            selectedSession = SelectedSession;
+        }
+
+        if (selectedSession is null || !HasLoadedSnapshotFor(selectedSession))
+        {
+            ReportExportStatusText = "报告导出失败：历史会话复盘数据尚未加载。";
+            return null;
+        }
+
+        return new PostRaceReviewReportData(
+            selectedSession,
+            _lastLoadedLaps,
+            _lastLoadedEvents,
+            _lastLoadedAiReports,
+            _lastLoadedSummaryMetrics,
+            _lastLoadedStints,
+            DateTimeOffset.UtcNow,
+            VersionInfo.CurrentVersion);
+    }
+
+    private bool HasLoadedSnapshotFor(HistorySessionItemViewModel selectedSession)
+    {
+        return _lastLoadedSession is not null
+            && string.Equals(_lastLoadedSession.SessionId, selectedSession.SessionId, StringComparison.Ordinal);
+    }
+
+    private void RaiseCommandStatesChanged()
+    {
+        _refreshCommand.RaiseCanExecuteChanged();
+        _exportMarkdownCommand.RaiseCanExecuteChanged();
+        _exportJsonCommand.RaiseCanExecuteChanged();
+    }
+
+    private static string BuildSuggestedFileName(
+        HistorySessionItemViewModel session,
+        PostRaceReviewReportFormat format)
+    {
+        var extension = format == PostRaceReviewReportFormat.Markdown ? "md" : "json";
+        var sessionIdentifier = session.SessionUid == "-" ? session.SessionId : session.SessionUid;
+        var normalizedSession = SanitizeFileNamePart(sessionIdentifier);
+        return $"F1Telemetry-{normalizedSession}-post-race-review.{extension}";
+    }
+
+    private static string SanitizeFileNamePart(string value)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value
+            .Select(ch => invalidChars.Contains(ch) || char.IsWhiteSpace(ch) ? '-' : ch)
+            .ToArray())
+            .Trim('-');
+        return string.IsNullOrWhiteSpace(sanitized) ? "session" : sanitized;
     }
 
     private void OnHistoryBrowserPropertyChanged(object? sender, PropertyChangedEventArgs e)
