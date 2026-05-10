@@ -42,6 +42,20 @@ public sealed class VersionInfoTests
     }
 
     /// <summary>
+    /// Verifies the dashboard subtitle reuses the current UI version text.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_Subtitle_ContainsCurrentDisplayVersion()
+    {
+        var viewModel = Assert.IsType<DashboardViewModel>(
+            RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
+
+        Assert.Contains(VersionInfo.DisplayVersion, viewModel.Subtitle, StringComparison.Ordinal);
+        Assert.Contains("实时遥测助手", viewModel.Subtitle, StringComparison.Ordinal);
+        Assert.DoesNotContain("v1.2.0", viewModel.Subtitle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies the download entry point targets the project GitHub Releases page.
     /// </summary>
     [Fact]
