@@ -47,6 +47,26 @@ public sealed class StorageRepositoryTests
     }
 
     /// <summary>
+    /// Verifies that recent sessions are ordered by start time descending and limited by count.
+    /// </summary>
+    [Fact]
+    public async Task SessionRepository_GetRecentAsync_ReturnsNewestSessionsLimited()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        ISessionRepository repository = new SessionRepository(databaseService);
+
+        await repository.CreateAsync(CreateSession("session-old", "uid-old", DateTimeOffset.Parse("2026-04-18T10:00:00Z")));
+        await repository.CreateAsync(CreateSession("session-new", "uid-new", DateTimeOffset.Parse("2026-04-18T10:02:00Z")));
+        await repository.CreateAsync(CreateSession("session-middle", "uid-middle", DateTimeOffset.Parse("2026-04-18T10:01:00Z")));
+
+        var recentSessions = await repository.GetRecentAsync(2);
+
+        Assert.Equal(new[] { "session-new", "session-middle" }, recentSessions.Select(session => session.Id));
+    }
+
+    /// <summary>
     /// Verifies that laps are inserted and queried in descending creation order.
     /// </summary>
     [Fact]
@@ -228,14 +248,18 @@ public sealed class StorageRepositoryTests
     private static async Task SeedSessionAsync(IDatabaseService databaseService, string sessionId)
     {
         ISessionRepository repository = new SessionRepository(databaseService);
-        await repository.CreateAsync(
-            new StoredSession
-            {
-                Id = sessionId,
-                SessionUid = $"uid-{sessionId}",
-                TrackId = 10,
-                SessionType = 12,
-                StartedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z")
-            });
+        await repository.CreateAsync(CreateSession(sessionId, $"uid-{sessionId}", DateTimeOffset.Parse("2026-04-18T10:00:00Z")));
+    }
+
+    private static StoredSession CreateSession(string id, string sessionUid, DateTimeOffset startedAt)
+    {
+        return new StoredSession
+        {
+            Id = id,
+            SessionUid = sessionUid,
+            TrackId = 10,
+            SessionType = 12,
+            StartedAt = startedAt
+        };
     }
 }

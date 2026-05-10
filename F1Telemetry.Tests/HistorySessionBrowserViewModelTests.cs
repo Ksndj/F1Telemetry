@@ -1,0 +1,228 @@
+using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.ViewModels;
+using F1Telemetry.Storage.Interfaces;
+using F1Telemetry.Storage.Models;
+using Xunit;
+
+namespace F1Telemetry.Tests;
+
+/// <summary>
+/// Verifies persisted session history browser behavior.
+/// </summary>
+public sealed class HistorySessionBrowserViewModelTests
+{
+    /// <summary>
+    /// Verifies an empty repository produces a stable empty state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WhenEmpty_ShowsEmptyState()
+    {
+        var viewModel = new HistorySessionBrowserViewModel(
+            new FakeSessionRepository(),
+            new FakeLapRepository());
+
+        var exception = await Record.ExceptionAsync(() => viewModel.RefreshSessionsAsync());
+
+        Assert.Null(exception);
+        Assert.Empty(viewModel.HistorySessions);
+        Assert.Empty(viewModel.HistoryLaps);
+        Assert.False(viewModel.IsLoadingSessions);
+        Assert.Contains("暂无历史会话", viewModel.EmptyStateText, StringComparison.Ordinal);
+        Assert.Contains("暂无历史会话", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies session loading exposes a loading state while the repository is pending.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WhilePending_ShowsLoadingState()
+    {
+        var pendingSessions = new TaskCompletionSource<IReadOnlyList<StoredSession>>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var sessionRepository = new FakeSessionRepository
+        {
+            GetRecentHandler = (_, _) => pendingSessions.Task
+        };
+        var viewModel = new HistorySessionBrowserViewModel(
+            sessionRepository,
+            new FakeLapRepository());
+
+        var refreshTask = viewModel.RefreshSessionsAsync();
+
+        Assert.True(viewModel.IsLoadingSessions);
+        Assert.Contains("正在加载历史会话", viewModel.StatusText, StringComparison.Ordinal);
+
+        pendingSessions.SetResult(
+        [
+            CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z"))
+        ]);
+
+        await refreshTask;
+
+        Assert.False(viewModel.IsLoadingSessions);
+        Assert.Single(viewModel.HistorySessions);
+    }
+
+    /// <summary>
+    /// Verifies selecting a session loads stored laps sorted by lap number ascending.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithLaps_SortsHistoryLapsByLapNumber()
+    {
+        var session = CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z"));
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [session]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-a"] =
+                [
+                    CreateLap("session-a", 3, 3),
+                    CreateLap("session-a", 1, 1),
+                    CreateLap("session-a", 2, 2)
+                ]
+            }
+        };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+
+        await viewModel.RefreshSessionsAsync();
+
+        Assert.Equal("session-a", viewModel.SelectedSession?.SessionId);
+        Assert.Equal(new[] { "Lap 1", "Lap 2", "Lap 3" }, viewModel.HistoryLaps.Select(lap => lap.LapText));
+        Assert.Contains("已加载 3 条单圈记录", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies session repository failures are captured into status text.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WhenSessionRepositoryThrows_DoesNotThrow()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            GetRecentHandler = (_, _) => throw new InvalidOperationException("database unavailable")
+        };
+        var viewModel = new HistorySessionBrowserViewModel(
+            sessionRepository,
+            new FakeLapRepository());
+
+        var exception = await Record.ExceptionAsync(() => viewModel.RefreshSessionsAsync());
+
+        Assert.Null(exception);
+        Assert.Contains("历史会话加载失败", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.False(viewModel.IsLoadingSessions);
+    }
+
+    /// <summary>
+    /// Verifies lap repository failures are captured into status text.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WhenLapRepositoryThrows_DoesNotThrow()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z"))]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            GetRecentHandler = (_, _, _) => throw new InvalidOperationException("lap query failed")
+        };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+
+        var exception = await Record.ExceptionAsync(() => viewModel.RefreshSessionsAsync());
+
+        Assert.Null(exception);
+        Assert.Contains("单圈记录加载失败", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.False(viewModel.IsLoadingLaps);
+    }
+
+    private static StoredSession CreateSession(string id, DateTimeOffset startedAt)
+    {
+        return new StoredSession
+        {
+            Id = id,
+            SessionUid = $"uid-{id}",
+            TrackId = 10,
+            SessionType = 12,
+            StartedAt = startedAt,
+            EndedAt = startedAt.AddMinutes(45)
+        };
+    }
+
+    private static StoredLap CreateLap(string sessionId, int lapNumber, long id)
+    {
+        return new StoredLap
+        {
+            Id = id,
+            SessionId = sessionId,
+            LapNumber = lapNumber,
+            LapTimeInMs = 90_000 + lapNumber,
+            Sector1TimeInMs = 30_000,
+            Sector2TimeInMs = 30_000,
+            Sector3TimeInMs = 30_000,
+            IsValid = true,
+            AverageSpeedKph = 215,
+            FuelUsedLitres = 1.2f,
+            ErsUsed = 150_000f,
+            StartTyre = "V17 / A19",
+            EndTyre = "V17 / A19",
+            CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+        };
+    }
+
+    private sealed class FakeSessionRepository : ISessionRepository
+    {
+        public List<StoredSession> Sessions { get; init; } = [];
+
+        public Func<int, CancellationToken, Task<IReadOnlyList<StoredSession>>>? GetRecentHandler { get; init; }
+
+        public Task CreateAsync(StoredSession session, CancellationToken cancellationToken = default)
+        {
+            Sessions.Add(session);
+            return Task.CompletedTask;
+        }
+
+        public Task EndAsync(string sessionId, DateTimeOffset endedAt, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredSession>> GetRecentAsync(int count, CancellationToken cancellationToken = default)
+        {
+            if (GetRecentHandler is not null)
+            {
+                return GetRecentHandler(count, cancellationToken);
+            }
+
+            return Task.FromResult<IReadOnlyList<StoredSession>>(Sessions.Take(count).ToArray());
+        }
+    }
+
+    private sealed class FakeLapRepository : ILapRepository
+    {
+        public Dictionary<string, IReadOnlyList<StoredLap>> LapsBySession { get; } = new(StringComparer.Ordinal);
+
+        public Func<string, int, CancellationToken, Task<IReadOnlyList<StoredLap>>>? GetRecentHandler { get; init; }
+
+        public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            if (GetRecentHandler is not null)
+            {
+                return GetRecentHandler(sessionId, count, cancellationToken);
+            }
+
+            return Task.FromResult(
+                LapsBySession.TryGetValue(sessionId, out var laps)
+                    ? laps.Take(count).ToArray()
+                    : (IReadOnlyList<StoredLap>)Array.Empty<StoredLap>());
+        }
+    }
+}
