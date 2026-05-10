@@ -49,6 +49,7 @@ public partial class App : Application
         var eventRepository = new EventRepository(databaseService);
         var aiReportRepository = new AIReportRepository(databaseService);
         var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+        var sessionComparison = new SessionComparisonViewModel(sessionRepository, lapRepository);
         var storagePersistenceService = new StoragePersistenceService(
             sessionRepository,
             lapRepository,
@@ -81,7 +82,8 @@ public partial class App : Application
                 historyBrowser,
                 lapRepository,
                 eventRepository,
-                aiReportRepository));
+                aiReportRepository),
+            sessionComparison: sessionComparison);
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

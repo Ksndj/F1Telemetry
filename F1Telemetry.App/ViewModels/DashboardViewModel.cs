@@ -169,6 +169,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private bool _disposed;
     private bool _hasRequestedHistoryLoad;
     private bool _isPostRaceReviewRefreshRunning;
+    private bool _isSessionComparisonRefreshRunning;
 
     /// <summary>
     /// Initializes a new dashboard view model.
@@ -190,6 +191,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="raceEventBus">The optional V2 event bus used to publish detected race events.</param>
     /// <param name="historyBrowser">The optional persisted history session browser.</param>
     /// <param name="postRaceReview">The optional post-race review page view model.</param>
+    /// <param name="sessionComparison">The optional multi-session comparison page view model.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -207,7 +209,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         IUdpRawLogDirectoryService? udpRawLogDirectoryService = null,
         IEventBus<RaceEvent>? raceEventBus = null,
         HistorySessionBrowserViewModel? historyBrowser = null,
-        PostRaceReviewViewModel? postRaceReview = null)
+        PostRaceReviewViewModel? postRaceReview = null,
+        SessionComparisonViewModel? sessionComparison = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -223,6 +226,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
+        SessionComparison = sessionComparison ?? CreateNoOpSessionComparison();
         _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
         _raceEventSpeechSubscriber = new RaceEventSpeechSubscriber(
             _raceEventBus,
@@ -362,6 +366,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public PostRaceReviewViewModel PostRaceReview { get; }
 
     /// <summary>
+    /// Gets the multi-session comparison page view model.
+    /// </summary>
+    public SessionComparisonViewModel SessionComparison { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the sidebar is expanded.
     /// </summary>
     public bool IsSidebarExpanded
@@ -395,6 +404,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(IsChartsSelected));
                 OnPropertyChanged(nameof(IsLapHistorySelected));
                 OnPropertyChanged(nameof(IsPostRaceReviewSelected));
+                OnPropertyChanged(nameof(IsSessionComparisonSelected));
                 OnPropertyChanged(nameof(IsOpponentsSelected));
                 OnPropertyChanged(nameof(IsLogsSelected));
                 OnPropertyChanged(nameof(IsAiTtsSelected));
@@ -404,6 +414,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(SelectedShellNavigationTitle));
                 RequestHistoryBrowserRefreshIfNeeded();
                 RequestPostRaceReviewRefreshIfNeeded();
+                RequestSessionComparisonRefreshIfNeeded();
             }
         }
     }
@@ -427,6 +438,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets a value indicating whether the post-race review page is selected.
     /// </summary>
     public bool IsPostRaceReviewSelected => IsSelectedShellNavigationKey("post-race-review");
+
+    /// <summary>
+    /// Gets a value indicating whether the multi-session comparison page is selected.
+    /// </summary>
+    public bool IsSessionComparisonSelected => IsSelectedShellNavigationKey("session-comparison");
 
     /// <summary>
     /// Gets a value indicating whether the opponents page is selected.
@@ -456,6 +472,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         !IsChartsSelected &&
         !IsLapHistorySelected &&
         !IsPostRaceReviewSelected &&
+        !IsSessionComparisonSelected &&
         !IsOpponentsSelected &&
         !IsLogsSelected &&
         !IsAiTtsSelected &&
@@ -1347,6 +1364,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         try
         {
+            if ((object)SessionComparison is IDisposable disposableSessionComparison)
+            {
+                disposableSessionComparison.Dispose();
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
             await _udpListener.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         catch
@@ -1465,6 +1493,38 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
+    private void RequestSessionComparisonRefreshIfNeeded()
+    {
+        if (_isSessionComparisonRefreshRunning || !IsSessionComparisonSelected)
+        {
+            return;
+        }
+
+        _ = RefreshSessionComparisonAsync();
+    }
+
+    private async Task RefreshSessionComparisonAsync()
+    {
+        _isSessionComparisonRefreshRunning = true;
+        try
+        {
+            await SessionComparison.RefreshAsync(_lifecycleCts.Token);
+        }
+        catch (OperationCanceledException) when (_lifecycleCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"多会话对比刷新失败：{ex.Message}";
+            EnqueueEventLog("System", StatusMessage);
+            Debug.WriteLine($"Failed to refresh session comparison: {ex}");
+        }
+        finally
+        {
+            _isSessionComparisonRefreshRunning = false;
+        }
+    }
+
     private static HistorySessionBrowserViewModel CreateNoOpHistoryBrowser()
     {
         return new HistorySessionBrowserViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
@@ -1478,6 +1538,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             new NoOpLapRepository(),
             new NoOpEventRepository(),
             new NoOpAiReportRepository());
+    }
+
+    private static SessionComparisonViewModel CreateNoOpSessionComparison()
+    {
+        return new SessionComparisonViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
     }
 
     private void StopUiTimer()
