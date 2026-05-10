@@ -46,11 +46,14 @@ public partial class App : Application
         var databaseService = new SqliteDatabaseService();
         var sessionRepository = new SessionRepository(databaseService);
         var lapRepository = new LapRepository(databaseService);
+        var eventRepository = new EventRepository(databaseService);
+        var aiReportRepository = new AIReportRepository(databaseService);
+        var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
         var storagePersistenceService = new StoragePersistenceService(
             sessionRepository,
             lapRepository,
-            new EventRepository(databaseService),
-            new AIReportRepository(databaseService),
+            eventRepository,
+            aiReportRepository,
             databaseService.InitializeAsync,
             databaseService);
         var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer, eventDetectionService);
@@ -73,7 +76,12 @@ public partial class App : Application
             storagePersistenceService,
             Dispatcher,
             raceEventBus: raceEventBus,
-            historyBrowser: new HistorySessionBrowserViewModel(sessionRepository, lapRepository));
+            historyBrowser: historyBrowser,
+            postRaceReview: new PostRaceReviewViewModel(
+                historyBrowser,
+                lapRepository,
+                eventRepository,
+                aiReportRepository));
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

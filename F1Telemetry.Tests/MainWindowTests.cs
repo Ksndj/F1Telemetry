@@ -86,7 +86,7 @@ public sealed class MainWindowTests
                 Assert.NotNull(window.FindName("ContentHost"));
 
                 var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
-                Assert.Equal(7, navigationList.Items.Count);
+                Assert.Equal(8, navigationList.Items.Count);
                 Assert.Same(navigationItems[0], navigationList.SelectedItem);
                 Assert.Equal("实时概览", navigationItems[0].Name);
             }
@@ -105,7 +105,7 @@ public sealed class MainWindowTests
     {
         var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
 
-        Assert.Equal(7, navigationItems.Count);
+        Assert.Equal(8, navigationItems.Count);
         Assert.All(navigationItems, item => Assert.False(string.IsNullOrWhiteSpace(item.IconGlyph)));
     }
 
@@ -186,6 +186,7 @@ public sealed class MainWindowTests
     [Theory]
     [InlineData(typeof(ChartsView))]
     [InlineData(typeof(LapHistoryView))]
+    [InlineData(typeof(PostRaceReviewView))]
     [InlineData(typeof(OpponentsView))]
     [InlineData(typeof(LogsView))]
     [InlineData(typeof(AiTtsView))]
@@ -227,7 +228,7 @@ public sealed class MainWindowTests
             {
                 window.Show();
 
-                Assert.Equal(7, navigationItems.Count);
+                Assert.Equal(8, navigationItems.Count);
                 AssertContentHostShows<OverviewView>(window, "OverviewContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[1];
@@ -237,15 +238,18 @@ public sealed class MainWindowTests
                 AssertContentHostShows<LapHistoryView>(window, "LapHistoryContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[3];
-                AssertContentHostShows<OpponentsView>(window, "OpponentsContentTemplate");
+                AssertContentHostShows<PostRaceReviewView>(window, "PostRaceReviewContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[4];
-                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
+                AssertContentHostShows<OpponentsView>(window, "OpponentsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[5];
-                AssertContentHostShows<AiTtsView>(window, "AiTtsContentTemplate");
+                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[6];
+                AssertContentHostShows<AiTtsView>(window, "AiTtsContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = navigationItems[7];
                 AssertContentHostShows<SettingsView>(window, "SettingsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("laps", "Laps alias");
@@ -260,7 +264,7 @@ public sealed class MainWindowTests
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("future-page", "Future page");
                 AssertContentHostUsesPlaceholder(window);
 
-                Assert.Equal(7, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
+                Assert.Equal(8, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
             }
             finally
             {
@@ -383,6 +387,7 @@ public sealed class MainWindowTests
                 IsLapHistorySelected =
                     string.Equals(value.Key, "lap-history", StringComparison.Ordinal) ||
                     string.Equals(value.Key, "laps", StringComparison.Ordinal);
+                IsPostRaceReviewSelected = string.Equals(value.Key, "post-race-review", StringComparison.Ordinal);
                 IsOpponentsSelected = string.Equals(value.Key, "opponents", StringComparison.Ordinal);
                 IsLogsSelected =
                     string.Equals(value.Key, "event-logs", StringComparison.Ordinal) ||
@@ -394,6 +399,7 @@ public sealed class MainWindowTests
                     !IsOverviewSelected &&
                     !IsChartsSelected &&
                     !IsLapHistorySelected &&
+                    !IsPostRaceReviewSelected &&
                     !IsOpponentsSelected &&
                     !IsLogsSelected &&
                     !IsAiTtsSelected &&
@@ -404,6 +410,7 @@ public sealed class MainWindowTests
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOverviewSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsChartsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLapHistorySelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPostRaceReviewSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOpponentsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLogsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAiTtsSelected)));
@@ -419,6 +426,8 @@ public sealed class MainWindowTests
         public bool IsChartsSelected { get; private set; }
 
         public bool IsLapHistorySelected { get; private set; }
+
+        public bool IsPostRaceReviewSelected { get; private set; }
 
         public bool IsOpponentsSelected { get; private set; }
 
@@ -528,7 +537,7 @@ public sealed class MainWindowTests
 
     private static bool IsShellPage(object value)
     {
-        return value is OverviewView or ChartsView or LapHistoryView or OpponentsView or LogsView or AiTtsView or SettingsView or LegacyDashboardView;
+        return value is OverviewView or ChartsView or LapHistoryView or PostRaceReviewView or OpponentsView or LogsView or AiTtsView or SettingsView or LegacyDashboardView;
     }
 
     private static T? FindDescendant<T>(DependencyObject root)
