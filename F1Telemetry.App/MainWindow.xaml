@@ -38,6 +38,10 @@
             <views:LapHistoryView />
         </DataTemplate>
 
+        <DataTemplate x:Key="PostRaceReviewContentTemplate">
+            <views:PostRaceReviewView />
+        </DataTemplate>
+
         <DataTemplate x:Key="OpponentsContentTemplate">
             <views:OpponentsView />
         </DataTemplate>
@@ -403,6 +407,9 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsLapHistorySelected}" Value="True">
                             <Setter Property="ContentTemplate" Value="{StaticResource LapHistoryContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsPostRaceReviewSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource PostRaceReviewContentTemplate}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsOpponentsSelected}" Value="True">
                             <Setter Property="ContentTemplate" Value="{StaticResource OpponentsContentTemplate}" />

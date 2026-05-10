@@ -168,6 +168,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private Task? _shutdownTask;
     private bool _disposed;
     private bool _hasRequestedHistoryLoad;
+    private bool _isPostRaceReviewRefreshRunning;
 
     /// <summary>
     /// Initializes a new dashboard view model.
@@ -188,6 +189,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="udpRawLogDirectoryService">The optional raw UDP log directory helper used by Settings.</param>
     /// <param name="raceEventBus">The optional V2 event bus used to publish detected race events.</param>
     /// <param name="historyBrowser">The optional persisted history session browser.</param>
+    /// <param name="postRaceReview">The optional post-race review page view model.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -204,7 +206,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         WindowsVoiceCatalog? windowsVoiceCatalog = null,
         IUdpRawLogDirectoryService? udpRawLogDirectoryService = null,
         IEventBus<RaceEvent>? raceEventBus = null,
-        HistorySessionBrowserViewModel? historyBrowser = null)
+        HistorySessionBrowserViewModel? historyBrowser = null,
+        PostRaceReviewViewModel? postRaceReview = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -219,6 +222,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
+        PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
         _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
         _raceEventSpeechSubscriber = new RaceEventSpeechSubscriber(
             _raceEventBus,
@@ -353,6 +357,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public HistorySessionBrowserViewModel HistoryBrowser { get; }
 
     /// <summary>
+    /// Gets the post-race review page view model.
+    /// </summary>
+    public PostRaceReviewViewModel PostRaceReview { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the sidebar is expanded.
     /// </summary>
     public bool IsSidebarExpanded
@@ -385,6 +394,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(IsOverviewSelected));
                 OnPropertyChanged(nameof(IsChartsSelected));
                 OnPropertyChanged(nameof(IsLapHistorySelected));
+                OnPropertyChanged(nameof(IsPostRaceReviewSelected));
                 OnPropertyChanged(nameof(IsOpponentsSelected));
                 OnPropertyChanged(nameof(IsLogsSelected));
                 OnPropertyChanged(nameof(IsAiTtsSelected));
@@ -393,6 +403,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(IsLegacyDashboardSelected));
                 OnPropertyChanged(nameof(SelectedShellNavigationTitle));
                 RequestHistoryBrowserRefreshIfNeeded();
+                RequestPostRaceReviewRefreshIfNeeded();
             }
         }
     }
@@ -411,6 +422,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets a value indicating whether the lap history page is selected.
     /// </summary>
     public bool IsLapHistorySelected => IsSelectedShellNavigationKey("lap-history") || IsSelectedShellNavigationKey("laps");
+
+    /// <summary>
+    /// Gets a value indicating whether the post-race review page is selected.
+    /// </summary>
+    public bool IsPostRaceReviewSelected => IsSelectedShellNavigationKey("post-race-review");
 
     /// <summary>
     /// Gets a value indicating whether the opponents page is selected.
@@ -439,6 +455,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         !IsOverviewSelected &&
         !IsChartsSelected &&
         !IsLapHistorySelected &&
+        !IsPostRaceReviewSelected &&
         !IsOpponentsSelected &&
         !IsLogsSelected &&
         !IsAiTtsSelected &&
@@ -1319,6 +1336,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         try
         {
+            if ((object)PostRaceReview is IDisposable disposablePostRaceReview)
+            {
+                disposablePostRaceReview.Dispose();
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
             await _udpListener.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         catch
@@ -1405,9 +1433,51 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
+    private void RequestPostRaceReviewRefreshIfNeeded()
+    {
+        if (_isPostRaceReviewRefreshRunning || !IsPostRaceReviewSelected)
+        {
+            return;
+        }
+
+        _ = RefreshPostRaceReviewAsync();
+    }
+
+    private async Task RefreshPostRaceReviewAsync()
+    {
+        _isPostRaceReviewRefreshRunning = true;
+        try
+        {
+            await PostRaceReview.RefreshAsync(_lifecycleCts.Token);
+        }
+        catch (OperationCanceledException) when (_lifecycleCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"赛后复盘刷新失败：{ex.Message}";
+            EnqueueEventLog("System", StatusMessage);
+            Debug.WriteLine($"Failed to refresh post-race review: {ex}");
+        }
+        finally
+        {
+            _isPostRaceReviewRefreshRunning = false;
+        }
+    }
+
     private static HistorySessionBrowserViewModel CreateNoOpHistoryBrowser()
     {
         return new HistorySessionBrowserViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
+    }
+
+    private static PostRaceReviewViewModel CreateNoOpPostRaceReview()
+    {
+        var historyBrowser = CreateNoOpHistoryBrowser();
+        return new PostRaceReviewViewModel(
+            historyBrowser,
+            new NoOpLapRepository(),
+            new NoOpEventRepository(),
+            new NoOpAiReportRepository());
     }
 
     private void StopUiTimer()
@@ -3019,6 +3089,37 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredLap>>(Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class NoOpEventRepository : IEventRepository
+    {
+        public Task AddAsync(string sessionId, RaceEvent raceEvent, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredEvent>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredEvent>>(Array.Empty<StoredEvent>());
+        }
+    }
+
+    private sealed class NoOpAiReportRepository : IAIReportRepository
+    {
+        public Task AddAsync(
+            string sessionId,
+            int lapNumber,
+            AIAnalysisResult analysisResult,
+            DateTimeOffset? createdAt = null,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredAiReport>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredAiReport>>(Array.Empty<StoredAiReport>());
         }
     }
 }
