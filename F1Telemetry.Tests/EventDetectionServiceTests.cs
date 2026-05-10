@@ -74,7 +74,8 @@ public sealed class EventDetectionServiceTests
         service.Observe(CreateState(
             CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 70f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
 
-        var raceEvent = Assert.Single(service.DrainPendingEvents());
+        var detectedEvents = service.DrainPendingEvents();
+        var raceEvent = Assert.Single(detectedEvents, candidate => candidate.EventType == EventType.HighTyreWear);
         Assert.Equal(EventType.HighTyreWear, raceEvent.EventType);
         Assert.Equal(15, raceEvent.LapNumber);
         Assert.Equal(3, raceEvent.VehicleIdx);
@@ -261,6 +262,37 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
+    /// Verifies safety-car restart is emitted when full or virtual safety car clears.
+    /// </summary>
+    [Theory]
+    [InlineData((byte)1)]
+    [InlineData((byte)2)]
+    public void Observe_SafetyCarClears_EmitsRestartEvent(byte previousSafetyCarStatus)
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 30, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: previousSafetyCarStatus,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 12, fuelLapsRemaining: 6.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyresAgeLaps: 4)));
+        service.DrainPendingEvents();
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 12, fuelLapsRemaining: 5.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 4)));
+
+        var restartEvent = Assert.Single(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.SafetyCarRestart);
+        Assert.Equal(12, restartEvent.LapNumber);
+        Assert.Contains("重启", restartEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies marshal-zone flags emit only confirmed flags and keep unknown values as data quality warnings.
     /// </summary>
     [Fact]
@@ -280,6 +312,82 @@ public sealed class EventDetectionServiceTests
         Assert.DoesNotContain("Yellow flag", yellowFlag.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(detectedEvents, raceEvent => raceEvent.EventType == EventType.DataQualityWarning);
         Assert.Equal(2, detectedEvents.Count);
+    }
+
+    /// <summary>
+    /// Verifies red-flag transition with known player tyre data emits tyre-change advice.
+    /// </summary>
+    [Fact]
+    public void Observe_RedFlagTransitionWithKnownTyres_EmitsRedFlagTyreChange()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 35, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: new Dictionary<int, sbyte> { [0] = 0 },
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 31, fuelLapsRemaining: 4.1f, tyreWear: 58f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, updatedAt: timestamp, tyresAgeLaps: 15)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: new Dictionary<int, sbyte> { [0] = 4 },
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 31, fuelLapsRemaining: 4.0f, tyreWear: 5f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 0)));
+
+        var redFlagTyreChange = Assert.Single(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RedFlagTyreChange);
+        Assert.Equal(31, redFlagTyreChange.LapNumber);
+        Assert.Equal(3, redFlagTyreChange.VehicleIdx);
+        Assert.Contains("红旗", redFlagTyreChange.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies qualifying does not emit race-only safety-car restart or red-flag tyre advice.
+    /// </summary>
+    [Fact]
+    public void Observe_QualifyingSafetyOrRedFlagTransitions_DoesNotEmitRaceOnlyAdvice()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 38, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 1,
+            marshalZoneFlags: new Dictionary<int, sbyte> { [0] = 0 },
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 6, fuelLapsRemaining: 8.0f, tyreWear: 20f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyresAgeLaps: 2)));
+        service.DrainPendingEvents();
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: new Dictionary<int, sbyte> { [0] = 4 },
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 6, fuelLapsRemaining: 7.9f, tyreWear: 21f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 2)));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        Assert.DoesNotContain(detectedEvents, raceEvent => raceEvent.EventType == EventType.SafetyCarRestart);
+        Assert.DoesNotContain(detectedEvents, raceEvent => raceEvent.EventType == EventType.RedFlagTyreChange);
+    }
+
+    /// <summary>
+    /// Verifies reset clears cooldown and armed state for new race-advice rules.
+    /// </summary>
+    [Fact]
+    public void Reset_ClearsNewRaceAdviceCooldownAndArmedState()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 40, 0, TimeSpan.Zero);
+
+        ObserveFrontOldTyreSequence(service, timestamp);
+        Assert.Single(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.FrontOldTyreRisk);
+
+        service.Reset();
+
+        ObserveFrontOldTyreSequence(service, timestamp);
+        Assert.Single(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.FrontOldTyreRisk);
     }
 
     /// <summary>
@@ -340,6 +448,210 @@ public sealed class EventDetectionServiceTests
 
         var rearmedEvents = service.DrainPendingEvents();
         Assert.Equal(2, rearmedEvents.Count(raceEvent => raceEvent.EventType is EventType.AttackWindow or EventType.DefenseWindow));
+    }
+
+    /// <summary>
+    /// Verifies close race traffic ahead on much older tyres emits one front-old-tyre risk event.
+    /// </summary>
+    [Fact]
+    public void Observe_RaceFrontCarOnOldTyres_EmitsRiskAndSuppressesImmediateRepeat()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 0, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 21, fuelLapsRemaining: 5.8f, tyreWear: 45f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 1_800, updatedAt: timestamp, tyresAgeLaps: 6),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, updatedAt: timestamp, tyresAgeLaps: 11),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, gapToFrontMs: 2_400, updatedAt: timestamp, tyresAgeLaps: 6)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 21, fuelLapsRemaining: 5.7f, tyreWear: 46f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 850, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 6),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 11),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, gapToFrontMs: 2_400, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 6)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 21, fuelLapsRemaining: 5.6f, tyreWear: 47f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 800, updatedAt: timestamp.AddMilliseconds(200), tyresAgeLaps: 6),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, updatedAt: timestamp.AddMilliseconds(200), tyresAgeLaps: 11),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 21, gapToFrontMs: 2_400, updatedAt: timestamp.AddMilliseconds(200), tyresAgeLaps: 6)));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        Assert.Equal(1, detectedEvents.Count(raceEvent => raceEvent.EventType == EventType.FrontOldTyreRisk));
+        var tyreRisk = Assert.Single(detectedEvents, raceEvent => raceEvent.EventType == EventType.FrontOldTyreRisk);
+        Assert.Equal(21, tyreRisk.LapNumber);
+        Assert.Equal(2, tyreRisk.VehicleIdx);
+        Assert.Equal("Front Runner", tyreRisk.DriverName);
+    }
+
+    /// <summary>
+    /// Verifies a close race car behind on much newer tyres emits rear-new-tyre pressure.
+    /// </summary>
+    [Fact]
+    public void Observe_RaceRearCarOnNewerTyres_EmitsPressureRisk()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 5, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 24, fuelLapsRemaining: 5.2f, tyreWear: 55f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 2_100, updatedAt: timestamp, tyresAgeLaps: 13),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 24, updatedAt: timestamp, tyresAgeLaps: 13),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 2, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 24, gapToFrontMs: 1_900, updatedAt: timestamp, tyresAgeLaps: 8)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 24, fuelLapsRemaining: 5.1f, tyreWear: 56f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 2_100, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 13),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 24, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 13),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 2, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 24, gapToFrontMs: 850, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 8)));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        var pressureEvent = Assert.Single(detectedEvents, raceEvent => raceEvent.EventType == EventType.RearNewTyrePressure);
+        Assert.Equal(24, pressureEvent.LapNumber);
+        Assert.Equal(4, pressureEvent.VehicleIdx);
+        Assert.Equal("Rear Runner", pressureEvent.DriverName);
+    }
+
+    /// <summary>
+    /// Verifies close same-lap front traffic emits traffic risk in race and qualifying.
+    /// </summary>
+    [Theory]
+    [InlineData((byte)15)]
+    [InlineData((byte)5)]
+    public void Observe_CloseSameLapFrontTraffic_EmitsTrafficRisk(byte sessionType)
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 10, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: sessionType,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 7, fuelLapsRemaining: 7.2f, tyreWear: 25f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 1_800, updatedAt: timestamp, tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, updatedAt: timestamp, tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, gapToFrontMs: 2_400, updatedAt: timestamp, tyresAgeLaps: 4)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: sessionType,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 7, fuelLapsRemaining: 7.1f, tyreWear: 26f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 850, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, gapToFrontMs: 2_400, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 4)));
+
+        Assert.Contains(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.TrafficRisk);
+    }
+
+    /// <summary>
+    /// Verifies qualifying emits a clean-air window when nearby same-lap traffic clears.
+    /// </summary>
+    [Fact]
+    public void Observe_QualifyingClearTraffic_EmitsCleanAirWindow()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 15, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 6, fuelLapsRemaining: 8.1f, tyreWear: 18f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 850, updatedAt: timestamp, tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, updatedAt: timestamp, tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, gapToFrontMs: 900, updatedAt: timestamp, tyresAgeLaps: 2)));
+        service.DrainPendingEvents();
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 6, fuelLapsRemaining: 8.0f, tyreWear: 19f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 4_000, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, gapToFrontMs: 4_000, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 2)));
+
+        Assert.Contains(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.QualifyingCleanAirWindow);
+    }
+
+    /// <summary>
+    /// Verifies race pit-window advice emits from tyre age or tyre wear thresholds.
+    /// </summary>
+    [Fact]
+    public void Observe_RaceTyreAgeOrWearThreshold_EmitsPitWindow()
+    {
+        var ageService = new EventDetectionService(new EventDetectionOptions());
+        var wearService = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 20, 0, TimeSpan.Zero);
+
+        ageService.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 28, fuelLapsRemaining: 4.7f, tyreWear: 52f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: null, updatedAt: timestamp, tyresAgeLaps: 14)));
+        ageService.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 29, fuelLapsRemaining: 4.6f, tyreWear: 53f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: null, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 18)));
+
+        wearService.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 28, fuelLapsRemaining: 4.7f, tyreWear: 69f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: null, updatedAt: timestamp, tyresAgeLaps: 8)));
+        wearService.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 29, fuelLapsRemaining: 4.6f, tyreWear: 72f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: null, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 8)));
+
+        Assert.Contains(ageService.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RacePitWindow);
+        Assert.Contains(wearService.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RacePitWindow);
+    }
+
+    /// <summary>
+    /// Verifies qualifying sessions do not emit race pit-window advice.
+    /// </summary>
+    [Fact]
+    public void Observe_QualifyingTyreAgeOrWearThreshold_DoesNotEmitRacePitWindow()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 25, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 8.4f, tyreWear: 69f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, updatedAt: timestamp, tyresAgeLaps: 14)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 1,
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 9, fuelLapsRemaining: 8.3f, tyreWear: 72f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 18)));
+
+        Assert.DoesNotContain(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RacePitWindow);
     }
 
     /// <summary>
@@ -435,6 +747,24 @@ public sealed class EventDetectionServiceTests
             cars);
     }
 
+    private static void ObserveFrontOldTyreSequence(EventDetectionService service, DateTimeOffset timestamp)
+    {
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 2,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 18, fuelLapsRemaining: 5.8f, tyreWear: 40f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 1_800, updatedAt: timestamp, tyresAgeLaps: 6),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 18, updatedAt: timestamp, tyresAgeLaps: 11)));
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 2,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 18, fuelLapsRemaining: 5.7f, tyreWear: 41f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: 850, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 6),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, lapNumber: 18, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 11)));
+    }
+
     private static SessionState CreateStateWithMetadata(
         byte sessionType,
         byte? safetyCarStatus,
@@ -471,7 +801,8 @@ public sealed class EventDetectionServiceTests
         byte actualTyreCompound,
         ushort? gapToFrontMs = 2_000,
         float? ersStoreEnergy = 2_000_000f,
-        DateTimeOffset? updatedAt = null)
+        DateTimeOffset? updatedAt = null,
+        byte? tyresAgeLaps = null)
     {
         return CreateCar(
             carIndex,
@@ -487,7 +818,8 @@ public sealed class EventDetectionServiceTests
             actualTyreCompound: actualTyreCompound,
             gapToFrontMs: gapToFrontMs,
             ersStoreEnergy: ersStoreEnergy,
-            updatedAt: updatedAt);
+            updatedAt: updatedAt,
+            tyresAgeLaps: tyresAgeLaps);
     }
 
     private static CarSnapshot CreateOpponent(
@@ -500,7 +832,8 @@ public sealed class EventDetectionServiceTests
         byte actualTyreCompound,
         byte lapNumber = 10,
         ushort? gapToFrontMs = 2_000,
-        DateTimeOffset? updatedAt = null)
+        DateTimeOffset? updatedAt = null,
+        byte? tyresAgeLaps = null)
     {
         return CreateCar(
             carIndex,
@@ -516,7 +849,8 @@ public sealed class EventDetectionServiceTests
             actualTyreCompound: actualTyreCompound,
             gapToFrontMs: gapToFrontMs,
             ersStoreEnergy: 2_000_000f,
-            updatedAt: updatedAt);
+            updatedAt: updatedAt,
+            tyresAgeLaps: tyresAgeLaps);
     }
 
     private static CarSnapshot CreateCar(
@@ -533,7 +867,8 @@ public sealed class EventDetectionServiceTests
         byte actualTyreCompound,
         ushort? gapToFrontMs,
         float? ersStoreEnergy,
-        DateTimeOffset? updatedAt)
+        DateTimeOffset? updatedAt,
+        byte? tyresAgeLaps)
     {
         return new CarSnapshot
         {
@@ -550,6 +885,7 @@ public sealed class EventDetectionServiceTests
             ErsStoreEnergy = ersStoreEnergy,
             VisualTyreCompound = visualTyreCompound,
             ActualTyreCompound = actualTyreCompound,
+            TyresAgeLaps = tyresAgeLaps,
             IsCurrentLapValid = true,
             UpdatedAt = updatedAt ?? DateTimeOffset.UtcNow
         };

@@ -86,6 +86,41 @@ public enum EventType
     LowErs,
 
     /// <summary>
+    /// Indicates that the directly ahead car is close and running meaningfully older tyres.
+    /// </summary>
+    FrontOldTyreRisk,
+
+    /// <summary>
+    /// Indicates that the directly behind car is close and running meaningfully newer tyres.
+    /// </summary>
+    RearNewTyrePressure,
+
+    /// <summary>
+    /// Indicates that a same-lap car ahead creates a traffic risk.
+    /// </summary>
+    TrafficRisk,
+
+    /// <summary>
+    /// Indicates that a qualifying-like session has a clean-air window around the player.
+    /// </summary>
+    QualifyingCleanAirWindow,
+
+    /// <summary>
+    /// Indicates that the player's current tyre state is approaching a race pit window.
+    /// </summary>
+    RacePitWindow,
+
+    /// <summary>
+    /// Indicates that an active safety car status has cleared and a restart phase is expected.
+    /// </summary>
+    SafetyCarRestart,
+
+    /// <summary>
+    /// Indicates that a red flag transition provides a tyre-change review opportunity.
+    /// </summary>
+    RedFlagTyreChange,
+
+    /// <summary>
     /// Indicates that required evidence was missing or uncertain.
     /// </summary>
     DataQualityWarning

@@ -2982,8 +2982,18 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         return raceEvent.EventType switch
         {
-            EventType.SafetyCar or EventType.VirtualSafetyCar or EventType.YellowFlag or EventType.RedFlag => 600,
+            EventType.SafetyCar
+                or EventType.VirtualSafetyCar
+                or EventType.YellowFlag
+                or EventType.RedFlag
+                or EventType.SafetyCarRestart
+                or EventType.RedFlagTyreChange => 600,
             EventType.LowFuel or EventType.HighTyreWear => 500,
+            EventType.FrontOldTyreRisk
+                or EventType.RearNewTyrePressure
+                or EventType.TrafficRisk
+                or EventType.RacePitWindow => 450,
+            EventType.QualifyingCleanAirWindow => 425,
             EventType.AttackWindow or EventType.DefenseWindow => 400,
             EventType.FrontCarPitted or EventType.RearCarPitted => 300,
             EventType.LowErs => 200,

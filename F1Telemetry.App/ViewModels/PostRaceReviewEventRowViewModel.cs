@@ -83,6 +83,13 @@ public sealed record PostRaceReviewEventRowViewModel
             EventType.AttackWindow => "进攻窗口",
             EventType.DefenseWindow => "防守窗口",
             EventType.LowErs => "低 ERS",
+            EventType.FrontOldTyreRisk => "前车旧胎风险",
+            EventType.RearNewTyrePressure => "后车新胎压力",
+            EventType.TrafficRisk => "交通风险",
+            EventType.QualifyingCleanAirWindow => "排位空窗",
+            EventType.RacePitWindow => "进站窗口",
+            EventType.SafetyCarRestart => "安全车重启",
+            EventType.RedFlagTyreChange => "红旗换胎",
             EventType.DataQualityWarning => "数据质量提醒",
             _ => eventType.ToString()
         };
