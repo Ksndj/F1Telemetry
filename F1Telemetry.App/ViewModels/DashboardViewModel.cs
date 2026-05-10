@@ -18,6 +18,7 @@ using F1Telemetry.App.Services;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
+using F1Telemetry.Core.Eventing;
 using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -56,6 +57,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly TtsQueue _ttsQueue;
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
+    private readonly IEventBus<RaceEvent> _raceEventBus;
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
@@ -181,6 +183,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="dispatcher">The UI dispatcher.</param>
     /// <param name="windowsVoiceCatalog">The optional Windows voice catalog used by the settings UI.</param>
     /// <param name="udpRawLogDirectoryService">The optional raw UDP log directory helper used by Settings.</param>
+    /// <param name="raceEventBus">The optional V2 event bus used to publish detected race events.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -195,7 +198,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         IStoragePersistenceService storagePersistenceService,
         Dispatcher dispatcher,
         WindowsVoiceCatalog? windowsVoiceCatalog = null,
-        IUdpRawLogDirectoryService? udpRawLogDirectoryService = null)
+        IUdpRawLogDirectoryService? udpRawLogDirectoryService = null,
+        IEventBus<RaceEvent>? raceEventBus = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -209,6 +213,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
+        _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
         _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
@@ -1744,6 +1749,23 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
             TryEnqueueRaceEventSpeech(raceEvent, sessionMode);
             _storagePersistenceService.EnqueueRaceEvent(raceEvent);
+            PublishRaceEvent(raceEvent);
+        }
+    }
+
+    private void PublishRaceEvent(RaceEvent raceEvent)
+    {
+        try
+        {
+            _raceEventBus.Publish(raceEvent);
+        }
+        catch (AggregateException ex)
+        {
+            EnqueueEventLog("System", $"EventBus 发布 RaceEvent 失败：{ex.InnerExceptions.Count} 个订阅者异常。");
+        }
+        catch (Exception ex)
+        {
+            EnqueueEventLog("System", $"EventBus 发布 RaceEvent 失败：{ex.Message}");
         }
     }
 

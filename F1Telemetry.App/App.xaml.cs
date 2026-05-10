@@ -6,6 +6,7 @@ using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core;
+using F1Telemetry.Core.Eventing;
 using F1Telemetry.Storage.Repositories;
 using F1Telemetry.Storage.Services;
 using F1Telemetry.TTS.Models;
@@ -34,6 +35,7 @@ public partial class App : Application
         var packetDispatcher = new PacketDispatcher(new PacketHeaderParser());
         var lapAnalyzer = new LapAnalyzer();
         var eventDetectionService = new EventDetectionService();
+        var raceEventBus = new InMemoryEventBus<RaceEvent>();
         var appSettingsStore = new AppSettingsStore();
         _aiHttpClient = new HttpClient();
         var ttsQueue = new TtsQueue(new WindowsTtsService(), new TtsOptions());
@@ -67,7 +69,8 @@ public partial class App : Application
             ttsMessageFactory,
             ttsQueue,
             storagePersistenceService,
-            Dispatcher);
+            Dispatcher,
+            raceEventBus: raceEventBus);
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel
