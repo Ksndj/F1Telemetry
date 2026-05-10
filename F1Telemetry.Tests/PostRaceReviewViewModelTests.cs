@@ -1,6 +1,8 @@
+using System.IO;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -198,11 +200,149 @@ public sealed class PostRaceReviewViewModelTests
         Assert.Contains("未保存四轮胎磨数据", viewModel.TyreWearStatusText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies loaded review data can be exported as Markdown and JSON.
+    /// </summary>
+    [Fact]
+    public async Task ExportReportAsync_WithLoadedSession_ExportsMarkdownAndJson()
+    {
+        var exportService = new FakeReportExportService();
+        var viewModel = CreateViewModel(
+            CreateSessionRepositoryWithSession(),
+            new FakeLapRepository
+            {
+                LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] }
+            },
+            new FakeEventRepository
+            {
+                EventsBySession = { ["session-a"] = [CreateEvent("session-a", 1, 1)] }
+            },
+            new FakeAiReportRepository
+            {
+                ReportsBySession = { ["session-a"] = [CreateReport("session-a", 1, 1)] }
+            },
+            exportService);
+
+        await viewModel.RefreshAsync();
+        await viewModel.ExportReportAsync(PostRaceReviewReportFormat.Markdown);
+        await viewModel.ExportReportAsync(PostRaceReviewReportFormat.Json);
+
+        Assert.Equal(2, exportService.Requests.Count);
+        Assert.Equal(PostRaceReviewReportFormat.Markdown, exportService.Requests[0].Format);
+        Assert.Contains("历史会话复盘报告", exportService.Requests[0].Content, StringComparison.Ordinal);
+        Assert.Equal(PostRaceReviewReportFormat.Json, exportService.Requests[1].Format);
+        Assert.Contains("\"schemaVersion\"", exportService.Requests[1].Content, StringComparison.Ordinal);
+        Assert.Contains("报告已导出", viewModel.ReportExportStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies exporting before an explicit refresh loads the selected review first.
+    /// </summary>
+    [Fact]
+    public async Task ExportReportAsync_WhenNotLoaded_RefreshesSelectedSessionFirst()
+    {
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] }
+        };
+        var exportService = new FakeReportExportService();
+        var viewModel = CreateViewModel(
+            CreateSessionRepositoryWithSession(),
+            lapRepository,
+            reportExportService: exportService);
+
+        await viewModel.ExportReportAsync(PostRaceReviewReportFormat.Markdown);
+
+        Assert.True(lapRepository.GetRecentCallCount >= 1);
+        Assert.Single(exportService.Requests);
+        Assert.Contains("Lap 1", exportService.Requests[0].Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies cancelling the save dialog does not throw and reports cancellation.
+    /// </summary>
+    [Fact]
+    public async Task ExportReportAsync_WhenUserCancels_DoesNotThrowAndShowsCancelled()
+    {
+        var exportService = new FakeReportExportService
+        {
+            Cancel = true
+        };
+        var viewModel = CreateViewModel(
+            CreateSessionRepositoryWithSession(),
+            new FakeLapRepository
+            {
+                LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] }
+            },
+            reportExportService: exportService);
+
+        var exception = await Record.ExceptionAsync(() => viewModel.ExportReportAsync(PostRaceReviewReportFormat.Markdown));
+
+        Assert.Null(exception);
+        Assert.Contains("导出已取消", viewModel.ReportExportStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies file write failures do not escape to UI callers.
+    /// </summary>
+    [Fact]
+    public async Task ExportReportAsync_WhenExporterThrows_DoesNotThrowAndShowsFailure()
+    {
+        var exportService = new FakeReportExportService
+        {
+            ExceptionToThrow = new IOException("disk full")
+        };
+        var viewModel = CreateViewModel(
+            CreateSessionRepositoryWithSession(),
+            new FakeLapRepository
+            {
+                LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] }
+            },
+            reportExportService: exportService);
+
+        var exception = await Record.ExceptionAsync(() => viewModel.ExportReportAsync(PostRaceReviewReportFormat.Json));
+
+        Assert.Null(exception);
+        Assert.False(viewModel.IsExportingReport);
+        Assert.Contains("报告导出失败", viewModel.ReportExportStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies exporting exposes a busy state while the save operation is in progress.
+    /// </summary>
+    [Fact]
+    public async Task ExportReportAsync_WhileExporterIsPending_TogglesExportingState()
+    {
+        var exportService = new FakeReportExportService
+        {
+            BlockUntilCompleted = true
+        };
+        var viewModel = CreateViewModel(
+            CreateSessionRepositoryWithSession(),
+            new FakeLapRepository
+            {
+                LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] }
+            },
+            reportExportService: exportService);
+
+        await viewModel.RefreshAsync();
+        var exportTask = viewModel.ExportReportAsync(PostRaceReviewReportFormat.Markdown);
+        await exportService.WaitUntilCalledAsync();
+
+        Assert.True(viewModel.IsExportingReport);
+
+        exportService.CompletePendingExport();
+        await exportTask;
+
+        Assert.False(viewModel.IsExportingReport);
+    }
+
     private static PostRaceReviewViewModel CreateViewModel(
         FakeSessionRepository? sessionRepository = null,
         FakeLapRepository? lapRepository = null,
         FakeEventRepository? eventRepository = null,
-        FakeAiReportRepository? aiReportRepository = null)
+        FakeAiReportRepository? aiReportRepository = null,
+        FakeReportExportService? reportExportService = null)
     {
         sessionRepository ??= new FakeSessionRepository();
         lapRepository ??= new FakeLapRepository();
@@ -211,7 +351,16 @@ public sealed class PostRaceReviewViewModelTests
             historyBrowser,
             lapRepository,
             eventRepository ?? new FakeEventRepository(),
-            aiReportRepository ?? new FakeAiReportRepository());
+            aiReportRepository ?? new FakeAiReportRepository(),
+            reportExportService ?? new FakeReportExportService());
+    }
+
+    private static FakeSessionRepository CreateSessionRepositoryWithSession()
+    {
+        return new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-a")]
+        };
     }
 
     private static StoredSession CreateSession(string id)
@@ -309,6 +458,8 @@ public sealed class PostRaceReviewViewModelTests
 
         public Func<string, int, CancellationToken, Task<IReadOnlyList<StoredLap>>>? GetRecentHandler { get; init; }
 
+        public int GetRecentCallCount { get; private set; }
+
         public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -316,6 +467,7 @@ public sealed class PostRaceReviewViewModelTests
 
         public Task<IReadOnlyList<StoredLap>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
         {
+            GetRecentCallCount++;
             if (GetRecentHandler is not null)
             {
                 return GetRecentHandler(sessionId, count, cancellationToken);
@@ -366,6 +518,52 @@ public sealed class PostRaceReviewViewModelTests
                 ReportsBySession.TryGetValue(sessionId, out var reports)
                     ? reports.Take(count).ToArray()
                     : (IReadOnlyList<StoredAiReport>)Array.Empty<StoredAiReport>());
+        }
+    }
+
+    private sealed class FakeReportExportService : IPostRaceReviewReportExportService
+    {
+        private readonly TaskCompletionSource<bool> _called = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _pendingExport = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public List<PostRaceReviewReportExportRequest> Requests { get; } = [];
+
+        public bool Cancel { get; init; }
+
+        public bool BlockUntilCompleted { get; init; }
+
+        public Exception? ExceptionToThrow { get; init; }
+
+        public async Task<PostRaceReviewReportExportResult> ExportAsync(
+            PostRaceReviewReportExportRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            _called.TrySetResult(true);
+
+            if (BlockUntilCompleted)
+            {
+                await _pendingExport.Task.WaitAsync(cancellationToken);
+            }
+
+            if (ExceptionToThrow is not null)
+            {
+                throw ExceptionToThrow;
+            }
+
+            return Cancel
+                ? new PostRaceReviewReportExportResult(false, null)
+                : new PostRaceReviewReportExportResult(true, $"C:\\Reports\\{request.SuggestedFileName}");
+        }
+
+        public Task WaitUntilCalledAsync()
+        {
+            return _called.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+
+        public void CompletePendingExport()
+        {
+            _pendingExport.TrySetResult(true);
         }
     }
 }
