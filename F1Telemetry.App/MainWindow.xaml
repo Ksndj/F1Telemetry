@@ -12,8 +12,6 @@
         Height="860"
         MinWidth="920"
         MinHeight="620"
-        MaxWidth="1920"
-        MaxHeight="1080"
         WindowState="Normal"
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="True"

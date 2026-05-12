@@ -85,7 +85,7 @@
 
         <DataTemplate x:Key="MetricTemplate">
             <Border Margin="0,0,10,10"
-                    MinWidth="150"
+                    Width="150"
                     Style="{StaticResource InnerCardStyle}">
                 <StackPanel>
                     <TextBlock Style="{StaticResource LabelTextStyle}"
@@ -174,12 +174,9 @@
         </DataTemplate>
     </UserControl.Resources>
 
-    <ScrollViewer x:Name="PostRaceReviewScrollViewer"
-                  HorizontalScrollBarVisibility="Disabled"
-                  VerticalScrollBarVisibility="Auto">
-        <Border Padding="20"
-                CornerRadius="20"
-                Background="#0F1B2E">
+    <Border Padding="20"
+            CornerRadius="20"
+            Background="#0F1B2E">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="320" />
@@ -194,6 +191,8 @@
                             <RowDefinition Height="14" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="14" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="10" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="10" />
                             <RowDefinition Height="Auto" />
@@ -224,21 +223,24 @@
                         </Grid>
 
                         <TextBlock Grid.Row="4"
-                                   Margin="0,0,0,10"
                                    Style="{StaticResource MutedTextStyle}"
                                    Text="{Binding PostRaceReview.EmptyStateText}" />
 
-                        <ListBox x:Name="PostRaceHistorySessionListBox"
-                                 Grid.Row="4"
-                                 Margin="0,36,0,0"
-                                 MinHeight="360"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 HorizontalContentAlignment="Stretch"
-                                 ItemTemplate="{StaticResource HistorySessionTemplate}"
-                                 ItemsSource="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.Items}"
-                                 SelectedItem="{Binding PostRaceReview.HistoryBrowser.SelectedSession, Mode=TwoWay}" />
-                        <StackPanel Grid.Row="6"
+                        <Grid x:Name="PostRaceHistorySessionListHost"
+                              Grid.Row="6"
+                              ClipToBounds="True">
+                            <ListBox x:Name="PostRaceHistorySessionListBox"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     HorizontalContentAlignment="Stretch"
+                                     ItemTemplate="{StaticResource HistorySessionTemplate}"
+                                     ItemsSource="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.Items}"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                     SelectedItem="{Binding PostRaceReview.HistoryBrowser.SelectedSession, Mode=TwoWay}" />
+                        </Grid>
+
+                        <StackPanel Grid.Row="8"
                                     HorizontalAlignment="Right"
                                     Orientation="Horizontal">
                             <Button Width="64"
@@ -257,7 +259,10 @@
                     </Grid>
                 </Border>
 
-                <StackPanel Grid.Column="2">
+                <ScrollViewer Grid.Column="2"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
                     <Border Style="{StaticResource SectionCardStyle}">
                         <StackPanel>
                             <Grid>
@@ -433,8 +438,8 @@
                             </StackPanel>
                         </StackPanel>
                     </Border>
-                </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
-        </Border>
-    </ScrollViewer>
+    </Border>
 </UserControl>

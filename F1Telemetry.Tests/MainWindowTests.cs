@@ -1,6 +1,8 @@
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Runtime.ExceptionServices;
+using System.Xml.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -33,8 +35,8 @@ public sealed class MainWindowTests
                 Assert.Equal(WindowState.Normal, window.WindowState);
                 Assert.Equal(ResizeMode.CanResizeWithGrip, window.ResizeMode);
                 Assert.True(window.ShowInTaskbar);
-                Assert.Equal(1920d, window.MaxWidth);
-                Assert.Equal(1080d, window.MaxHeight);
+                Assert.True(double.IsPositiveInfinity(window.MaxWidth), "MainWindow should not cap maximum width.");
+                Assert.True(double.IsPositiveInfinity(window.MaxHeight), "MainWindow should not cap maximum height.");
             }
             finally
             {
@@ -54,7 +56,7 @@ public sealed class MainWindowTests
 
         Assert.True(maximizedProfile.ShowFeedback);
         Assert.Equal("窗口已最大化", maximizedProfile.FeedbackMessage);
-        Assert.Equal(new Thickness(8), maximizedProfile.ContentMargin);
+        Assert.Equal(new Thickness(0), maximizedProfile.ContentMargin);
         Assert.True(maximizedProfile.InitialScale < 1d);
 
         Assert.True(normalProfile.ShowFeedback);
@@ -182,18 +184,16 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
-    /// Verifies that each detail page can load and owns its own scroll surface.
+    /// Verifies that scroll-backed detail pages can load and own their scroll surface.
     /// </summary>
     [Theory]
     [InlineData(typeof(ChartsView))]
     [InlineData(typeof(LapHistoryView))]
-    [InlineData(typeof(PostRaceReviewView))]
-    [InlineData(typeof(SessionComparisonView))]
     [InlineData(typeof(OpponentsView))]
     [InlineData(typeof(LogsView))]
     [InlineData(typeof(AiTtsView))]
     [InlineData(typeof(SettingsView))]
-    public void DetailViews_LoadWithScrollViewer(Type viewType)
+    public void ScrollBackedDetailViews_LoadWithScrollViewer(Type viewType)
     {
         RunOnStaThread(() =>
         {
@@ -222,14 +222,19 @@ public sealed class MainWindowTests
         var postRaceReviewXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
         var sessionComparisonXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "SessionComparisonView.xaml"));
 
-        Assert.Contains("HistorySessionPages.Items", lapHistoryXaml, StringComparison.Ordinal);
-        Assert.Contains("HistoryLapPages.Items", lapHistoryXaml, StringComparison.Ordinal);
+        AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistorySessionPages");
+        AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistoryLapPages");
         Assert.Contains("HistoryBrowser.DeleteSessionCommand", lapHistoryXaml, StringComparison.Ordinal);
-        Assert.Contains("EventTimelinePages.Items", postRaceReviewXaml, StringComparison.Ordinal);
-        Assert.Contains("AiReportPages.Items", postRaceReviewXaml, StringComparison.Ordinal);
+
+        AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.HistoryBrowser.HistorySessionPages");
+        AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.EventTimelinePages");
+        AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.AiReportPages");
         Assert.Contains("PostRaceReview.HistoryBrowser.DeleteSessionCommand", postRaceReviewXaml, StringComparison.Ordinal);
-        Assert.Contains("CandidateSessionPages.Items", sessionComparisonXaml, StringComparison.Ordinal);
+        AssertHorizontalScrollBarVisibilityDisabled(postRaceReviewXaml);
+
+        AssertPagingBindings(sessionComparisonXaml, "SessionComparison.CandidateSessionPages");
         Assert.Contains("SessionComparison.DeleteSessionCommand", sessionComparisonXaml, StringComparison.Ordinal);
+        AssertHorizontalScrollBarVisibilityDisabled(sessionComparisonXaml);
     }
 
     /// <summary>
@@ -351,6 +356,26 @@ public sealed class MainWindowTests
                 view.Content = null;
             }
         });
+    }
+
+    private static void AssertPagingBindings(string xaml, string bindingPath)
+    {
+        Assert.Contains($"{bindingPath}.Items", xaml, StringComparison.Ordinal);
+        Assert.Contains($"{bindingPath}.PreviousPageCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains($"{bindingPath}.PageText", xaml, StringComparison.Ordinal);
+        Assert.Contains($"{bindingPath}.NextPageCommand", xaml, StringComparison.Ordinal);
+    }
+
+    private static void AssertHorizontalScrollBarVisibilityDisabled(string xaml)
+    {
+        var document = XDocument.Parse(xaml);
+        var horizontalScrollAttributes = document.Descendants()
+            .SelectMany(element => element.Attributes())
+            .Where(attribute => attribute.Name.LocalName.EndsWith("HorizontalScrollBarVisibility", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.NotEmpty(horizontalScrollAttributes);
+        Assert.All(horizontalScrollAttributes, attribute => Assert.Equal("Disabled", attribute.Value));
     }
 
     private static void RunOnStaThread(Action action)
