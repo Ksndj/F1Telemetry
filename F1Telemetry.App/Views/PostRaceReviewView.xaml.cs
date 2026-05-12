@@ -26,7 +26,7 @@ public partial class PostRaceReviewView : UserControl
         }
 
         viewModel.PostRaceReview.HistoryBrowser.HistorySessionPages.SetPageSizeFromViewport(
-            PostRaceHistorySessionListBox.ActualHeight,
+            PostRaceHistorySessionListHost.ActualHeight,
             estimatedItemHeight: 118,
             minPageSize: 2,
             maxPageSize: 8);

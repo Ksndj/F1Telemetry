@@ -28,7 +28,7 @@ public static class WindowStateTransitionPlanner
         {
             WindowState.Maximized => new WindowStateTransitionProfile(
                 FeedbackMessage: "窗口已最大化",
-                ContentMargin: new Thickness(8),
+                ContentMargin: new Thickness(0),
                 InitialScale: 0.988,
                 InitialOpacity: 0.96,
                 ShowFeedback: true),

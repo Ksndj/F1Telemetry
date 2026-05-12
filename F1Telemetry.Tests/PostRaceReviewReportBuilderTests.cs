@@ -63,7 +63,7 @@ public sealed class PostRaceReviewReportBuilderTests
 
         Assert.True(root.TryGetProperty("schemaVersion", out _));
         Assert.True(root.TryGetProperty("generatedAt", out _));
-        Assert.Equal("2.0.0-beta2", root.GetProperty("applicationVersion").GetString());
+        Assert.Equal("2.0.0-beta3", root.GetProperty("applicationVersion").GetString());
         Assert.Equal("uid-session-a", root.GetProperty("session").GetProperty("sessionUid").GetString());
         Assert.Equal(1, root.GetProperty("laps")[0].GetProperty("lapNumber").GetInt32());
         Assert.Equal(2, root.GetProperty("laps")[1].GetProperty("lapNumber").GetInt32());
@@ -169,7 +169,7 @@ public sealed class PostRaceReviewReportBuilderTests
             summaryMetrics,
             stints,
             DateTimeOffset.Parse("2026-05-10T12:00:00Z"),
-            "2.0.0-beta2");
+            "2.0.0-beta3");
     }
 
     private static StoredLap CreateLap(int lapNumber)
