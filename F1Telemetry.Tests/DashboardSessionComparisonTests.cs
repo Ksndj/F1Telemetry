@@ -171,6 +171,11 @@ public sealed class DashboardSessionComparisonTests
         {
             return Task.FromResult<IReadOnlyList<StoredSession>>(Sessions.Take(count).ToArray());
         }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class RecordingLapRepository : ILapRepository

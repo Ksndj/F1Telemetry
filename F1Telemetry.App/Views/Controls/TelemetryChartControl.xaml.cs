@@ -15,6 +15,13 @@ namespace F1Telemetry.App.Views.Controls;
 /// </summary>
 public partial class TelemetryChartControl : UserControl
 {
+    private const string ChartFontName = "Microsoft YaHei UI";
+    private static readonly ScottPlot.Color PlotBackgroundColor = ScottPlot.Color.FromHex("#0C1830");
+    private static readonly ScottPlot.Color DataBackgroundColor = ScottPlot.Color.FromHex("#10233F");
+    private static readonly ScottPlot.Color AxisColor = ScottPlot.Color.FromHex("#D7E4F3");
+    private static readonly ScottPlot.Color GridColor = ScottPlot.Color.FromHex("#244B72");
+    private static readonly ScottPlot.Color LegendBackgroundColor = ScottPlot.Color.FromHex("#132743");
+
     private ChartPanelViewModel? _chartPanel;
     private readonly WpfPlot _plotHost;
 
@@ -116,6 +123,7 @@ public partial class TelemetryChartControl : UserControl
 
         var plot = _plotHost.Plot;
         plot.Clear();
+        ApplyPlotStyle(plot);
 
         if (!hasData)
         {
@@ -135,6 +143,30 @@ public partial class TelemetryChartControl : UserControl
         plot.ShowLegend();
         plot.Axes.AutoScale();
         _plotHost.Refresh();
+    }
+
+    private static void ApplyPlotStyle(Plot plot)
+    {
+        plot.FigureBackground.Color = PlotBackgroundColor;
+        plot.DataBackground.Color = DataBackgroundColor;
+        plot.Font.Set(ChartFontName);
+
+        plot.Axes.Color(AxisColor);
+        plot.Axes.Bottom.Label.FontName = ChartFontName;
+        plot.Axes.Left.Label.FontName = ChartFontName;
+        plot.Axes.Bottom.TickLabelStyle.FontName = ChartFontName;
+        plot.Axes.Left.TickLabelStyle.FontName = ChartFontName;
+
+        plot.Grid.MajorLineColor = GridColor;
+        plot.Grid.MinorLineColor = GridColor.WithAlpha(40);
+        plot.Grid.MajorLineWidth = 1;
+        plot.Grid.MinorLineWidth = 1;
+
+        plot.Legend.FontName = ChartFontName;
+        plot.Legend.FontColor = AxisColor;
+        plot.Legend.BackgroundColor = LegendBackgroundColor;
+        plot.Legend.OutlineColor = GridColor;
+        plot.Legend.OutlineWidth = 1;
     }
 
     private Scatter CreateScatter(ChartSeriesModel series, List<Coordinates> points)

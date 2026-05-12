@@ -49,8 +49,9 @@ public partial class App : Application
         var lapRepository = new LapRepository(databaseService);
         var eventRepository = new EventRepository(databaseService);
         var aiReportRepository = new AIReportRepository(databaseService);
-        var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
-        var sessionComparison = new SessionComparisonViewModel(sessionRepository, lapRepository);
+        var deletionConfirmationService = new MessageBoxHistorySessionDeletionConfirmationService();
+        var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository, deletionConfirmationService);
+        var sessionComparison = new SessionComparisonViewModel(sessionRepository, lapRepository, deletionConfirmationService);
         var storagePersistenceService = new StoragePersistenceService(
             sessionRepository,
             lapRepository,

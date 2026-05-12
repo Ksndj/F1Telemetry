@@ -130,6 +130,64 @@ public sealed class PostRaceReviewViewModelTests
     }
 
     /// <summary>
+    /// Verifies event timeline and AI report rows expose paged projections that reset on refresh.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithManyEventsAndReports_PaginatesTimelineAndReports()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-a")]
+        };
+        var eventRepository = new FakeEventRepository
+        {
+            EventsBySession =
+            {
+                ["session-a"] =
+                [
+                    CreateEvent("session-a", 1, 1),
+                    CreateEvent("session-a", 2, 2),
+                    CreateEvent("session-a", 3, 3),
+                    CreateEvent("session-a", 4, 4)
+                ]
+            }
+        };
+        var aiReportRepository = new FakeAiReportRepository
+        {
+            ReportsBySession =
+            {
+                ["session-a"] =
+                [
+                    CreateReport("session-a", 1, 1),
+                    CreateReport("session-a", 2, 2),
+                    CreateReport("session-a", 3, 3)
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(
+            sessionRepository,
+            new FakeLapRepository { LapsBySession = { ["session-a"] = [CreateLap("session-a", 1)] } },
+            eventRepository,
+            aiReportRepository);
+
+        await viewModel.RefreshAsync();
+        viewModel.EventTimelinePages.SetPageSize(2);
+        viewModel.AiReportPages.SetPageSize(2);
+        viewModel.EventTimelinePages.NextPageCommand.Execute(null);
+        viewModel.AiReportPages.NextPageCommand.Execute(null);
+
+        Assert.Equal(new[] { "Lap 3", "Lap 4" }, viewModel.EventTimelinePages.Items.Select(row => row.LapText));
+        Assert.Equal(new[] { "Lap 3" }, viewModel.AiReportPages.Items.Select(row => row.LapText));
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(0, viewModel.EventTimelinePages.PageIndex);
+        Assert.Equal(0, viewModel.AiReportPages.PageIndex);
+        Assert.Equal(new[] { "Lap 1", "Lap 2" }, viewModel.EventTimelinePages.Items.Select(row => row.LapText));
+        Assert.Equal(new[] { "Lap 1", "Lap 2" }, viewModel.AiReportPages.Items.Select(row => row.LapText));
+    }
+
+    /// <summary>
     /// Verifies new race-advice event types have Chinese timeline display text.
     /// </summary>
     [Fact]
@@ -449,6 +507,11 @@ public sealed class PostRaceReviewViewModelTests
         public Task<IReadOnlyList<StoredSession>> GetRecentAsync(int count, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredSession>>(Sessions.Take(count).ToArray());
+        }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
         }
     }
 

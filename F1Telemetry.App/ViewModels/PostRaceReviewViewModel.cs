@@ -78,6 +78,8 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         EventTimelineRows = new ObservableCollection<PostRaceReviewEventRowViewModel>();
         AiReportRows = new ObservableCollection<PostRaceReviewAiReportRowViewModel>();
         TyreStintSummaryRows = new ObservableCollection<PostRaceReviewStintRowViewModel>();
+        EventTimelinePages = new PagedCollectionViewModel<PostRaceReviewEventRowViewModel>();
+        AiReportPages = new PagedCollectionViewModel<PostRaceReviewAiReportRowViewModel>();
 
         LapTimeTrendPanel = _chartBuilder.BuildLapTimePanel(Array.Empty<StoredLap>());
         SectorSplitTrendPanel = _chartBuilder.BuildSectorSplitPanel(Array.Empty<StoredLap>());
@@ -230,6 +232,11 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     public ObservableCollection<PostRaceReviewEventRowViewModel> EventTimeline => EventTimelineRows;
 
     /// <summary>
+    /// Gets the paged stored event timeline rows used by WPF bindings.
+    /// </summary>
+    public PagedCollectionViewModel<PostRaceReviewEventRowViewModel> EventTimelinePages { get; }
+
+    /// <summary>
     /// Gets the stored AI report rows.
     /// </summary>
     public ObservableCollection<PostRaceReviewAiReportRowViewModel> AiReportRows { get; }
@@ -238,6 +245,11 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     /// Gets the stored AI report rows used by WPF bindings.
     /// </summary>
     public ObservableCollection<PostRaceReviewAiReportRowViewModel> AiReports => AiReportRows;
+
+    /// <summary>
+    /// Gets the paged stored AI report rows used by WPF bindings.
+    /// </summary>
+    public PagedCollectionViewModel<PostRaceReviewAiReportRowViewModel> AiReportPages { get; }
 
     /// <summary>
     /// Gets the inferred tyre stint rows.
@@ -466,6 +478,9 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             AiReportRows.Add(row);
         }
 
+        EventTimelinePages.SetItems(EventTimelineRows, resetPage: true);
+        AiReportPages.SetItems(AiReportRows, resetPage: true);
+
         foreach (var row in stintRows)
         {
             TyreStintSummaryRows.Add(row);
@@ -582,6 +597,8 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         EventTimelineRows.Clear();
         AiReportRows.Clear();
         TyreStintSummaryRows.Clear();
+        EventTimelinePages.SetItems(EventTimelineRows, resetPage: true);
+        AiReportPages.SetItems(AiReportRows, resetPage: true);
         _lastLoadedSession = null;
         _lastLoadedLaps = Array.Empty<StoredLap>();
         _lastLoadedEvents = Array.Empty<StoredEvent>();

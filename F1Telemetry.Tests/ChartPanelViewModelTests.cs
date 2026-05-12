@@ -1,7 +1,13 @@
 using System.ComponentModel;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.ViewModels;
+using F1Telemetry.App.Views.Controls;
+using ScottPlot.WPF;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -180,6 +186,51 @@ public sealed class ChartPanelViewModelTests
     }
 
     /// <summary>
+    /// Verifies chart rendering creates a styled plot surface for historical charts.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WithData_AppliesDarkThemeAndChineseFont()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                DataContext = new ChartPanelViewModel(
+                    title: "圈速趋势",
+                    xAxisLabel: "圈号",
+                    yAxisLabel: "s",
+                    emptyMessage: "暂无数据",
+                    isEmpty: false,
+                    series:
+                    [
+                        new ChartSeriesModel
+                        {
+                            Name = "圈速",
+                            StrokeBrush = Brushes.DeepSkyBlue,
+                            Points =
+                            [
+                                new ChartPointModel { X = 1d, Y = 90d },
+                                new ChartPointModel { X = 2d, Y = 89d }
+                            ]
+                        }
+                    ])
+            };
+
+            control.UpdateLayout();
+
+            var plotBorder = Assert.IsType<Border>(control.FindName("PlotBorder"));
+            var plotHost = GetPlotHost(control);
+
+            Assert.Equal(Visibility.Visible, plotBorder.Visibility);
+            Assert.Equal("Microsoft YaHei UI", plotHost.Plot.Axes.Bottom.TickLabelStyle.FontName);
+            Assert.Equal("Microsoft YaHei UI", plotHost.Plot.Axes.Left.TickLabelStyle.FontName);
+            Assert.Equal("Microsoft YaHei UI", plotHost.Plot.Legend.FontName);
+            Assert.Equal(ScottPlot.Color.FromHex("#0C1830").ARGB, plotHost.Plot.FigureBackground.Color.ARGB);
+            Assert.Equal(ScottPlot.Color.FromHex("#10233F").ARGB, plotHost.Plot.DataBackground.Color.ARGB);
+        });
+    }
+
+    /// <summary>
     /// Returns series shapes that contain no finite plottable points.
     /// </summary>
     public static TheoryData<IReadOnlyList<ChartSeriesModel>> NonPlottableSeries()
@@ -210,5 +261,36 @@ public sealed class ChartPanelViewModelTests
                 }
             }
         };
+    }
+
+    private static WpfPlot GetPlotHost(TelemetryChartControl control)
+    {
+        var field = typeof(TelemetryChartControl).GetField("_plotHost", BindingFlags.Instance | BindingFlags.NonPublic);
+        return Assert.IsType<WpfPlot>(field?.GetValue(control));
+    }
+
+    private static void RunOnStaThread(Action action)
+    {
+        Exception? capturedException = null;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                capturedException = ex;
+            }
+        });
+
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        thread.Join();
+
+        if (capturedException is not null)
+        {
+            ExceptionDispatchInfo.Capture(capturedException).Throw();
+        }
     }
 }

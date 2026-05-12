@@ -67,6 +67,53 @@ public sealed class StorageRepositoryTests
     }
 
     /// <summary>
+    /// Verifies deleting a session removes its associated history rows without affecting other sessions.
+    /// </summary>
+    [Fact]
+    public async Task SessionRepository_DeleteAsync_RemovesAssociatedRowsOnlyForTargetSession()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        ISessionRepository sessionRepository = new SessionRepository(databaseService);
+        ILapRepository lapRepository = new LapRepository(databaseService);
+        IEventRepository eventRepository = new EventRepository(databaseService);
+        IAIReportRepository aiReportRepository = new AIReportRepository(databaseService);
+
+        await sessionRepository.CreateAsync(CreateSession("session-delete", "uid-delete", DateTimeOffset.Parse("2026-04-18T10:00:00Z")));
+        await sessionRepository.CreateAsync(CreateSession("session-keep", "uid-keep", DateTimeOffset.Parse("2026-04-18T11:00:00Z")));
+        await AddHistoryRowsAsync(lapRepository, eventRepository, aiReportRepository, "session-delete", 1);
+        await AddHistoryRowsAsync(lapRepository, eventRepository, aiReportRepository, "session-keep", 2);
+
+        var deleted = await sessionRepository.DeleteAsync("session-delete");
+
+        Assert.True(deleted);
+        Assert.DoesNotContain(await sessionRepository.GetRecentAsync(10), session => session.Id == "session-delete");
+        Assert.Empty(await lapRepository.GetRecentAsync("session-delete", 10));
+        Assert.Empty(await eventRepository.GetRecentAsync("session-delete", 10));
+        Assert.Empty(await aiReportRepository.GetRecentAsync("session-delete", 10));
+        Assert.Single(await lapRepository.GetRecentAsync("session-keep", 10));
+        Assert.Single(await eventRepository.GetRecentAsync("session-keep", 10));
+        Assert.Single(await aiReportRepository.GetRecentAsync("session-keep", 10));
+    }
+
+    /// <summary>
+    /// Verifies deleting a missing session reports false.
+    /// </summary>
+    [Fact]
+    public async Task SessionRepository_DeleteAsync_WhenSessionMissing_ReturnsFalse()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        ISessionRepository repository = new SessionRepository(databaseService);
+
+        var deleted = await repository.DeleteAsync("missing-session");
+
+        Assert.False(deleted);
+    }
+
+    /// <summary>
     /// Verifies that laps are inserted and queried in descending creation order.
     /// </summary>
     [Fact]
@@ -249,6 +296,59 @@ public sealed class StorageRepositoryTests
     {
         ISessionRepository repository = new SessionRepository(databaseService);
         await repository.CreateAsync(CreateSession(sessionId, $"uid-{sessionId}", DateTimeOffset.Parse("2026-04-18T10:00:00Z")));
+    }
+
+    private static async Task AddHistoryRowsAsync(
+        ILapRepository lapRepository,
+        IEventRepository eventRepository,
+        IAIReportRepository aiReportRepository,
+        string sessionId,
+        int lapNumber)
+    {
+        await lapRepository.AddAsync(
+            sessionId,
+            new LapSummary
+            {
+                LapNumber = lapNumber,
+                LapTimeInMs = (uint)(90_000 + lapNumber),
+                Sector1TimeInMs = 30_000,
+                Sector2TimeInMs = 30_000,
+                Sector3TimeInMs = 30_000,
+                AverageSpeedKph = 216,
+                FuelUsedLitres = 1.4f,
+                ErsUsed = 150_000f,
+                IsValid = true,
+                StartTyre = "Medium",
+                EndTyre = "Medium",
+                ClosedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+            });
+        await eventRepository.AddAsync(
+            sessionId,
+            new RaceEvent
+            {
+                EventType = EventType.LowFuel,
+                Severity = EventSeverity.Warning,
+                LapNumber = lapNumber,
+                VehicleIdx = 0,
+                DriverName = "Player",
+                Message = $"Lap {lapNumber} fuel warning",
+                DedupKey = $"fuel:{sessionId}:{lapNumber}",
+                Timestamp = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+            });
+        await aiReportRepository.AddAsync(
+            sessionId,
+            lapNumber,
+            new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = $"Lap {lapNumber} summary",
+                TyreAdvice = "stay out",
+                FuelAdvice = "target",
+                TrafficAdvice = "clear",
+                TtsText = "pace stable",
+                ErrorMessage = "-"
+            },
+            DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber));
     }
 
     private static StoredSession CreateSession(string id, string sessionUid, DateTimeOffset startedAt)

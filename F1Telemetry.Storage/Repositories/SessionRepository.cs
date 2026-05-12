@@ -97,4 +97,81 @@ public sealed class SessionRepository : ISessionRepository
             },
             cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            return Task.FromResult(false);
+        }
+
+        return _databaseService.ExecuteAsync(
+            async (connection, innerCancellationToken) =>
+            {
+                await using var transaction = (Microsoft.Data.Sqlite.SqliteTransaction)await connection.BeginTransactionAsync(innerCancellationToken);
+                try
+                {
+                    var sessionExists = await SessionExistsAsync(connection, transaction, sessionId, innerCancellationToken);
+                    if (!sessionExists)
+                    {
+                        await transaction.CommitAsync(innerCancellationToken);
+                        return false;
+                    }
+
+                    await DeleteAssociatedRowsAsync(connection, transaction, "ai_reports", sessionId, innerCancellationToken);
+                    await DeleteAssociatedRowsAsync(connection, transaction, "events", sessionId, innerCancellationToken);
+                    await DeleteAssociatedRowsAsync(connection, transaction, "laps", sessionId, innerCancellationToken);
+
+                    using var deleteSessionCommand = connection.CreateCommand();
+                    deleteSessionCommand.Transaction = transaction;
+                    deleteSessionCommand.CommandText = """
+                        DELETE FROM sessions
+                        WHERE id = @id;
+                        """;
+                    deleteSessionCommand.Parameters.AddWithValue("@id", sessionId);
+                    var deletedRows = await deleteSessionCommand.ExecuteNonQueryAsync(innerCancellationToken);
+                    await transaction.CommitAsync(innerCancellationToken);
+                    return deletedRows > 0;
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                    throw;
+                }
+            },
+            cancellationToken);
+    }
+
+    private static async Task<bool> SessionExistsAsync(
+        Microsoft.Data.Sqlite.SqliteConnection connection,
+        Microsoft.Data.Sqlite.SqliteTransaction transaction,
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            SELECT 1
+            FROM sessions
+            WHERE id = @id
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("@id", sessionId);
+        return await command.ExecuteScalarAsync(cancellationToken) is not null;
+    }
+
+    private static async Task DeleteAssociatedRowsAsync(
+        Microsoft.Data.Sqlite.SqliteConnection connection,
+        Microsoft.Data.Sqlite.SqliteTransaction transaction,
+        string tableName,
+        string sessionId,
+        CancellationToken cancellationToken)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"DELETE FROM {tableName} WHERE session_id = @session_id;";
+        command.Parameters.AddWithValue("@session_id", sessionId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
 }

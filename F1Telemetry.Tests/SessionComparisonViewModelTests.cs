@@ -1,4 +1,5 @@
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -110,6 +111,30 @@ public sealed class SessionComparisonViewModelTests
     }
 
     /// <summary>
+    /// Verifies the candidate session list exposes a paged projection.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithManyCandidateSessions_PaginatesCandidates()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = Enumerable.Range(1, 5)
+                .Select(index => CreateSession($"session-{index}", 10, DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(index)))
+                .ToList()
+        };
+        var viewModel = CreateViewModel(sessionRepository);
+
+        await viewModel.RefreshAsync();
+        viewModel.CandidateSessionPages.SetPageSize(2);
+
+        Assert.Equal(new[] { "session-5", "session-4" }, viewModel.CandidateSessionPages.Items.Select(item => item.SessionId));
+
+        viewModel.CandidateSessionPages.NextPageCommand.Execute(null);
+
+        Assert.Equal(new[] { "session-3", "session-2" }, viewModel.CandidateSessionPages.Items.Select(item => item.SessionId));
+    }
+
+    /// <summary>
     /// Verifies unordered repository laps are sorted by lap number before plotting.
     /// </summary>
     [Fact]
@@ -214,13 +239,46 @@ public sealed class SessionComparisonViewModelTests
         Assert.Contains("无法生成胎磨对比", viewModel.TyreWearComparisonPanel.EmptyStateText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies deleting a comparison session refreshes filters, candidates, selected sessions, and panels.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSessionAsync_WhenConfirmed_RefreshesComparisonState()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions =
+            [
+                CreateSession("session-a", 10, DateTimeOffset.Parse("2026-04-20T10:00:00Z")),
+                CreateSession("session-b", 10, DateTimeOffset.Parse("2026-04-19T10:00:00Z")),
+                CreateSession("session-c", 10, DateTimeOffset.Parse("2026-04-18T10:00:00Z"))
+            ]
+        };
+        var lapRepository = new FakeLapRepository();
+        lapRepository.LapsBySession["session-b"] = [CreateLap("session-b", 1, lapTimeInMs: 90_000)];
+        lapRepository.LapsBySession["session-c"] = [CreateLap("session-c", 1, lapTimeInMs: 91_000)];
+        var confirmationService = new FakeDeletionConfirmationService { Confirmed = true };
+        var viewModel = CreateViewModel(sessionRepository, lapRepository, confirmationService);
+
+        await viewModel.RefreshAsync();
+        await viewModel.DeleteSessionAsync(viewModel.CandidateSessions[0]);
+
+        Assert.Equal(1, confirmationService.CallCount);
+        Assert.DoesNotContain(sessionRepository.Sessions, session => session.Id == "session-a");
+        Assert.Equal(new[] { "session-b", "session-c" }, viewModel.CandidateSessions.Select(session => session.SessionId));
+        Assert.Equal(new[] { "session-b", "session-c" }, viewModel.SelectedSessions.Select(session => session.SessionId));
+        Assert.True(viewModel.LapTimeComparisonPanel.HasData);
+    }
+
     private static SessionComparisonViewModel CreateViewModel(
         FakeSessionRepository? sessionRepository = null,
-        FakeLapRepository? lapRepository = null)
+        FakeLapRepository? lapRepository = null,
+        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null)
     {
         return new SessionComparisonViewModel(
             sessionRepository ?? new FakeSessionRepository(),
-            lapRepository ?? new FakeLapRepository());
+            lapRepository ?? new FakeLapRepository(),
+            deletionConfirmationService);
     }
 
     private static StoredSession CreateSession(string id, int? trackId, DateTimeOffset startedAt)
@@ -297,6 +355,18 @@ public sealed class SessionComparisonViewModelTests
 
             return Task.FromResult<IReadOnlyList<StoredSession>>(Sessions.Take(count).ToArray());
         }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            var session = Sessions.FirstOrDefault(item => string.Equals(item.Id, sessionId, StringComparison.Ordinal));
+            if (session is null)
+            {
+                return Task.FromResult(false);
+            }
+
+            Sessions.Remove(session);
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class FakeLapRepository : ILapRepository
@@ -324,6 +394,21 @@ public sealed class SessionComparisonViewModelTests
                 LapsBySession.TryGetValue(sessionId, out var laps)
                     ? laps.Take(count).ToArray()
                     : (IReadOnlyList<StoredLap>)Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class FakeDeletionConfirmationService : IHistorySessionDeletionConfirmationService
+    {
+        public bool Confirmed { get; init; }
+
+        public int CallCount { get; private set; }
+
+        public Task<bool> ConfirmDeleteAsync(
+            HistorySessionDeletionConfirmationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(Confirmed);
         }
     }
 }
