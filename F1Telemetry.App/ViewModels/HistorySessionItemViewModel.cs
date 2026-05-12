@@ -27,6 +27,7 @@ public sealed class HistorySessionItemViewModel
         StartedAtText = FormatTimestamp(_session.StartedAt);
         EndedAtText = _session.EndedAt is null ? "-" : FormatTimestamp(_session.EndedAt.Value);
         DurationText = FormatDuration(_session.StartedAt, _session.EndedAt);
+        CanDelete = _session.EndedAt is not null;
         SummaryText = $"{TrackText} · {SessionTypeText} · {StartedAtText}";
     }
 
@@ -69,6 +70,11 @@ public sealed class HistorySessionItemViewModel
     /// Gets the compact session summary.
     /// </summary>
     public string SummaryText { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether this stored session can be deleted from history.
+    /// </summary>
+    public bool CanDelete { get; }
 
     private static string FormatTrack(int? trackId)
     {

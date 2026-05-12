@@ -48,23 +48,38 @@
         <DataTemplate x:Key="HistorySessionTemplate">
             <Border Margin="0,0,0,10"
                     Style="{StaticResource InnerCardStyle}">
-                <StackPanel>
-                    <TextBlock FontWeight="SemiBold"
-                               Foreground="White"
-                               Text="{Binding SummaryText}"
-                               TextWrapping="Wrap" />
-                    <TextBlock Margin="0,6,0,0"
-                               Style="{StaticResource MutedTextStyle}"
-                               Text="{Binding TrackText}" />
-                    <TextBlock Margin="0,4,0,0"
-                               Foreground="#6F86A3"
-                               Text="{Binding SessionTypeText}"
-                               TextWrapping="Wrap" />
-                    <TextBlock Margin="0,4,0,0"
-                               Foreground="#6F86A3"
-                               Text="{Binding StartedAtText}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="68" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="{Binding SummaryText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Style="{StaticResource MutedTextStyle}"
+                                   Text="{Binding TrackText}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#6F86A3"
+                                   Text="{Binding SessionTypeText}"
+                                   TextWrapping="Wrap" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#6F86A3"
+                                   Text="{Binding StartedAtText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1"
+                            Width="58"
+                            Height="28"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Command="{Binding DataContext.PostRaceReview.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                            CommandParameter="{Binding}"
+                            Content="删除"
+                            IsEnabled="{Binding CanDelete}" />
+                </Grid>
             </Border>
         </DataTemplate>
 
@@ -160,17 +175,16 @@
     </UserControl.Resources>
 
     <ScrollViewer x:Name="PostRaceReviewScrollViewer"
-                  HorizontalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-        <Border MinWidth="1120"
-                Padding="20"
+        <Border Padding="20"
                 CornerRadius="20"
                 Background="#0F1B2E">
             <Grid>
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="330" />
+                    <ColumnDefinition Width="320" />
                     <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="*" MinWidth="760" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Border Style="{StaticResource SectionCardStyle}">
@@ -181,6 +195,8 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="14" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="10" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <StackPanel>
@@ -212,15 +228,32 @@
                                    Style="{StaticResource MutedTextStyle}"
                                    Text="{Binding PostRaceReview.EmptyStateText}" />
 
-                        <ListBox Grid.Row="4"
+                        <ListBox x:Name="PostRaceHistorySessionListBox"
+                                 Grid.Row="4"
                                  Margin="0,36,0,0"
                                  MinHeight="360"
                                  Background="Transparent"
                                  BorderThickness="0"
                                  HorizontalContentAlignment="Stretch"
                                  ItemTemplate="{StaticResource HistorySessionTemplate}"
-                                 ItemsSource="{Binding PostRaceReview.HistoryBrowser.HistorySessions}"
+                                 ItemsSource="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.Items}"
                                  SelectedItem="{Binding PostRaceReview.HistoryBrowser.SelectedSession, Mode=TwoWay}" />
+                        <StackPanel Grid.Row="6"
+                                    HorizontalAlignment="Right"
+                                    Orientation="Horizontal">
+                            <Button Width="64"
+                                    Height="28"
+                                    Command="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.PreviousPageCommand}"
+                                    Content="上一页" />
+                            <TextBlock Margin="10,0"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.PageText}" />
+                            <Button Width="64"
+                                    Height="28"
+                                    Command="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.NextPageCommand}"
+                                    Content="下一页" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 
@@ -341,19 +374,37 @@
                             </StackPanel>
                         </Border>
 
-                        <Border Grid.Column="2"
+                        <Border x:Name="PostRaceEventTimelineHost"
+                                Grid.Column="2"
                                 Style="{StaticResource SectionCardStyle}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionTitleStyle}"
                                            Text="事件时间线" />
                                 <ItemsControl Margin="0,14,0,0"
                                               ItemTemplate="{StaticResource TimelineTemplate}"
-                                              ItemsSource="{Binding PostRaceReview.EventTimeline}" />
+                                              ItemsSource="{Binding PostRaceReview.EventTimelinePages.Items}" />
+                                <StackPanel Margin="0,4,0,0"
+                                            HorizontalAlignment="Right"
+                                            Orientation="Horizontal">
+                                    <Button Width="64"
+                                            Height="28"
+                                            Command="{Binding PostRaceReview.EventTimelinePages.PreviousPageCommand}"
+                                            Content="上一页" />
+                                    <TextBlock Margin="10,0"
+                                               VerticalAlignment="Center"
+                                               Style="{StaticResource MutedTextStyle}"
+                                               Text="{Binding PostRaceReview.EventTimelinePages.PageText}" />
+                                    <Button Width="64"
+                                            Height="28"
+                                            Command="{Binding PostRaceReview.EventTimelinePages.NextPageCommand}"
+                                            Content="下一页" />
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </Grid>
 
-                    <Border Margin="0,16,0,0"
+                    <Border x:Name="PostRaceAiReportHost"
+                            Margin="0,16,0,0"
                             Style="{StaticResource SectionCardStyle}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource SectionTitleStyle}"
@@ -363,7 +414,23 @@
                                        Text="所选历史会话的赛后 AI 报告。" />
                             <ItemsControl Margin="0,14,0,0"
                                           ItemTemplate="{StaticResource AiReportTemplate}"
-                                          ItemsSource="{Binding PostRaceReview.AiReports}" />
+                                          ItemsSource="{Binding PostRaceReview.AiReportPages.Items}" />
+                            <StackPanel Margin="0,4,0,0"
+                                        HorizontalAlignment="Right"
+                                        Orientation="Horizontal">
+                                <Button Width="64"
+                                        Height="28"
+                                        Command="{Binding PostRaceReview.AiReportPages.PreviousPageCommand}"
+                                        Content="上一页" />
+                                <TextBlock Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Style="{StaticResource MutedTextStyle}"
+                                           Text="{Binding PostRaceReview.AiReportPages.PageText}" />
+                                <Button Width="64"
+                                        Height="28"
+                                        Command="{Binding PostRaceReview.AiReportPages.NextPageCommand}"
+                                        Content="下一页" />
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>

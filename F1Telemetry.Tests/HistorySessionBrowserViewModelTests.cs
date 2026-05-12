@@ -1,4 +1,5 @@
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -93,6 +94,94 @@ public sealed class HistorySessionBrowserViewModelTests
         Assert.Equal("session-a", viewModel.SelectedSession?.SessionId);
         Assert.Equal(new[] { "Lap 1", "Lap 2", "Lap 3" }, viewModel.HistoryLaps.Select(lap => lap.LapText));
         Assert.Contains("已加载 3 条单圈记录", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies session and lap lists expose paged projections.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithManyRows_PaginatesSessionsAndLaps()
+    {
+        var sessions = Enumerable.Range(1, 5)
+            .Select(index => CreateSession($"session-{index}", DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(index)))
+            .ToArray();
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = sessions.ToList()
+        };
+        var lapRepository = new FakeLapRepository();
+        lapRepository.LapsBySession["session-1"] = Enumerable.Range(1, 5)
+            .Select(index => CreateLap("session-1", index, index))
+            .ToArray();
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+
+        await viewModel.RefreshSessionsAsync();
+        viewModel.HistorySessionPages.SetPageSize(2);
+        viewModel.HistoryLapPages.SetPageSize(2);
+
+        Assert.Equal(new[] { "session-1", "session-2" }, viewModel.HistorySessionPages.Items.Select(item => item.SessionId));
+        Assert.Equal(new[] { "Lap 1", "Lap 2" }, viewModel.HistoryLapPages.Items.Select(item => item.LapText));
+
+        viewModel.HistorySessionPages.NextPageCommand.Execute(null);
+        viewModel.HistoryLapPages.NextPageCommand.Execute(null);
+
+        Assert.Equal(new[] { "session-3", "session-4" }, viewModel.HistorySessionPages.Items.Select(item => item.SessionId));
+        Assert.Equal(new[] { "Lap 3", "Lap 4" }, viewModel.HistoryLapPages.Items.Select(item => item.LapText));
+    }
+
+    /// <summary>
+    /// Verifies confirmed deletion removes the selected session and loads the next one.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSessionAsync_WhenConfirmed_RemovesSessionAndSelectsNext()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions =
+            [
+                CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z")),
+                CreateSession("session-b", DateTimeOffset.Parse("2026-04-18T09:00:00Z"))
+            ]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-a"] = [CreateLap("session-a", 1, 1)],
+                ["session-b"] = [CreateLap("session-b", 2, 2)]
+            }
+        };
+        var confirmationService = new FakeDeletionConfirmationService { Confirmed = true };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository, confirmationService);
+
+        await viewModel.RefreshSessionsAsync();
+        await viewModel.DeleteSessionAsync(viewModel.SelectedSession);
+
+        Assert.Equal(1, confirmationService.CallCount);
+        Assert.Equal(new[] { "session-b" }, sessionRepository.Sessions.Select(session => session.Id));
+        Assert.Equal("session-b", viewModel.SelectedSession?.SessionId);
+        Assert.Equal(new[] { "Lap 2" }, viewModel.HistoryLaps.Select(lap => lap.LapText));
+        Assert.Contains("历史会话已删除", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies cancelled deletion leaves stored history intact.
+    /// </summary>
+    [Fact]
+    public async Task DeleteSessionAsync_WhenConfirmationCancelled_DoesNotDelete()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z"))]
+        };
+        var confirmationService = new FakeDeletionConfirmationService { Confirmed = false };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, new FakeLapRepository(), confirmationService);
+
+        await viewModel.RefreshSessionsAsync();
+        await viewModel.DeleteSessionAsync(viewModel.SelectedSession);
+
+        Assert.Single(sessionRepository.Sessions);
+        Assert.Contains("删除已取消", viewModel.StatusText, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -199,6 +288,18 @@ public sealed class HistorySessionBrowserViewModelTests
 
             return Task.FromResult<IReadOnlyList<StoredSession>>(Sessions.Take(count).ToArray());
         }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            var session = Sessions.FirstOrDefault(item => string.Equals(item.Id, sessionId, StringComparison.Ordinal));
+            if (session is null)
+            {
+                return Task.FromResult(false);
+            }
+
+            Sessions.Remove(session);
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class FakeLapRepository : ILapRepository
@@ -223,6 +324,21 @@ public sealed class HistorySessionBrowserViewModelTests
                 LapsBySession.TryGetValue(sessionId, out var laps)
                     ? laps.Take(count).ToArray()
                     : (IReadOnlyList<StoredLap>)Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class FakeDeletionConfirmationService : IHistorySessionDeletionConfirmationService
+    {
+        public bool Confirmed { get; init; }
+
+        public int CallCount { get; private set; }
+
+        public Task<bool> ConfirmDeleteAsync(
+            HistorySessionDeletionConfirmationRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return Task.FromResult(Confirmed);
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows.Input;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.Formatting;
+using F1Telemetry.App.Services;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -20,13 +21,16 @@ public sealed class SessionComparisonViewModel : ViewModelBase
 
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
+    private readonly IHistorySessionDeletionConfirmationService _deletionConfirmationService;
     private readonly StoredLapSessionComparisonChartBuilder _chartBuilder;
     private readonly RelayCommand _refreshCommand;
+    private readonly RelayCommand<SessionComparisonSessionItemViewModel> _deleteSessionCommand;
     private IReadOnlyList<StoredSession> _recentSessions = Array.Empty<StoredSession>();
     private SessionComparisonTrackFilterViewModel? _selectedTrackFilter;
     private bool _isLoadingSessions;
     private bool _isLoadingComparison;
     private bool _isApplyingSelection;
+    private bool _isDeletingSession;
     private int _sessionLoadVersion;
     private int _comparisonLoadVersion;
     private string _statusText = "等待加载历史会话对比。";
@@ -39,15 +43,21 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     /// <param name="lapRepository">The stored lap repository.</param>
     public SessionComparisonViewModel(
         ISessionRepository sessionRepository,
-        ILapRepository lapRepository)
+        ILapRepository lapRepository,
+        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null)
     {
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
+        _deletionConfirmationService = deletionConfirmationService ?? new MessageBoxHistorySessionDeletionConfirmationService();
         _chartBuilder = new StoredLapSessionComparisonChartBuilder();
-        _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoadingSessions && !IsLoadingComparison);
+        _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoadingSessions && !IsLoadingComparison && !IsDeletingSession);
+        _deleteSessionCommand = new RelayCommand<SessionComparisonSessionItemViewModel>(
+            session => _ = DeleteSessionAsync(session),
+            CanDeleteSession);
 
         TrackFilters = new ObservableCollection<SessionComparisonTrackFilterViewModel>();
         CandidateSessions = new ObservableCollection<SessionComparisonSessionItemViewModel>();
+        CandidateSessionPages = new PagedCollectionViewModel<SessionComparisonSessionItemViewModel>();
         SelectedSessions = new ObservableCollection<SessionComparisonSessionItemViewModel>();
         SummaryRows = new ObservableCollection<SessionComparisonMetricRowViewModel>();
 
@@ -61,6 +71,11 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     /// Gets the command that refreshes candidate sessions and comparison data.
     /// </summary>
     public ICommand RefreshCommand => _refreshCommand;
+
+    /// <summary>
+    /// Gets the command that deletes a stored comparison candidate session.
+    /// </summary>
+    public ICommand DeleteSessionCommand => _deleteSessionCommand;
 
     /// <summary>
     /// Gets or sets the active track filter.
@@ -90,6 +105,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
             if (SetProperty(ref _isLoadingSessions, value))
             {
                 _refreshCommand.RaiseCanExecuteChanged();
+                _deleteSessionCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -105,6 +121,23 @@ public sealed class SessionComparisonViewModel : ViewModelBase
             if (SetProperty(ref _isLoadingComparison, value))
             {
                 _refreshCommand.RaiseCanExecuteChanged();
+                _deleteSessionCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a history session deletion is running.
+    /// </summary>
+    public bool IsDeletingSession
+    {
+        get => _isDeletingSession;
+        private set
+        {
+            if (SetProperty(ref _isDeletingSession, value))
+            {
+                _refreshCommand.RaiseCanExecuteChanged();
+                _deleteSessionCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -136,6 +169,11 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     /// Gets the candidate sessions for the active track filter.
     /// </summary>
     public ObservableCollection<SessionComparisonSessionItemViewModel> CandidateSessions { get; }
+
+    /// <summary>
+    /// Gets the paged candidate sessions for the active track filter.
+    /// </summary>
+    public PagedCollectionViewModel<SessionComparisonSessionItemViewModel> CandidateSessionPages { get; }
 
     /// <summary>
     /// Gets the selected sessions used by the comparison.
@@ -350,6 +388,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
 
         if (filter is null)
         {
+            CandidateSessionPages.SetItems(CandidateSessions, resetPage: true);
             StatusText = "请选择赛道筛选历史会话。";
             EmptyStateText = "请选择赛道筛选历史会话";
             return;
@@ -380,6 +419,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
             }
 
             UpdateSelectedSessions();
+            CandidateSessionPages.SetItems(CandidateSessions, resetPage: true);
         }
         finally
         {
@@ -453,6 +493,60 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         _ = RefreshComparisonAsync();
     }
 
+    /// <summary>
+    /// Deletes the specified historical comparison session after confirmation.
+    /// </summary>
+    /// <param name="session">The session to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task DeleteSessionAsync(
+        SessionComparisonSessionItemViewModel? session,
+        CancellationToken cancellationToken = default)
+    {
+        if (!CanDeleteSession(session))
+        {
+            StatusText = session is null
+                ? "请选择要删除的历史会话。"
+                : "进行中的历史会话不可删除。";
+            return;
+        }
+
+        IsDeletingSession = true;
+        try
+        {
+            var confirmed = await _deletionConfirmationService.ConfirmDeleteAsync(
+                new HistorySessionDeletionConfirmationRequest(session!.SummaryText, session.SessionUid),
+                cancellationToken);
+            if (!confirmed)
+            {
+                StatusText = "历史会话删除已取消。";
+                return;
+            }
+
+            StatusText = "正在删除历史会话...";
+            var deleted = await _sessionRepository.DeleteAsync(session.SessionId, cancellationToken);
+            if (!deleted)
+            {
+                StatusText = "未找到要删除的历史会话。";
+                return;
+            }
+
+            StatusText = "历史会话已删除，正在刷新多会话对比。";
+            await RefreshAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            StatusText = "历史会话删除已取消。";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"历史会话删除失败：{ex.Message}";
+        }
+        finally
+        {
+            IsDeletingSession = false;
+        }
+    }
+
     private async Task<SessionComparisonLoadedSession> LoadSessionLapsAsync(
         SessionComparisonSessionItemViewModel item,
         CancellationToken cancellationToken)
@@ -515,6 +609,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         }
 
         CandidateSessions.Clear();
+        CandidateSessionPages.SetItems(CandidateSessions, resetPage: true);
         SelectedSessions.Clear();
     }
 
@@ -534,6 +629,11 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         {
             SelectedSessions.Add(item);
         }
+    }
+
+    private bool CanDeleteSession(SessionComparisonSessionItemViewModel? session)
+    {
+        return session is not null && session.CanDelete && !IsLoadingSessions && !IsLoadingComparison && !IsDeletingSession;
     }
 
     private void SetSelectedTrackFilter(SessionComparisonTrackFilterViewModel? filter)

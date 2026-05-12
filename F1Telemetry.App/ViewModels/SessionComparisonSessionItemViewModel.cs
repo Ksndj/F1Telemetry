@@ -25,6 +25,7 @@ public sealed class SessionComparisonSessionItemViewModel : ViewModelBase
         TrackText = FormatTrack(session.TrackId);
         SessionTypeText = FormatSessionType(session.SessionType);
         StartedAtText = FormatTimestamp(session.StartedAt);
+        CanDelete = session.EndedAt is not null;
         SummaryText = $"{TrackText} · {SessionTypeText} · {StartedAtText}";
         ComparisonLabel = $"{SessionTypeText} · {StartedAtText}";
     }
@@ -68,6 +69,11 @@ public sealed class SessionComparisonSessionItemViewModel : ViewModelBase
     /// Gets the chart legend label for this session.
     /// </summary>
     public string ComparisonLabel { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether this stored session can be deleted from history.
+    /// </summary>
+    public bool CanDelete { get; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the session is selected.

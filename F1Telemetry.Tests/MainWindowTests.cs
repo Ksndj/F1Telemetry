@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -208,6 +209,27 @@ public sealed class MainWindowTests
                 view.Content = null;
             }
         });
+    }
+
+    /// <summary>
+    /// Verifies history-heavy views expose paging controls and deletion commands.
+    /// </summary>
+    [Fact]
+    public void HistoryViews_DefinePagingAndDeleteEntryPoints()
+    {
+        var root = FindRepositoryRoot();
+        var lapHistoryXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "LapHistoryView.xaml"));
+        var postRaceReviewXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
+        var sessionComparisonXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "SessionComparisonView.xaml"));
+
+        Assert.Contains("HistorySessionPages.Items", lapHistoryXaml, StringComparison.Ordinal);
+        Assert.Contains("HistoryLapPages.Items", lapHistoryXaml, StringComparison.Ordinal);
+        Assert.Contains("HistoryBrowser.DeleteSessionCommand", lapHistoryXaml, StringComparison.Ordinal);
+        Assert.Contains("EventTimelinePages.Items", postRaceReviewXaml, StringComparison.Ordinal);
+        Assert.Contains("AiReportPages.Items", postRaceReviewXaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceReview.HistoryBrowser.DeleteSessionCommand", postRaceReviewXaml, StringComparison.Ordinal);
+        Assert.Contains("CandidateSessionPages.Items", sessionComparisonXaml, StringComparison.Ordinal);
+        Assert.Contains("SessionComparison.DeleteSessionCommand", sessionComparisonXaml, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -574,5 +596,21 @@ public sealed class MainWindowTests
         }
 
         return null;
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Directory.Build.props")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not find repository root.");
     }
 }

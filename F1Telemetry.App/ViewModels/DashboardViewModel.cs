@@ -3152,6 +3152,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             return Task.FromResult<IReadOnlyList<StoredSession>>(Array.Empty<StoredSession>());
         }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class NoOpLapRepository : ILapRepository

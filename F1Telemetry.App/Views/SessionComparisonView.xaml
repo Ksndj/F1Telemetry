@@ -48,26 +48,41 @@
         <DataTemplate x:Key="CandidateSessionTemplate">
             <Border Margin="0,0,0,10"
                     Style="{StaticResource InnerCardStyle}">
-                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
-                    <StackPanel Margin="8,0,0,0">
-                        <TextBlock FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="{Binding SummaryText, TargetNullValue=历史会话}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="#D7E4F3"
-                                   Text="{Binding TrackText}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Foreground="#6F86A3"
-                                   Text="{Binding SessionTypeText}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Foreground="#6F86A3"
-                                   Text="{Binding StartedAtText}"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
-                </CheckBox>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="68" />
+                    </Grid.ColumnDefinitions>
+                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                        <StackPanel Margin="8,0,0,0">
+                            <TextBlock FontWeight="SemiBold"
+                                       Foreground="White"
+                                       Text="{Binding SummaryText, TargetNullValue=历史会话}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Foreground="#D7E4F3"
+                                       Text="{Binding TrackText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Foreground="#6F86A3"
+                                       Text="{Binding SessionTypeText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Foreground="#6F86A3"
+                                       Text="{Binding StartedAtText}"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </CheckBox>
+                    <Button Grid.Column="1"
+                            Width="58"
+                            Height="28"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Top"
+                            Command="{Binding DataContext.SessionComparison.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                            CommandParameter="{Binding}"
+                            Content="删除"
+                            IsEnabled="{Binding CanDelete}" />
+                </Grid>
             </Border>
         </DataTemplate>
 
@@ -131,6 +146,8 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="14" />
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="10" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <StackPanel>
@@ -173,9 +190,11 @@
                                     Content="刷新" />
                         </Grid>
 
-                        <Grid Grid.Row="6">
-                            <ItemsControl ItemTemplate="{StaticResource CandidateSessionTemplate}"
-                                          ItemsSource="{Binding SessionComparison.CandidateSessions}" />
+                        <Grid x:Name="CandidateSessionListHost"
+                              Grid.Row="6">
+                            <ItemsControl x:Name="CandidateSessionItemsControl"
+                                          ItemTemplate="{StaticResource CandidateSessionTemplate}"
+                                          ItemsSource="{Binding SessionComparison.CandidateSessionPages.Items}" />
                             <Border Padding="12,8"
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Top"
@@ -186,6 +205,22 @@
                                            Text="正在加载历史会话" />
                             </Border>
                         </Grid>
+                        <StackPanel Grid.Row="8"
+                                    HorizontalAlignment="Right"
+                                    Orientation="Horizontal">
+                            <Button Width="64"
+                                    Height="28"
+                                    Command="{Binding SessionComparison.CandidateSessionPages.PreviousPageCommand}"
+                                    Content="上一页" />
+                            <TextBlock Margin="10,0"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding SessionComparison.CandidateSessionPages.PageText}" />
+                            <Button Width="64"
+                                    Height="28"
+                                    Command="{Binding SessionComparison.CandidateSessionPages.NextPageCommand}"
+                                    Content="下一页" />
+                        </StackPanel>
                     </Grid>
                 </Border>
 

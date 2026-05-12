@@ -243,6 +243,11 @@ public sealed class StoragePersistenceServiceTests
         {
             return Task.FromResult<IReadOnlyList<StoredSession>>(CreatedSessions);
         }
+
+        public Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(false);
+        }
     }
 
     private sealed class ThrowingLapRepository : ILapRepository

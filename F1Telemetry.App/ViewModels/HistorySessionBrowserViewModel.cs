@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using F1Telemetry.App.Services;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Storage.Interfaces;
 
@@ -14,10 +15,13 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     private const int MaxRecentLaps = 200;
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
+    private readonly IHistorySessionDeletionConfirmationService _deletionConfirmationService;
     private readonly RelayCommand _refreshSessionsCommand;
+    private readonly RelayCommand<HistorySessionItemViewModel> _deleteSessionCommand;
     private HistorySessionItemViewModel? _selectedSession;
     private bool _isLoadingSessions;
     private bool _isLoadingLaps;
+    private bool _isDeletingSession;
     private string _statusText = "等待加载历史会话。";
     private string _emptyStateText = "暂无历史会话";
     private int _sessionLoadVersion;
@@ -28,16 +32,24 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     /// </summary>
     /// <param name="sessionRepository">The session repository.</param>
     /// <param name="lapRepository">The lap repository.</param>
+    /// <param name="deletionConfirmationService">The optional deletion confirmation service.</param>
     public HistorySessionBrowserViewModel(
         ISessionRepository sessionRepository,
-        ILapRepository lapRepository)
+        ILapRepository lapRepository,
+        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null)
     {
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
-        _refreshSessionsCommand = new RelayCommand(() => _ = RefreshSessionsAsync());
+        _deletionConfirmationService = deletionConfirmationService ?? new MessageBoxHistorySessionDeletionConfirmationService();
+        _refreshSessionsCommand = new RelayCommand(() => _ = RefreshSessionsAsync(), () => !IsDeletingSession);
+        _deleteSessionCommand = new RelayCommand<HistorySessionItemViewModel>(
+            session => _ = DeleteSessionAsync(session),
+            CanDeleteSession);
 
         HistorySessions = new ObservableCollection<HistorySessionItemViewModel>();
         HistoryLaps = new ObservableCollection<LapSummaryItemViewModel>();
+        HistorySessionPages = new PagedCollectionViewModel<HistorySessionItemViewModel>();
+        HistoryLapPages = new PagedCollectionViewModel<LapSummaryItemViewModel>();
         HistorySessions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHistorySessions));
         HistoryLaps.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasHistoryLaps));
     }
@@ -51,6 +63,16 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     /// Gets the stored laps for the selected session.
     /// </summary>
     public ObservableCollection<LapSummaryItemViewModel> HistoryLaps { get; }
+
+    /// <summary>
+    /// Gets the paged stored sessions used by history views.
+    /// </summary>
+    public PagedCollectionViewModel<HistorySessionItemViewModel> HistorySessionPages { get; }
+
+    /// <summary>
+    /// Gets the paged stored laps used by history views.
+    /// </summary>
+    public PagedCollectionViewModel<LapSummaryItemViewModel> HistoryLapPages { get; }
 
     /// <summary>
     /// Gets or sets the selected stored session.
@@ -67,7 +89,13 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     public bool IsLoadingSessions
     {
         get => _isLoadingSessions;
-        private set => SetProperty(ref _isLoadingSessions, value);
+        private set
+        {
+            if (SetProperty(ref _isLoadingSessions, value))
+            {
+                RaiseCommandStatesChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -76,7 +104,28 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     public bool IsLoadingLaps
     {
         get => _isLoadingLaps;
-        private set => SetProperty(ref _isLoadingLaps, value);
+        private set
+        {
+            if (SetProperty(ref _isLoadingLaps, value))
+            {
+                RaiseCommandStatesChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a history session is being deleted.
+    /// </summary>
+    public bool IsDeletingSession
+    {
+        get => _isDeletingSession;
+        private set
+        {
+            if (SetProperty(ref _isDeletingSession, value))
+            {
+                RaiseCommandStatesChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -113,6 +162,11 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     public ICommand RefreshSessionsCommand => _refreshSessionsCommand;
 
     /// <summary>
+    /// Gets the command that deletes a stored history session.
+    /// </summary>
+    public ICommand DeleteSessionCommand => _deleteSessionCommand;
+
+    /// <summary>
     /// Refreshes the recent stored session list.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -123,6 +177,8 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
         ClearSelectedSession();
         HistorySessions.Clear();
         HistoryLaps.Clear();
+        RefreshSessionPages(resetPage: true);
+        RefreshLapPages(resetPage: true);
         IsLoadingLaps = false;
         IsLoadingSessions = true;
         StatusText = "正在加载历史会话...";
@@ -141,6 +197,8 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
             {
                 HistorySessions.Add(new HistorySessionItemViewModel(session));
             }
+
+            RefreshSessionPages(resetPage: true);
 
             if (HistorySessions.Count == 0)
             {
@@ -169,6 +227,8 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
                 ClearSelectedSession();
                 HistorySessions.Clear();
                 HistoryLaps.Clear();
+                RefreshSessionPages(resetPage: true);
+                RefreshLapPages(resetPage: true);
                 EmptyStateText = "暂无历史会话";
                 StatusText = $"历史会话加载失败：{ex.Message}";
             }
@@ -193,6 +253,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
         {
             Interlocked.Increment(ref _lapLoadVersion);
             HistoryLaps.Clear();
+            RefreshLapPages(resetPage: true);
             IsLoadingLaps = false;
             EmptyStateText = HasHistorySessions ? "请选择历史会话" : "暂无历史会话";
             StatusText = HasHistorySessions ? "请选择历史会话。" : "暂无历史会话";
@@ -201,6 +262,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
 
         var loadVersion = Interlocked.Increment(ref _lapLoadVersion);
         HistoryLaps.Clear();
+        RefreshLapPages(resetPage: true);
         IsLoadingLaps = true;
         StatusText = "正在加载单圈记录...";
         EmptyStateText = string.Empty;
@@ -218,6 +280,8 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
                 HistoryLaps.Add(LapSummaryItemViewModel.FromStoredLap(lap));
             }
 
+            RefreshLapPages(resetPage: true);
+
             if (HistoryLaps.Count == 0)
             {
                 EmptyStateText = "该会话暂无单圈记录";
@@ -233,6 +297,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
             if (IsCurrentLapLoad(loadVersion, selectedSession))
             {
                 HistoryLaps.Clear();
+                RefreshLapPages(resetPage: true);
                 EmptyStateText = "该会话暂无单圈记录";
                 StatusText = "单圈记录加载已取消";
             }
@@ -242,6 +307,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
             if (IsCurrentLapLoad(loadVersion, selectedSession))
             {
                 HistoryLaps.Clear();
+                RefreshLapPages(resetPage: true);
                 EmptyStateText = "该会话暂无单圈记录";
                 StatusText = $"单圈记录加载失败：{ex.Message}";
             }
@@ -252,6 +318,78 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
             {
                 IsLoadingLaps = false;
             }
+        }
+    }
+
+    /// <summary>
+    /// Deletes the specified stored history session after confirmation.
+    /// </summary>
+    /// <param name="session">The session to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task DeleteSessionAsync(
+        HistorySessionItemViewModel? session,
+        CancellationToken cancellationToken = default)
+    {
+        if (!CanDeleteSession(session))
+        {
+            StatusText = session is null
+                ? "请选择要删除的历史会话。"
+                : "进行中的历史会话不可删除。";
+            return;
+        }
+
+        IsDeletingSession = true;
+        try
+        {
+            var confirmed = await _deletionConfirmationService.ConfirmDeleteAsync(
+                new HistorySessionDeletionConfirmationRequest(session!.SummaryText, session.SessionUid),
+                cancellationToken);
+            if (!confirmed)
+            {
+                StatusText = "历史会话删除已取消。";
+                return;
+            }
+
+            StatusText = "正在删除历史会话...";
+            var sessionIndex = HistorySessions.IndexOf(session);
+            var deleted = await _sessionRepository.DeleteAsync(session.SessionId, cancellationToken);
+            if (!deleted)
+            {
+                StatusText = "未找到要删除的历史会话。";
+                return;
+            }
+
+            HistorySessions.Remove(session);
+            RefreshSessionPages(resetPage: false);
+
+            if (SelectedSession is not null && string.Equals(SelectedSession.SessionId, session.SessionId, StringComparison.Ordinal))
+            {
+                await SelectSessionAsync(ResolveNextSelection(sessionIndex), cancellationToken);
+            }
+
+            if (HistorySessions.Count == 0)
+            {
+                HistoryLaps.Clear();
+                RefreshLapPages(resetPage: true);
+                EmptyStateText = "暂无历史会话";
+                StatusText = "历史会话已删除，当前暂无历史会话。";
+                return;
+            }
+
+            EmptyStateText = string.Empty;
+            StatusText = $"历史会话已删除。剩余 {HistorySessions.Count} 个历史会话。";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            StatusText = "历史会话删除已取消。";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"历史会话删除失败：{ex.Message}";
+        }
+        finally
+        {
+            IsDeletingSession = false;
         }
     }
 
@@ -266,6 +404,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
         {
             Interlocked.Increment(ref _lapLoadVersion);
             HistoryLaps.Clear();
+            RefreshLapPages(resetPage: true);
             IsLoadingLaps = false;
             EmptyStateText = HasHistorySessions ? "请选择历史会话" : "暂无历史会话";
             StatusText = HasHistorySessions ? "请选择历史会话。" : "暂无历史会话";
@@ -294,5 +433,36 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
 
         _selectedSession = null;
         OnPropertyChanged(nameof(SelectedSession));
+    }
+
+    private bool CanDeleteSession(HistorySessionItemViewModel? session)
+    {
+        return session is not null && session.CanDelete && !IsLoadingSessions && !IsLoadingLaps && !IsDeletingSession;
+    }
+
+    private HistorySessionItemViewModel? ResolveNextSelection(int deletedIndex)
+    {
+        if (HistorySessions.Count == 0)
+        {
+            return null;
+        }
+
+        return HistorySessions[Math.Clamp(deletedIndex, 0, HistorySessions.Count - 1)];
+    }
+
+    private void RefreshSessionPages(bool resetPage)
+    {
+        HistorySessionPages.SetItems(HistorySessions, resetPage);
+    }
+
+    private void RefreshLapPages(bool resetPage)
+    {
+        HistoryLapPages.SetItems(HistoryLaps, resetPage);
+    }
+
+    private void RaiseCommandStatesChanged()
+    {
+        _refreshSessionsCommand.RaiseCanExecuteChanged();
+        _deleteSessionCommand.RaiseCanExecuteChanged();
     }
 }

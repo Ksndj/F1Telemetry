@@ -21,4 +21,9 @@ public interface ISessionRepository
     /// Returns the most recent persisted sessions ordered by start time descending.
     /// </summary>
     Task<IReadOnlyList<StoredSession>> GetRecentAsync(int count, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Permanently deletes a persisted session and its associated history rows.
+    /// </summary>
+    Task<bool> DeleteAsync(string sessionId, CancellationToken cancellationToken = default);
 }
