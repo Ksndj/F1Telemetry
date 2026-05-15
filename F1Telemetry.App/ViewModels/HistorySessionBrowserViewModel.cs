@@ -3,6 +3,7 @@ using System.Windows.Input;
 using F1Telemetry.App.Services;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Storage.Interfaces;
+using F1Telemetry.Storage.Models;
 
 namespace F1Telemetry.App.ViewModels;
 
@@ -275,9 +276,19 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
                 return;
             }
 
-            foreach (var lap in laps.OrderBy(lap => lap.LapNumber).ThenBy(lap => lap.CreatedAt).ThenBy(lap => lap.Id))
+            var orderedLaps = laps.OrderBy(lap => lap.LapNumber).ThenBy(lap => lap.CreatedAt).ThenBy(lap => lap.Id).ToArray();
+            var fastestSector1 = FindFastestSectorTime(orderedLaps, lap => lap.Sector1TimeInMs);
+            var fastestSector2 = FindFastestSectorTime(orderedLaps, lap => lap.Sector2TimeInMs);
+            var fastestSector3 = FindFastestSectorTime(orderedLaps, LapSummaryItemViewModel.ResolveStoredSector3Time);
+
+            foreach (var lap in orderedLaps)
             {
-                HistoryLaps.Add(LapSummaryItemViewModel.FromStoredLap(lap));
+                HistoryLaps.Add(
+                    LapSummaryItemViewModel.FromStoredLap(
+                        lap,
+                        IsFastestSector(lap.Sector1TimeInMs, fastestSector1),
+                        IsFastestSector(lap.Sector2TimeInMs, fastestSector2),
+                        IsFastestSector(LapSummaryItemViewModel.ResolveStoredSector3Time(lap), fastestSector3)));
             }
 
             RefreshLapPages(resetPage: true);
@@ -448,6 +459,28 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
         }
 
         return HistorySessions[Math.Clamp(deletedIndex, 0, HistorySessions.Count - 1)];
+    }
+
+    private static int? FindFastestSectorTime(IReadOnlyList<StoredLap> laps, Func<StoredLap, int?> selector)
+    {
+        var validLapBest = FindFastestSectorTime(laps.Where(lap => lap.IsValid), selector);
+        return validLapBest ?? FindFastestSectorTime(laps.AsEnumerable(), selector);
+    }
+
+    private static int? FindFastestSectorTime(IEnumerable<StoredLap> laps, Func<StoredLap, int?> selector)
+    {
+        var sectorTimes = laps
+            .Select(selector)
+            .Where(time => time is > 0)
+            .Select(time => time!.Value)
+            .ToArray();
+
+        return sectorTimes.Length == 0 ? null : sectorTimes.Min();
+    }
+
+    private static bool IsFastestSector(int? sectorTime, int? fastestSectorTime)
+    {
+        return sectorTime is > 0 && fastestSectorTime is not null && sectorTime.Value == fastestSectorTime.Value;
     }
 
     private void RefreshSessionPages(bool resetPage)

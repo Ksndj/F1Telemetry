@@ -97,6 +97,45 @@ public sealed class HistorySessionBrowserViewModelTests
     }
 
     /// <summary>
+    /// Verifies history lap rows expose all three sector times and mark each fastest sector independently.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithLaps_MarksFastestSectorTimes()
+    {
+        var session = CreateSession("session-a", DateTimeOffset.Parse("2026-04-18T10:00:00Z"));
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [session]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-a"] =
+                [
+                    CreateLap("session-a", 1, 1, lapTimeInMs: 90_000, sector1TimeInMs: 29_000, sector2TimeInMs: 31_000, sector3TimeInMs: 30_000),
+                    CreateLap("session-a", 2, 2, lapTimeInMs: 88_500, sector1TimeInMs: 30_000, sector2TimeInMs: 30_000, sector3TimeInMs: null),
+                    CreateLap("session-a", 3, 3, lapTimeInMs: 90_000, sector1TimeInMs: 31_000, sector2TimeInMs: 29_000, sector3TimeInMs: 30_000)
+                ]
+            }
+        };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+
+        await viewModel.RefreshSessionsAsync();
+
+        var rows = viewModel.HistoryLaps.ToArray();
+        Assert.Equal("29.000s / 31.000s / 30.000s", rows[0].SectorsText);
+        Assert.Equal("30.000s / 30.000s / 28.500s", rows[1].SectorsText);
+        Assert.Equal("31.000s / 29.000s / 30.000s", rows[2].SectorsText);
+        Assert.True(rows[0].IsFastestSector1);
+        Assert.True(rows[1].IsFastestSector3);
+        Assert.True(rows[2].IsFastestSector2);
+        Assert.False(rows[0].IsFastestSector2);
+        Assert.False(rows[1].IsFastestSector1);
+        Assert.False(rows[2].IsFastestSector3);
+    }
+
+    /// <summary>
     /// Verifies session and lap lists expose paged projections.
     /// </summary>
     [Fact]
@@ -241,17 +280,24 @@ public sealed class HistorySessionBrowserViewModelTests
         };
     }
 
-    private static StoredLap CreateLap(string sessionId, int lapNumber, long id)
+    private static StoredLap CreateLap(
+        string sessionId,
+        int lapNumber,
+        long id,
+        int? lapTimeInMs = null,
+        int? sector1TimeInMs = 30_000,
+        int? sector2TimeInMs = 30_000,
+        int? sector3TimeInMs = 30_000)
     {
         return new StoredLap
         {
             Id = id,
             SessionId = sessionId,
             LapNumber = lapNumber,
-            LapTimeInMs = 90_000 + lapNumber,
-            Sector1TimeInMs = 30_000,
-            Sector2TimeInMs = 30_000,
-            Sector3TimeInMs = 30_000,
+            LapTimeInMs = lapTimeInMs ?? 90_000 + lapNumber,
+            Sector1TimeInMs = sector1TimeInMs,
+            Sector2TimeInMs = sector2TimeInMs,
+            Sector3TimeInMs = sector3TimeInMs,
             IsValid = true,
             AverageSpeedKph = 215,
             FuelUsedLitres = 1.2f,

@@ -116,7 +116,7 @@ public sealed class LapAnalyzerTests
                         new LapHistoryData(90_500, 0, 0, 0, 0, 0, 0, 1),
                         new LapHistoryData(91_000, 0, 0, 0, 0, 0, 0, 1),
                         new LapHistoryData(91_200, 0, 0, 0, 0, 0, 0, 1),
-                        new LapHistoryData(91_500, 31_000, 0, 30_500, 0, 30_000, 0, 0x0F)
+                        new LapHistoryData(91_500, 31_000, 0, 30_500, 0, 0, 0, 0x07)
                     ],
                     TyreStints: Array.Empty<TyreStintHistoryData>()),
                 playerCarIndex: 3,
