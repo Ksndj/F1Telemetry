@@ -328,12 +328,18 @@ public sealed class LapAnalyzer : ILapAnalyzer
         }
 
         var lapHistory = packet.LapHistory[lapIndex];
+        var lapTime = lapHistory.LapTimeInMs == 0 ? summary.LapTimeInMs : lapHistory.LapTimeInMs;
+        var sector1Time = ToSectorMilliseconds(lapHistory.Sector1TimeMinutesPart, lapHistory.Sector1TimeMsPart);
+        var sector2Time = ToSectorMilliseconds(lapHistory.Sector2TimeMinutesPart, lapHistory.Sector2TimeMsPart);
+        var sector3Time = ToSectorMilliseconds(lapHistory.Sector3TimeMinutesPart, lapHistory.Sector3TimeMsPart)
+            ?? TryInferSector3Milliseconds(lapTime, sector1Time, sector2Time);
+
         return summary with
         {
-            LapTimeInMs = lapHistory.LapTimeInMs == 0 ? summary.LapTimeInMs : lapHistory.LapTimeInMs,
-            Sector1TimeInMs = ToSectorMilliseconds(lapHistory.Sector1TimeMinutesPart, lapHistory.Sector1TimeMsPart),
-            Sector2TimeInMs = ToSectorMilliseconds(lapHistory.Sector2TimeMinutesPart, lapHistory.Sector2TimeMsPart),
-            Sector3TimeInMs = ToSectorMilliseconds(lapHistory.Sector3TimeMinutesPart, lapHistory.Sector3TimeMsPart),
+            LapTimeInMs = lapTime,
+            Sector1TimeInMs = sector1Time,
+            Sector2TimeInMs = sector2Time,
+            Sector3TimeInMs = sector3Time,
             IsValid = lapHistory.IsLapValid
         };
     }
@@ -346,5 +352,16 @@ public sealed class LapAnalyzer : ILapAnalyzer
         }
 
         return (uint)(minutesPart * 60_000 + millisecondsPart);
+    }
+
+    private static uint? TryInferSector3Milliseconds(uint? lapTime, uint? sector1Time, uint? sector2Time)
+    {
+        if (lapTime is null || sector1Time is null || sector2Time is null)
+        {
+            return null;
+        }
+
+        var sector12 = sector1Time.Value + sector2Time.Value;
+        return lapTime.Value > sector12 ? lapTime.Value - sector12 : null;
     }
 }
