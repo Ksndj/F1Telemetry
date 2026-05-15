@@ -31,6 +31,16 @@ public enum EventType
     HighTyreWear,
 
     /// <summary>
+    /// Indicates that the player's tyre temperature is above the dynamic track-temperature threshold.
+    /// </summary>
+    HighTyreTemperature,
+
+    /// <summary>
+    /// Indicates that the player's tyre temperature is below the dynamic track-temperature threshold.
+    /// </summary>
+    LowTyreTemperature,
+
+    /// <summary>
     /// Indicates that the player's car has entered a higher damage severity band.
     /// </summary>
     CarDamage,

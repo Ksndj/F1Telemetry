@@ -195,6 +195,7 @@ public sealed class CarStateStore
                 VisualTyreCompound = null,
                 TyresAgeLaps = null,
                 TyreWear = null,
+                TyreCondition = null,
                 FrontLeftWingDamage = null,
                 FrontRightWingDamage = null,
                 RearWingDamage = null,

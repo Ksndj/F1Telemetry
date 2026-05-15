@@ -174,6 +174,10 @@ public sealed class TtsMessageFactory
                 $"flag:lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.HighTyreWear =>
                 $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.HighTyreTemperature or EventType.LowTyreTemperature =>
+                string.IsNullOrWhiteSpace(raceEvent.DedupKey) || raceEvent.DedupKey.Trim() == "-"
+                    ? $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}"
+                    : raceEvent.DedupKey.Trim(),
             EventType.CarDamage or EventType.DrsFault or EventType.ErsFault or EventType.EngineFailure =>
                 string.IsNullOrWhiteSpace(raceEvent.DedupKey)
                     ? $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}"
@@ -192,6 +196,8 @@ public sealed class TtsMessageFactory
             EventType.PlayerLapInvalidated => "lap_invalid",
             EventType.LowFuel => "low_fuel",
             EventType.HighTyreWear => "high_tyre_wear",
+            EventType.HighTyreTemperature => "high_tyre_temperature",
+            EventType.LowTyreTemperature => "low_tyre_temperature",
             EventType.SafetyCar => "safety_car",
             EventType.VirtualSafetyCar => "virtual_safety_car",
             EventType.YellowFlag => "yellow_flag",
@@ -227,6 +233,8 @@ public sealed class TtsMessageFactory
                 TtsPriority.High,
             EventType.LowFuel
                 or EventType.HighTyreWear
+                or EventType.HighTyreTemperature
+                or EventType.LowTyreTemperature
                 or EventType.AttackWindow
                 or EventType.DefenseWindow
                 or EventType.FrontOldTyreRisk
@@ -260,6 +268,8 @@ public sealed class TtsMessageFactory
     {
         return eventType is EventType.LowFuel
             or EventType.HighTyreWear
+            or EventType.HighTyreTemperature
+            or EventType.LowTyreTemperature
             or EventType.LowErs
             or EventType.AttackWindow
             or EventType.DefenseWindow

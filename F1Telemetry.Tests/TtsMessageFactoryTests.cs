@@ -138,6 +138,8 @@ public sealed class TtsMessageFactoryTests
     [InlineData(EventType.RedFlag, TtsPriority.High)]
     [InlineData(EventType.LowFuel, TtsPriority.High)]
     [InlineData(EventType.HighTyreWear, TtsPriority.High)]
+    [InlineData(EventType.HighTyreTemperature, TtsPriority.High)]
+    [InlineData(EventType.LowTyreTemperature, TtsPriority.High)]
     [InlineData(EventType.AttackWindow, TtsPriority.High)]
     [InlineData(EventType.DefenseWindow, TtsPriority.High)]
     [InlineData(EventType.LowErs, TtsPriority.Normal)]
@@ -176,6 +178,8 @@ public sealed class TtsMessageFactoryTests
     [InlineData(EventType.RacePitWindow, "race_pit_window", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.SafetyCarRestart, "safety_car_restart", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.RedFlagTyreChange, "red_flag_tyre_change", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.HighTyreTemperature, "high_tyre_temperature", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.LowTyreTemperature, "low_tyre_temperature", TtsPriority.High, SessionMode.Race)]
     public void CreateForRaceEvent_MapsM6AdviceTypes(EventType eventType, string expectedType, TtsPriority expectedPriority, SessionMode sessionMode)
     {
         var factory = new TtsMessageFactory();

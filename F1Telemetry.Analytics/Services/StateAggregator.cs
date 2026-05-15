@@ -230,7 +230,14 @@ public sealed class StateAggregator : IStateAggregator
                     SteeringInput = car.Steer,
                     Gear = car.Gear,
                     EngineRpm = car.EngineRpm,
-                    IsDrsEnabled = car.Drs
+                    IsDrsEnabled = car.Drs,
+                    TyreCondition = new TyreConditionSnapshot
+                    {
+                        Timestamp = receivedAt,
+                        SurfaceTemperatureCelsius = ConvertWheelValues(car.TyresSurfaceTemperature),
+                        InnerTemperatureCelsius = ConvertWheelValues(car.TyresInnerTemperature),
+                        PressurePsi = ConvertWheelValues(car.TyresPressure)
+                    }
                 },
                 receivedAt);
         }
@@ -345,6 +352,15 @@ public sealed class StateAggregator : IStateAggregator
     private static byte MaxWheelValue(WheelSet<byte> values)
     {
         return NormalizePercent(Math.Max(Math.Max(values.RearLeft, values.RearRight), Math.Max(values.FrontLeft, values.FrontRight)));
+    }
+
+    private static WheelValues<T> ConvertWheelValues<T>(WheelSet<T> values)
+    {
+        return new WheelValues<T>(
+            values.RearLeft,
+            values.RearRight,
+            values.FrontLeft,
+            values.FrontRight);
     }
 
     private static byte NormalizePercent(byte value)

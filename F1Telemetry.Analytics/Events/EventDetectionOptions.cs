@@ -16,6 +16,36 @@ public sealed class EventDetectionOptions
     public float HighTyreWearThreshold { get; set; } = 70.0f;
 
     /// <summary>
+    /// Gets or sets the baseline track temperature used to normalize dynamic tyre temperature thresholds.
+    /// </summary>
+    public float TyreTemperatureBaselineTrackCelsius { get; set; } = 30.0f;
+
+    /// <summary>
+    /// Gets or sets the baseline surface temperature above which hot tyre alerts can be emitted.
+    /// </summary>
+    public float HighTyreSurfaceTemperatureBaselineCelsius { get; set; } = 105.0f;
+
+    /// <summary>
+    /// Gets or sets the baseline inner temperature above which hot tyre alerts can be emitted.
+    /// </summary>
+    public float HighTyreInnerTemperatureBaselineCelsius { get; set; } = 100.0f;
+
+    /// <summary>
+    /// Gets or sets the baseline surface temperature below which cold tyre alerts can be emitted.
+    /// </summary>
+    public float LowTyreSurfaceTemperatureBaselineCelsius { get; set; } = 75.0f;
+
+    /// <summary>
+    /// Gets or sets the baseline inner temperature below which cold tyre alerts can be emitted.
+    /// </summary>
+    public float LowTyreInnerTemperatureBaselineCelsius { get; set; } = 80.0f;
+
+    /// <summary>
+    /// Gets or sets the recovery hysteresis for tyre temperature alerts in degrees Celsius.
+    /// </summary>
+    public float TyreTemperatureRecoveryHysteresisCelsius { get; set; } = 3.0f;
+
+    /// <summary>
     /// Gets or sets the minimum cooldown in seconds between duplicate events with the same dedup key.
     /// </summary>
     public int EventCooldownSeconds { get; set; } = 20;
