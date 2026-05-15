@@ -16,6 +16,7 @@ public sealed class EventDetectionService : IEventDetectionService
     private readonly Queue<RaceEvent> _pendingEvents = new();
     private readonly Dictionary<string, DateTimeOffset> _lastRaisedAtByDedupKey = new(StringComparer.Ordinal);
     private readonly HashSet<string> _highTyreWearTyreKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _activeTyreTemperatureAlertKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> _dataQualityWarningKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<int, sbyte> _lastMarshalZoneFlags = new();
     private readonly Dictionary<int, PitCandidate> _pitCandidates = new();
@@ -59,6 +60,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 DetectPlayerLapInvalidated(previousState, sessionState);
                 DetectLowFuel(previousState, sessionState);
                 DetectHighTyreWear(previousState, sessionState);
+                DetectTyreTemperature(sessionState);
                 DetectPlayerDamage(previousState, sessionState);
             }
 
@@ -95,6 +97,7 @@ public sealed class EventDetectionService : IEventDetectionService
             _pendingEvents.Clear();
             _lastRaisedAtByDedupKey.Clear();
             _highTyreWearTyreKeys.Clear();
+            _activeTyreTemperatureAlertKeys.Clear();
             _dataQualityWarningKeys.Clear();
             _lastMarshalZoneFlags.Clear();
             _pitCandidates.Clear();
@@ -283,6 +286,101 @@ public sealed class EventDetectionService : IEventDetectionService
                 }))
         {
             _highTyreWearTyreKeys.Add(tyreKey);
+        }
+    }
+
+    private void DetectTyreTemperature(SessionState currentState)
+    {
+        var player = currentState.PlayerCar;
+        if (player?.TyreCondition is null || currentState.TrackTemperature is null)
+        {
+            return;
+        }
+
+        var thresholds = BuildTyreTemperatureThresholds(currentState.TrackTemperature.Value);
+        var wheels = EnumerateTyreTemperatureWheels(player.TyreCondition).ToArray();
+        var hottestWheel = wheels
+            .Where(wheel => IsHighTyreTemperatureCandidate(wheel, thresholds))
+            .OrderByDescending(wheel => GetHighTyreTemperatureScore(wheel, thresholds))
+            .FirstOrDefault();
+        if (hottestWheel is not null)
+        {
+            DetectHighTyreTemperature(currentState, player, hottestWheel, thresholds);
+        }
+        else if (wheels.All(wheel => HasRecoveredFromHighTyreTemperature(wheel, thresholds)))
+        {
+            _activeTyreTemperatureAlertKeys.Remove("tyre-temp:high");
+        }
+
+        var coldestWheel = wheels
+            .Where(wheel => IsLowTyreTemperatureCandidate(wheel, thresholds))
+            .OrderByDescending(wheel => GetLowTyreTemperatureScore(wheel, thresholds))
+            .FirstOrDefault();
+        if (coldestWheel is not null)
+        {
+            DetectLowTyreTemperature(currentState, player, coldestWheel, thresholds);
+        }
+        else if (wheels.All(wheel => HasRecoveredFromLowTyreTemperature(wheel, thresholds)))
+        {
+            _activeTyreTemperatureAlertKeys.Remove("tyre-temp:low");
+        }
+    }
+
+    private void DetectHighTyreTemperature(
+        SessionState currentState,
+        CarSnapshot player,
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        const string AlertKey = "tyre-temp:high";
+        const string OppositeAlertKey = "tyre-temp:low";
+        _activeTyreTemperatureAlertKeys.Remove(OppositeAlertKey);
+        if (_activeTyreTemperatureAlertKeys.Contains(AlertKey))
+        {
+            return;
+        }
+
+        if (EmitEvent(
+                eventType: EventType.HighTyreTemperature,
+                severity: EventSeverity.Warning,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                vehicleIdx: player.CarIndex,
+                driverName: player.DriverName,
+                message: $"{wheel.DisplayName}胎温偏高，表面 {wheel.SurfaceTemperatureCelsius}°C，内层 {wheel.InnerTemperatureCelsius}°C；赛道 {thresholds.TrackTemperatureCelsius:0}°C，保护轮胎避免连续打滑。",
+                dedupKey: AlertKey,
+                payload: BuildTyreTemperaturePayload(currentState, player, wheel, thresholds)))
+        {
+            _activeTyreTemperatureAlertKeys.Add(AlertKey);
+        }
+    }
+
+    private void DetectLowTyreTemperature(
+        SessionState currentState,
+        CarSnapshot player,
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        const string AlertKey = "tyre-temp:low";
+        const string OppositeAlertKey = "tyre-temp:high";
+        _activeTyreTemperatureAlertKeys.Remove(OppositeAlertKey);
+        if (_activeTyreTemperatureAlertKeys.Contains(AlertKey))
+        {
+            return;
+        }
+
+        if (EmitEvent(
+                eventType: EventType.LowTyreTemperature,
+                severity: EventSeverity.Warning,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: (int?)player.CurrentLapNumber,
+                vehicleIdx: player.CarIndex,
+                driverName: player.DriverName,
+                message: $"{wheel.DisplayName}胎温偏低，表面 {wheel.SurfaceTemperatureCelsius}°C，内层 {wheel.InnerTemperatureCelsius}°C；赛道 {thresholds.TrackTemperatureCelsius:0}°C，出弯前先把轮胎带起来。",
+                dedupKey: AlertKey,
+                payload: BuildTyreTemperaturePayload(currentState, player, wheel, thresholds)))
+        {
+            _activeTyreTemperatureAlertKeys.Add(AlertKey);
         }
     }
 
@@ -1173,6 +1271,120 @@ public sealed class EventDetectionService : IEventDetectionService
         return $"{carSnapshot.CarIndex}:{carSnapshot.NumPitStops ?? 0}:{carSnapshot.VisualTyreCompound?.ToString() ?? "-"}:{carSnapshot.ActualTyreCompound?.ToString() ?? "-"}";
     }
 
+    private TyreTemperatureThresholds BuildTyreTemperatureThresholds(sbyte trackTemperatureCelsius)
+    {
+        var trackDelta = Math.Clamp(
+            trackTemperatureCelsius - _options.TyreTemperatureBaselineTrackCelsius,
+            -20.0f,
+            20.0f);
+
+        return new TyreTemperatureThresholds(
+            TrackTemperatureCelsius: trackTemperatureCelsius,
+            HighSurfaceCelsius: _options.HighTyreSurfaceTemperatureBaselineCelsius + (trackDelta * 0.25f),
+            HighInnerCelsius: _options.HighTyreInnerTemperatureBaselineCelsius + (trackDelta * 0.15f),
+            LowSurfaceCelsius: _options.LowTyreSurfaceTemperatureBaselineCelsius + (trackDelta * 0.20f),
+            LowInnerCelsius: _options.LowTyreInnerTemperatureBaselineCelsius + (trackDelta * 0.10f));
+    }
+
+    private static IEnumerable<TyreTemperatureWheelSample> EnumerateTyreTemperatureWheels(TyreConditionSnapshot tyreCondition)
+    {
+        yield return new TyreTemperatureWheelSample(
+            "rear-left",
+            "后左轮",
+            tyreCondition.SurfaceTemperatureCelsius.RearLeft,
+            tyreCondition.InnerTemperatureCelsius.RearLeft,
+            tyreCondition.PressurePsi.RearLeft);
+        yield return new TyreTemperatureWheelSample(
+            "rear-right",
+            "后右轮",
+            tyreCondition.SurfaceTemperatureCelsius.RearRight,
+            tyreCondition.InnerTemperatureCelsius.RearRight,
+            tyreCondition.PressurePsi.RearRight);
+        yield return new TyreTemperatureWheelSample(
+            "front-left",
+            "前左轮",
+            tyreCondition.SurfaceTemperatureCelsius.FrontLeft,
+            tyreCondition.InnerTemperatureCelsius.FrontLeft,
+            tyreCondition.PressurePsi.FrontLeft);
+        yield return new TyreTemperatureWheelSample(
+            "front-right",
+            "前右轮",
+            tyreCondition.SurfaceTemperatureCelsius.FrontRight,
+            tyreCondition.InnerTemperatureCelsius.FrontRight,
+            tyreCondition.PressurePsi.FrontRight);
+    }
+
+    private static object BuildTyreTemperaturePayload(
+        SessionState currentState,
+        CarSnapshot player,
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return new
+        {
+            player.CarIndex,
+            player.CurrentLapNumber,
+            Wheel = wheel.Key,
+            WheelName = wheel.DisplayName,
+            SurfaceTemperatureCelsius = wheel.SurfaceTemperatureCelsius,
+            InnerTemperatureCelsius = wheel.InnerTemperatureCelsius,
+            PressurePsi = wheel.PressurePsi,
+            TrackTemperatureCelsius = currentState.TrackTemperature,
+            thresholds.HighSurfaceCelsius,
+            thresholds.HighInnerCelsius,
+            thresholds.LowSurfaceCelsius,
+            thresholds.LowInnerCelsius
+        };
+    }
+
+    private static bool IsHighTyreTemperatureCandidate(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return wheel.SurfaceTemperatureCelsius >= thresholds.HighSurfaceCelsius &&
+               wheel.InnerTemperatureCelsius >= thresholds.HighInnerCelsius;
+    }
+
+    private bool HasRecoveredFromHighTyreTemperature(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return wheel.SurfaceTemperatureCelsius <= thresholds.HighSurfaceCelsius - _options.TyreTemperatureRecoveryHysteresisCelsius &&
+               wheel.InnerTemperatureCelsius <= thresholds.HighInnerCelsius - _options.TyreTemperatureRecoveryHysteresisCelsius;
+    }
+
+    private static float GetHighTyreTemperatureScore(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return (wheel.SurfaceTemperatureCelsius - thresholds.HighSurfaceCelsius) +
+               (wheel.InnerTemperatureCelsius - thresholds.HighInnerCelsius);
+    }
+
+    private static bool IsLowTyreTemperatureCandidate(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return wheel.SurfaceTemperatureCelsius <= thresholds.LowSurfaceCelsius &&
+               wheel.InnerTemperatureCelsius <= thresholds.LowInnerCelsius;
+    }
+
+    private bool HasRecoveredFromLowTyreTemperature(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return wheel.SurfaceTemperatureCelsius >= thresholds.LowSurfaceCelsius + _options.TyreTemperatureRecoveryHysteresisCelsius &&
+               wheel.InnerTemperatureCelsius >= thresholds.LowInnerCelsius + _options.TyreTemperatureRecoveryHysteresisCelsius;
+    }
+
+    private static float GetLowTyreTemperatureScore(
+        TyreTemperatureWheelSample wheel,
+        TyreTemperatureThresholds thresholds)
+    {
+        return (thresholds.LowSurfaceCelsius - wheel.SurfaceTemperatureCelsius) +
+               (thresholds.LowInnerCelsius - wheel.InnerTemperatureCelsius);
+    }
+
     private void EmitFaultEvent(
         SessionState currentState,
         CarSnapshot currentPlayer,
@@ -1379,4 +1591,18 @@ public sealed class EventDetectionService : IEventDetectionService
         Front,
         Rear
     }
+
+    private sealed record TyreTemperatureWheelSample(
+        string Key,
+        string DisplayName,
+        byte SurfaceTemperatureCelsius,
+        byte InnerTemperatureCelsius,
+        float PressurePsi);
+
+    private sealed record TyreTemperatureThresholds(
+        float TrackTemperatureCelsius,
+        float HighSurfaceCelsius,
+        float HighInnerCelsius,
+        float LowSurfaceCelsius,
+        float LowInnerCelsius);
 }

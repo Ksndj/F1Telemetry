@@ -64,6 +64,10 @@ public sealed class StateAggregatorTests
         Assert.NotNull(state.PlayerCar.Telemetry);
         Assert.Equal(203d, state.PlayerCar.Telemetry!.SpeedKph, 3);
         Assert.Equal((sbyte)6, state.PlayerCar.Gear);
+        Assert.NotNull(state.PlayerCar.TyreCondition);
+        Assert.Equal((byte)90, state.PlayerCar.TyreCondition!.SurfaceTemperatureCelsius.RearLeft);
+        Assert.Equal((byte)80, state.PlayerCar.TyreCondition.InnerTemperatureCelsius.FrontRight);
+        Assert.Equal(22f, state.PlayerCar.TyreCondition.PressurePsi.RearRight, 3);
     }
 
     /// <summary>
@@ -94,11 +98,13 @@ public sealed class StateAggregatorTests
 
         Assert.True(restrictedOpponent.IsTelemetryRestricted);
         Assert.Null(restrictedOpponent.Telemetry);
+        Assert.Null(restrictedOpponent.TyreCondition);
         Assert.Null(restrictedOpponent.FuelInTank);
         Assert.Null(restrictedOpponent.ActualTyreCompound);
 
         Assert.False(visibleOpponent.IsTelemetryRestricted);
         Assert.NotNull(visibleOpponent.Telemetry);
+        Assert.NotNull(visibleOpponent.TyreCondition);
         Assert.Equal(205d, visibleOpponent.Telemetry!.SpeedKph, 3);
         Assert.NotNull(visibleOpponent.FuelInTank);
         Assert.Equal(20.5f, visibleOpponent.FuelInTank!.Value, 3);

@@ -156,6 +156,11 @@ public sealed record CarSnapshot
     public float? TyreWear { get; init; }
 
     /// <summary>
+    /// Gets the latest tyre temperature and pressure snapshot when visible.
+    /// </summary>
+    public TyreConditionSnapshot? TyreCondition { get; init; }
+
+    /// <summary>
     /// Gets the raw pit status value from lap data when known.
     /// </summary>
     public byte? PitStatus { get; init; }

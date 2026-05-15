@@ -1,11 +1,13 @@
 using System.Net;
 using System.Runtime.ExceptionServices;
+using System.Reflection;
 using System.Windows.Threading;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.ViewModels;
@@ -77,13 +79,51 @@ public sealed class DashboardChartStateTests
         });
     }
 
-    private static DashboardViewModel CreateDashboardViewModel(FakePacketDispatcher dispatcher)
+    /// <summary>
+    /// Verifies tyre condition summaries switch from waiting text to live telemetry values.
+    /// </summary>
+    [Fact]
+    public void RefreshCentralState_WithTyreCondition_ShowsTyreTemperatureAndPressureSummary()
+    {
+        RunOnStaThread(() =>
+        {
+            var dispatcher = new FakePacketDispatcher();
+            var sessionStateStore = new SessionStateStore(new CarStateStore());
+            var viewModel = CreateDashboardViewModel(dispatcher, sessionStateStore);
+
+            try
+            {
+                Assert.Equal("等待数据", viewModel.OverviewTyreTemperatureText);
+                Assert.Equal("等待数据", viewModel.OverviewTyrePressureText);
+
+                var aggregator = new StateAggregator(sessionStateStore);
+                aggregator.ApplyPacket(CreateParsedPacket(
+                    new CarTelemetryPacket(
+                        BuildTelemetryCars(),
+                        MfdPanelIndex: 255,
+                        MfdPanelIndexSecondaryPlayer: 255,
+                        SuggestedGear: 0),
+                    playerCarIndex: 0));
+
+                InvokeRefreshCentralState(viewModel);
+
+                Assert.Equal("表 90-105°C · 内 80-100°C", viewModel.OverviewTyreTemperatureText);
+                Assert.Equal("21.1-21.4 psi", viewModel.OverviewTyrePressureText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    private static DashboardViewModel CreateDashboardViewModel(FakePacketDispatcher dispatcher, SessionStateStore? sessionStateStore = null)
     {
         var ttsQueue = new TtsQueue(new FakeTtsService(), new TtsOptions());
         return new DashboardViewModel(
             new FakeUdpListener(),
             dispatcher,
-            new SessionStateStore(new CarStateStore()),
+            sessionStateStore ?? new SessionStateStore(new CarStateStore()),
             new LapAnalyzer(),
             new EventDetectionService(),
             new FakeAiAnalysisService(),
@@ -94,6 +134,62 @@ public sealed class DashboardChartStateTests
             new FakeStoragePersistenceService(),
             Dispatcher.CurrentDispatcher,
             new WindowsVoiceCatalog(() => new WindowsVoiceCatalogResult(Array.Empty<string>(), string.Empty, "No voices.")));
+    }
+
+    private static void InvokeRefreshCentralState(DashboardViewModel viewModel)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "RefreshCentralState",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, null);
+    }
+
+    private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
+    {
+        var header = new PacketHeader(
+            PacketFormat: 2025,
+            GameYear: 25,
+            GameMajorVersion: 1,
+            GameMinorVersion: 0,
+            PacketVersion: 1,
+            RawPacketId: (byte)PacketId.CarTelemetry,
+            SessionUid: 123UL,
+            SessionTime: 0,
+            FrameIdentifier: 1,
+            OverallFrameIdentifier: 1,
+            PlayerCarIndex: playerCarIndex,
+            SecondaryPlayerCarIndex: 255);
+        var datagram = new UdpDatagram(Array.Empty<byte>(), new IPEndPoint(IPAddress.Loopback, 20777), DateTimeOffset.UtcNow);
+        return new ParsedPacket(PacketId.CarTelemetry, header, packet, datagram);
+    }
+
+    private static CarTelemetryData[] BuildTelemetryCars()
+    {
+        var cars = new CarTelemetryData[22];
+        for (var index = 0; index < cars.Length; index++)
+        {
+            cars[index] = new CarTelemetryData(
+                Speed: 200,
+                Throttle: 0.5f,
+                Steer: 0f,
+                Brake: 0.2f,
+                Clutch: 0,
+                Gear: 4,
+                EngineRpm: 11000,
+                Drs: false,
+                RevLightsPercent: 0,
+                RevLightsBitValue: 0,
+                BrakesTemperature: new WheelSet<ushort>(500, 500, 500, 500),
+                TyresSurfaceTemperature: new WheelSet<byte>(90, 95, 100, 105),
+                TyresInnerTemperature: new WheelSet<byte>(80, 85, 90, 100),
+                EngineTemperature: 100,
+                TyresPressure: new WheelSet<float>(21.1f, 21.2f, 21.3f, 21.4f),
+                SurfaceType: new WheelSet<byte>(0, 0, 0, 0));
+        }
+
+        return cars;
     }
 
     private static ChartPanelViewModel CreateDataPanel(string title, string emptyStateText)

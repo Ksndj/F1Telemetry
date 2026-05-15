@@ -82,6 +82,120 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
+    /// Verifies that hot surface and inner tyre temperatures emit a dynamic high-temperature event.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreTemperatureCrossesDynamicHighThreshold_EmitsHighTyreTemperatureEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = DateTimeOffset.UtcNow;
+
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyreCondition: CreateTyreCondition(surface: 100, inner: 95))));
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyreCondition: CreateTyreCondition(surface: 106, inner: 101))));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.HighTyreTemperature);
+        Assert.Equal(EventSeverity.Warning, raceEvent.Severity);
+        Assert.Contains("胎温偏高", raceEvent.Message, StringComparison.Ordinal);
+        Assert.Contains("TrackTemperatureCelsius", raceEvent.PayloadJson, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that cold surface and inner tyre temperatures emit a dynamic low-temperature event.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreTemperatureCrossesDynamicLowThreshold_EmitsLowTyreTemperatureEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = DateTimeOffset.UtcNow;
+
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyreCondition: CreateTyreCondition(surface: 82, inner: 85))));
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyreCondition: CreateTyreCondition(surface: 74, inner: 79))));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.LowTyreTemperature);
+        Assert.Equal(EventSeverity.Warning, raceEvent.Severity);
+        Assert.Contains("胎温偏低", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that surface-only tyre temperature excursions do not emit a temperature event.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreTemperatureSurfaceOnlyExcursion_DoesNotEmitTemperatureEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = DateTimeOffset.UtcNow;
+
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyreCondition: CreateTyreCondition(surface: 100, inner: 95))));
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyreCondition: CreateTyreCondition(surface: 106, inner: 95))));
+
+        Assert.DoesNotContain(
+            service.DrainPendingEvents(),
+            raceEvent => raceEvent.EventType is EventType.HighTyreTemperature or EventType.LowTyreTemperature);
+    }
+
+    /// <summary>
+    /// Verifies that tyre temperature alerts wait for track temperature evidence.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreTemperatureWithoutTrackTemperature_DoesNotEmitTemperatureEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = DateTimeOffset.UtcNow;
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyreCondition: CreateTyreCondition(surface: 100, inner: 95))));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(1), tyreCondition: CreateTyreCondition(surface: 106, inner: 101))));
+
+        Assert.DoesNotContain(
+            service.DrainPendingEvents(),
+            raceEvent => raceEvent.EventType is EventType.HighTyreTemperature or EventType.LowTyreTemperature);
+    }
+
+    /// <summary>
+    /// Verifies that temperature hysteresis allows a fresh alert after the tyre returns to range.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreTemperatureRecovers_AllowsFreshTemperatureEvent()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions
+        {
+            EventCooldownSeconds = 1
+        });
+        var timestamp = DateTimeOffset.UtcNow;
+
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 8.0f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp, tyreCondition: CreateTyreCondition(surface: 100, inner: 95))));
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(2), tyreCondition: CreateTyreCondition(surface: 106, inner: 101))));
+
+        Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.HighTyreTemperature);
+
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.8f, tyreWear: 32f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(4), tyreCondition: CreateTyreCondition(surface: 101, inner: 96))));
+        service.Observe(CreateStateWithTrackTemperature(
+            30,
+            CreatePlayerCar(carIndex: 3, position: 6, lapNumber: 15, fuelLapsRemaining: 7.7f, tyreWear: 33f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, updatedAt: timestamp.AddSeconds(6), tyreCondition: CreateTyreCondition(surface: 106, inner: 101))));
+
+        Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.HighTyreTemperature);
+    }
+
+    /// <summary>
     /// Verifies that crossing into a higher damage severity emits a player-car damage event.
     /// </summary>
     [Fact]
@@ -747,6 +861,14 @@ public sealed class EventDetectionServiceTests
             cars);
     }
 
+    private static SessionState CreateStateWithTrackTemperature(sbyte trackTemperature, params CarSnapshot[] cars)
+    {
+        return CreateState(cars) with
+        {
+            TrackTemperature = trackTemperature
+        };
+    }
+
     private static void ObserveFrontOldTyreSequence(EventDetectionService service, DateTimeOffset timestamp)
     {
         service.Observe(CreateStateWithMetadata(
@@ -802,7 +924,8 @@ public sealed class EventDetectionServiceTests
         ushort? gapToFrontMs = 2_000,
         float? ersStoreEnergy = 2_000_000f,
         DateTimeOffset? updatedAt = null,
-        byte? tyresAgeLaps = null)
+        byte? tyresAgeLaps = null,
+        TyreConditionSnapshot? tyreCondition = null)
     {
         return CreateCar(
             carIndex,
@@ -819,7 +942,8 @@ public sealed class EventDetectionServiceTests
             gapToFrontMs: gapToFrontMs,
             ersStoreEnergy: ersStoreEnergy,
             updatedAt: updatedAt,
-            tyresAgeLaps: tyresAgeLaps);
+            tyresAgeLaps: tyresAgeLaps,
+            tyreCondition: tyreCondition);
     }
 
     private static CarSnapshot CreateOpponent(
@@ -833,7 +957,8 @@ public sealed class EventDetectionServiceTests
         byte lapNumber = 10,
         ushort? gapToFrontMs = 2_000,
         DateTimeOffset? updatedAt = null,
-        byte? tyresAgeLaps = null)
+        byte? tyresAgeLaps = null,
+        TyreConditionSnapshot? tyreCondition = null)
     {
         return CreateCar(
             carIndex,
@@ -850,7 +975,8 @@ public sealed class EventDetectionServiceTests
             gapToFrontMs: gapToFrontMs,
             ersStoreEnergy: 2_000_000f,
             updatedAt: updatedAt,
-            tyresAgeLaps: tyresAgeLaps);
+            tyresAgeLaps: tyresAgeLaps,
+            tyreCondition: tyreCondition);
     }
 
     private static CarSnapshot CreateCar(
@@ -868,7 +994,8 @@ public sealed class EventDetectionServiceTests
         ushort? gapToFrontMs,
         float? ersStoreEnergy,
         DateTimeOffset? updatedAt,
-        byte? tyresAgeLaps)
+        byte? tyresAgeLaps,
+        TyreConditionSnapshot? tyreCondition)
     {
         return new CarSnapshot
         {
@@ -886,8 +1013,20 @@ public sealed class EventDetectionServiceTests
             VisualTyreCompound = visualTyreCompound,
             ActualTyreCompound = actualTyreCompound,
             TyresAgeLaps = tyresAgeLaps,
+            TyreCondition = tyreCondition,
             IsCurrentLapValid = true,
             UpdatedAt = updatedAt ?? DateTimeOffset.UtcNow
+        };
+    }
+
+    private static TyreConditionSnapshot CreateTyreCondition(byte surface, byte inner)
+    {
+        return new TyreConditionSnapshot
+        {
+            Timestamp = DateTimeOffset.UtcNow,
+            SurfaceTemperatureCelsius = new WheelValues<byte>(surface, surface, surface, surface),
+            InnerTemperatureCelsius = new WheelValues<byte>(inner, inner, inner, inner),
+            PressurePsi = new WheelValues<float>(22f, 22f, 22f, 22f)
         };
     }
 

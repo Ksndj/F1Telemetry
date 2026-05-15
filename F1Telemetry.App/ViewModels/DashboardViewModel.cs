@@ -115,6 +115,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _overviewBrakeText = "-";
     private string _overviewDrsText = "-";
     private string _overviewTyreWearText = "-";
+    private string _overviewTyreTemperatureText = "等待数据";
+    private string _overviewTyrePressureText = "等待数据";
     private string _overviewDamageText = "等待 CarDamage 包";
     private string _overviewKeyOpponentText = "-";
     private string _overviewSessionFocusText = SessionModeFormatter.FormatFocus(SessionMode.Unknown);
@@ -1232,14 +1234,22 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
-    /// Gets the overview tyre temperature placeholder.
+    /// Gets the overview tyre temperature summary.
     /// </summary>
-    public string OverviewTyreTemperatureText => "暂未接入";
+    public string OverviewTyreTemperatureText
+    {
+        get => _overviewTyreTemperatureText;
+        private set => SetProperty(ref _overviewTyreTemperatureText, value);
+    }
 
     /// <summary>
-    /// Gets the overview tyre pressure placeholder.
+    /// Gets the overview tyre pressure summary.
     /// </summary>
-    public string OverviewTyrePressureText => "暂未接入";
+    public string OverviewTyrePressureText
+    {
+        get => _overviewTyrePressureText;
+        private set => SetProperty(ref _overviewTyrePressureText, value);
+    }
 
     /// <summary>
     /// Gets the overview key opponent summary.
@@ -2098,6 +2108,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             OverviewBrakeText = "-";
             OverviewDrsText = "-";
             OverviewTyreWearText = "-";
+            OverviewTyreTemperatureText = "等待数据";
+            OverviewTyrePressureText = "等待数据";
             OverviewDamageText = "等待 CarDamage 包";
             return;
         }
@@ -2120,6 +2132,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OverviewBrakeText = playerCar.Telemetry is null ? "-" : playerCar.Telemetry.Brake.ToString("P0", CultureInfo.InvariantCulture);
         OverviewDrsText = playerCar.IsDrsEnabled is null ? "-" : playerCar.IsDrsEnabled.Value ? "On" : "Off";
         OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"平均 {playerCar.TyreWear.Value:0.0}%";
+        OverviewTyreTemperatureText = BuildTyreTemperatureText(playerCar.TyreCondition);
+        OverviewTyrePressureText = BuildTyrePressureText(playerCar.TyreCondition);
         OverviewDamageText = DamageSummaryFormatter.Format(playerCar.Damage, "等待 CarDamage 包");
     }
 
@@ -2988,7 +3002,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 or EventType.RedFlag
                 or EventType.SafetyCarRestart
                 or EventType.RedFlagTyreChange => 600,
-            EventType.LowFuel or EventType.HighTyreWear => 500,
+            EventType.LowFuel
+                or EventType.HighTyreWear
+                or EventType.HighTyreTemperature
+                or EventType.LowTyreTemperature => 500,
             EventType.FrontOldTyreRisk
                 or EventType.RearNewTyrePressure
                 or EventType.TrafficRisk
@@ -3095,6 +3112,45 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             playerCar.VisualTyreCompound,
             playerCar.ActualTyreCompound,
             playerCar.HasTelemetryAccess);
+    }
+
+    private static string BuildTyreTemperatureText(TyreConditionSnapshot? tyreCondition)
+    {
+        if (tyreCondition is null)
+        {
+            return "等待数据";
+        }
+
+        var surfaceValues = EnumerateWheelValues(tyreCondition.SurfaceTemperatureCelsius).ToArray();
+        var innerValues = EnumerateWheelValues(tyreCondition.InnerTemperatureCelsius).ToArray();
+        return $"表 {surfaceValues.Min():0}-{surfaceValues.Max():0}°C · 内 {innerValues.Min():0}-{innerValues.Max():0}°C";
+    }
+
+    private static string BuildTyrePressureText(TyreConditionSnapshot? tyreCondition)
+    {
+        if (tyreCondition is null)
+        {
+            return "等待数据";
+        }
+
+        var pressureValues = EnumerateWheelValues(tyreCondition.PressurePsi).ToArray();
+        return $"{pressureValues.Min():0.0}-{pressureValues.Max():0.0} psi";
+    }
+
+    private static IEnumerable<double> EnumerateWheelValues(WheelValues<byte> values)
+    {
+        yield return values.RearLeft;
+        yield return values.RearRight;
+        yield return values.FrontLeft;
+        yield return values.FrontRight;
+    }
+
+    private static IEnumerable<double> EnumerateWheelValues(WheelValues<float> values)
+    {
+        yield return values.RearLeft;
+        yield return values.RearRight;
+        yield return values.FrontLeft;
+        yield return values.FrontRight;
     }
 
     private static string BuildHighlightedLapText(string label, LapSummary? summary)
