@@ -105,6 +105,9 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                 parsedPacket.Header.SessionUid.ToString(CultureInfo.InvariantCulture),
                 sessionPacket.TrackId,
                 sessionPacket.SessionType,
+                sessionPacket.TotalLaps,
+                sessionPacket.NumSessionsInWeekend,
+                sessionPacket.WeekendStructure.ToArray(),
                 parsedPacket.Datagram.ReceivedAt));
     }
 
@@ -430,6 +433,9 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             SessionUid = command.SessionUid,
             TrackId = command.TrackId,
             SessionType = command.SessionType,
+            TotalLaps = command.TotalLaps,
+            NumSessionsInWeekend = command.NumSessionsInWeekend,
+            WeekendStructure = command.WeekendStructure.ToArray(),
             StartedAt = command.ObservedAt
         };
 
@@ -506,6 +512,9 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         string SessionUid,
         int? TrackId,
         int? SessionType,
+        int? TotalLaps,
+        int? NumSessionsInWeekend,
+        IReadOnlyList<byte> WeekendStructure,
         DateTimeOffset ObservedAt) : StorageCommand(true);
 
     private sealed record PersistLapCommand(LapSummary LapSummary) : StorageCommand(false);

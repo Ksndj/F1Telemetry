@@ -24,7 +24,7 @@ public sealed class HistorySessionItemViewModel
         SessionUid = string.IsNullOrWhiteSpace(_session.SessionUid) ? "-" : _session.SessionUid;
         TrackId = _session.TrackId;
         TrackText = FormatTrack(_session.TrackId);
-        SessionTypeText = FormatSessionType(_session.SessionType);
+        SessionTypeText = FormatSessionType(_session);
         StartedAtText = FormatTimestamp(_session.StartedAt);
         EndedAtText = _session.EndedAt is null ? "-" : FormatTimestamp(_session.EndedAt.Value);
         DurationText = FormatDuration(_session.StartedAt, _session.EndedAt);
@@ -97,14 +97,25 @@ public sealed class HistorySessionItemViewModel
         return TrackNameFormatter.Format((sbyte)trackId.Value);
     }
 
-    private static string FormatSessionType(int? sessionType)
+    private static string FormatSessionType(StoredSession session)
     {
+        var sessionType = session.SessionType;
         if (sessionType is null || sessionType.Value < byte.MinValue || sessionType.Value > byte.MaxValue)
         {
             return SessionTypeFormatter.Format(null);
         }
 
-        return SessionTypeFormatter.Format((byte)sessionType.Value);
+        return SessionTypeFormatter.Format(
+            (byte)sessionType.Value,
+            ToByte(session.TotalLaps),
+            session.WeekendStructure);
+    }
+
+    private static byte? ToByte(int? value)
+    {
+        return value.HasValue && value.Value >= byte.MinValue && value.Value <= byte.MaxValue
+            ? (byte)value.Value
+            : null;
     }
 
     private static string FormatTimestamp(DateTimeOffset timestamp)

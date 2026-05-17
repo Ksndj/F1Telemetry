@@ -135,6 +135,7 @@ public sealed class StateAggregator : IStateAggregator
             weekendLinkIdentifier: packet.WeekendLinkIdentifier,
             sessionLinkIdentifier: packet.SessionLinkIdentifier,
             numSessionsInWeekend: packet.NumSessionsInWeekend,
+            weekendStructure: packet.WeekendStructure,
             marshalZoneFlags: BuildMarshalZoneFlags(packet),
             updatedAt: receivedAt);
     }

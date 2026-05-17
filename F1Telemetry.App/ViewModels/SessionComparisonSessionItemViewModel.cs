@@ -23,7 +23,7 @@ public sealed class SessionComparisonSessionItemViewModel : ViewModelBase
         SessionId = session.Id;
         SessionUid = string.IsNullOrWhiteSpace(session.SessionUid) ? "-" : session.SessionUid;
         TrackText = FormatTrack(session.TrackId);
-        SessionTypeText = FormatSessionType(session.SessionType);
+        SessionTypeText = FormatSessionType(session);
         StartedAtText = FormatTimestamp(session.StartedAt);
         CanDelete = session.EndedAt is not null;
         SummaryText = $"{TrackText} · {SessionTypeText} · {StartedAtText}";
@@ -110,14 +110,25 @@ public sealed class SessionComparisonSessionItemViewModel : ViewModelBase
         return TrackNameFormatter.Format((sbyte)trackId.Value);
     }
 
-    private static string FormatSessionType(int? sessionType)
+    private static string FormatSessionType(StoredSession session)
     {
+        var sessionType = session.SessionType;
         if (sessionType is null || sessionType.Value < byte.MinValue || sessionType.Value > byte.MaxValue)
         {
             return SessionTypeFormatter.Format(null);
         }
 
-        return SessionTypeFormatter.Format((byte)sessionType.Value);
+        return SessionTypeFormatter.Format(
+            (byte)sessionType.Value,
+            ToByte(session.TotalLaps),
+            session.WeekendStructure);
+    }
+
+    private static byte? ToByte(int? value)
+    {
+        return value.HasValue && value.Value >= byte.MinValue && value.Value <= byte.MaxValue
+            ? (byte)value.Value
+            : null;
     }
 
     private static string FormatTimestamp(DateTimeOffset timestamp)

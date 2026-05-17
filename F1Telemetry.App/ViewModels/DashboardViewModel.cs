@@ -162,7 +162,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private ulong? _activeSessionUid;
     private string? _lastPostRaceAiSummaryKey;
     private string? _lastStagedPostRaceAiKey;
-    private readonly HashSet<string> _persistedLapKeys = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _persistedLapQualityByKey = new(StringComparer.Ordinal);
     private int? _lastTrendRefreshLapNumber;
     private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
     private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
@@ -237,7 +237,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _raceEventBus,
             _ttsMessageFactory,
             _ttsQueue,
-            () => SessionModeFormatter.Resolve(_sessionStateStore.CaptureState().SessionType),
+            () => ResolveSessionMode(_sessionStateStore.CaptureState()),
             BuildTtsOptions,
             LogRaceEventSubscriberWarning);
         _raceEventInsightBuffer = new RaceEventInsightBuffer(_raceEventBus);
@@ -1865,7 +1865,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
-                _persistedLapKeys.Clear();
+                _persistedLapQualityByKey.Clear();
                 _lastTrendRefreshLapNumber = null;
                 ResetChartPanels();
             }
@@ -1909,7 +1909,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
-            _persistedLapKeys.Clear();
+            _persistedLapQualityByKey.Clear();
             _lastTrendRefreshLapNumber = null;
             ResetChartPanels();
             StatusMessage = "UDP 监听已停止。";
@@ -1966,7 +1966,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
         _lastStagedPostRaceAiKey = null;
-        _persistedLapKeys.Clear();
+        _persistedLapQualityByKey.Clear();
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
         _raceEventInsightBuffer.Reset();
@@ -2125,7 +2125,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         var sessionState = _sessionStateStore.CaptureState();
         var playerCar = sessionState.PlayerCar;
-        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
+        var sessionMode = ResolveSessionMode(sessionState);
 
         TrackText = BuildTrackText(sessionState.TrackId);
         SessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode);
@@ -2254,11 +2254,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         foreach (var lap in laps.OrderBy(lap => lap.LapNumber))
         {
             var lapKey = BuildSessionLapKey(lap.LapNumber);
-            if (!_persistedLapKeys.Add(lapKey))
+            var quality = CalculateLapPersistenceQuality(lap);
+            if (_persistedLapQualityByKey.TryGetValue(lapKey, out var persistedQuality)
+                && persistedQuality >= quality)
             {
                 continue;
             }
 
+            _persistedLapQualityByKey[lapKey] = quality;
             _storagePersistenceService.EnqueueLapSummary(lap);
             var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
             _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
@@ -2731,7 +2734,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var mode = force
             ? PostRaceAiCompletionMode.ForceComplete
             : SelectedPostRaceAiCompletionMode?.Mode ?? PostRaceAiCompletionMode.Auto;
-        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
+        var sessionMode = ResolveSessionMode(sessionState);
         var isRace = sessionMode == SessionMode.Race;
 
         if (mode == PostRaceAiCompletionMode.Hold)
@@ -2802,7 +2805,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void MarkIncompleteRaceAsStaged(SessionState sessionState, string reason)
     {
-        if (SessionModeFormatter.Resolve(sessionState.SessionType) != SessionMode.Race ||
+        if (ResolveSessionMode(sessionState) != SessionMode.Race ||
             sessionState.HasFinalClassification)
         {
             return;
@@ -2895,7 +2898,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var carBehind = playerCar?.Position is null
             ? null
             : sessionState.Cars.FirstOrDefault(car => car.Position == playerCar.Position + 1);
-        var sessionMode = SessionModeFormatter.Resolve(sessionState.SessionType);
+        var sessionMode = ResolveSessionMode(sessionState);
         var telemetryAnalysisSummary = _telemetryAnalysisSummaryBuilder.Build(currentLapSamples, recentLaps);
 
         return new AIAnalysisContext
@@ -2923,6 +2926,31 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
         return $"{sessionToken}:{lapNumber}";
+    }
+
+    private static SessionMode ResolveSessionMode(SessionState sessionState)
+    {
+        return SessionModeFormatter.Resolve(
+            sessionState.SessionType,
+            sessionState.TotalLaps,
+            sessionState.WeekendStructure);
+    }
+
+    private static int CalculateLapPersistenceQuality(LapSummary lap)
+    {
+        var quality = 0;
+        quality += lap.LapTimeInMs is null ? 0 : 1;
+        quality += lap.Sector1TimeInMs is null ? 0 : 1;
+        quality += lap.Sector2TimeInMs is null ? 0 : 1;
+        quality += lap.Sector3TimeInMs is null ? 0 : 1;
+        quality += lap.AverageSpeedKph is null ? 0 : 2;
+        quality += lap.FuelUsedLitres is null ? 0 : 2;
+        quality += lap.ErsUsed is null ? 0 : 2;
+        quality += lap.TyreWearDelta is null ? 0 : 1;
+        quality += string.IsNullOrWhiteSpace(lap.StartTyre) || lap.StartTyre == "-" ? 0 : 1;
+        quality += string.IsNullOrWhiteSpace(lap.EndTyre) || lap.EndTyre == "-" ? 0 : 1;
+
+        return quality;
     }
 
     private static string BuildAiFailureLogText(int lapNumber, string? errorMessage)

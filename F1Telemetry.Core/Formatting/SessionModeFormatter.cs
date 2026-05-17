@@ -27,6 +27,26 @@ public static class SessionModeFormatter
     }
 
     /// <summary>
+    /// Resolves a raw session type identifier with race-weekend context.
+    /// </summary>
+    /// <param name="sessionType">The raw session type identifier from the session packet.</param>
+    /// <param name="totalLaps">The configured lap count from the session packet.</param>
+    /// <param name="weekendStructure">The raw weekend session type sequence from the session packet.</param>
+    /// <returns>The resolved session mode.</returns>
+    public static SessionMode Resolve(
+        byte? sessionType,
+        byte? totalLaps,
+        IReadOnlyList<byte>? weekendStructure)
+    {
+        if (IsSprintRaceFromWeekendStructure(sessionType, totalLaps, weekendStructure))
+        {
+            return SessionMode.SprintRace;
+        }
+
+        return Resolve(sessionType);
+    }
+
+    /// <summary>
     /// Formats a session mode as Chinese user-facing text.
     /// </summary>
     /// <param name="sessionMode">The resolved session mode.</param>
@@ -94,5 +114,41 @@ public static class SessionModeFormatter
     public static bool AllowsPitWindowSpeech(SessionMode sessionMode)
     {
         return sessionMode is SessionMode.Race or SessionMode.SprintRace;
+    }
+
+    private static bool IsSprintRaceFromWeekendStructure(
+        byte? sessionType,
+        byte? totalLaps,
+        IReadOnlyList<byte>? weekendStructure)
+    {
+        if (sessionType != 15 || weekendStructure is null || weekendStructure.Count == 0)
+        {
+            return false;
+        }
+
+        var activeWeekendSessions = weekendStructure.Where(value => value != 0).ToArray();
+        if (!activeWeekendSessions.Any(IsSprintQualifyingSessionType))
+        {
+            return false;
+        }
+
+        var raceIndex = Array.IndexOf(activeWeekendSessions, sessionType.Value);
+        var hasLaterGrandPrixRace = raceIndex >= 0
+            && activeWeekendSessions
+                .Skip(raceIndex + 1)
+                .Any(IsGrandPrixRaceSessionType);
+        var looksLikeSprintDistance = totalLaps is > 0 and <= 25;
+
+        return hasLaterGrandPrixRace || looksLikeSprintDistance;
+    }
+
+    private static bool IsSprintQualifyingSessionType(byte sessionType)
+    {
+        return sessionType is >= 10 and <= 14;
+    }
+
+    private static bool IsGrandPrixRaceSessionType(byte sessionType)
+    {
+        return sessionType is 16 or 17;
     }
 }

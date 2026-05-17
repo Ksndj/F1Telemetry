@@ -527,7 +527,7 @@ public sealed class MainWindowViewModel : ViewModelBase, IDisposable
             return "等待 Session 包。";
         }
 
-        return $"{TrackNameFormatter.Format(sessionState.TrackId)} · {SessionTypeFormatter.Format(sessionState.SessionType)}";
+        return $"{TrackNameFormatter.Format(sessionState.TrackId)} · {SessionTypeFormatter.Format(sessionState.SessionType, sessionState.TotalLaps, sessionState.WeekendStructure)}";
     }
 
     private static string BuildSessionConditions(SessionState sessionState)

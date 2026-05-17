@@ -30,6 +30,30 @@ public sealed class LapRepository : ILapRepository
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = """
+                    UPDATE laps
+                    SET lap_time_ms = @lap_time_ms,
+                        sector1_ms = @sector1_ms,
+                        sector2_ms = @sector2_ms,
+                        sector3_ms = @sector3_ms,
+                        is_valid = @is_valid,
+                        avg_speed_kph = @avg_speed_kph,
+                        fuel_used_litres = @fuel_used_litres,
+                        ers_used = @ers_used,
+                        start_tyre = @start_tyre,
+                        end_tyre = @end_tyre,
+                        created_at = @created_at
+                    WHERE session_id = @session_id
+                      AND lap_number = @lap_number;
+                    """;
+                BindLapParameters(command, sessionId, lapSummary);
+                var updatedRows = await command.ExecuteNonQueryAsync(innerCancellationToken);
+                if (updatedRows > 0)
+                {
+                    return;
+                }
+
+                using var insertCommand = connection.CreateCommand();
+                insertCommand.CommandText = """
                     INSERT INTO laps (
                         session_id,
                         lap_number,
@@ -59,20 +83,8 @@ public sealed class LapRepository : ILapRepository
                         @end_tyre,
                         @created_at);
                     """;
-                command.Parameters.AddWithValue("@session_id", sessionId);
-                command.Parameters.AddWithValue("@lap_number", lapSummary.LapNumber);
-                command.Parameters.AddWithValue("@lap_time_ms", (object?)lapSummary.LapTimeInMs is null ? DBNull.Value : (int)lapSummary.LapTimeInMs.Value);
-                command.Parameters.AddWithValue("@sector1_ms", (object?)lapSummary.Sector1TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector1TimeInMs.Value);
-                command.Parameters.AddWithValue("@sector2_ms", (object?)lapSummary.Sector2TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector2TimeInMs.Value);
-                command.Parameters.AddWithValue("@sector3_ms", (object?)lapSummary.Sector3TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector3TimeInMs.Value);
-                command.Parameters.AddWithValue("@is_valid", lapSummary.IsValid ? 1 : 0);
-                command.Parameters.AddWithValue("@avg_speed_kph", (object?)lapSummary.AverageSpeedKph ?? DBNull.Value);
-                command.Parameters.AddWithValue("@fuel_used_litres", (object?)lapSummary.FuelUsedLitres ?? DBNull.Value);
-                command.Parameters.AddWithValue("@ers_used", (object?)lapSummary.ErsUsed ?? DBNull.Value);
-                command.Parameters.AddWithValue("@start_tyre", lapSummary.StartTyre);
-                command.Parameters.AddWithValue("@end_tyre", lapSummary.EndTyre);
-                command.Parameters.AddWithValue("@created_at", SqliteStorageConverters.ToStorageTimestamp(lapSummary.ClosedAt));
-                await command.ExecuteNonQueryAsync(innerCancellationToken);
+                BindLapParameters(insertCommand, sessionId, lapSummary);
+                await insertCommand.ExecuteNonQueryAsync(innerCancellationToken);
             },
             cancellationToken);
     }
@@ -134,5 +146,25 @@ public sealed class LapRepository : ILapRepository
                 return (IReadOnlyList<StoredLap>)results;
             },
             cancellationToken);
+    }
+
+    private static void BindLapParameters(
+        Microsoft.Data.Sqlite.SqliteCommand command,
+        string sessionId,
+        LapSummary lapSummary)
+    {
+        command.Parameters.AddWithValue("@session_id", sessionId);
+        command.Parameters.AddWithValue("@lap_number", lapSummary.LapNumber);
+        command.Parameters.AddWithValue("@lap_time_ms", (object?)lapSummary.LapTimeInMs is null ? DBNull.Value : (int)lapSummary.LapTimeInMs.Value);
+        command.Parameters.AddWithValue("@sector1_ms", (object?)lapSummary.Sector1TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector1TimeInMs.Value);
+        command.Parameters.AddWithValue("@sector2_ms", (object?)lapSummary.Sector2TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector2TimeInMs.Value);
+        command.Parameters.AddWithValue("@sector3_ms", (object?)lapSummary.Sector3TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector3TimeInMs.Value);
+        command.Parameters.AddWithValue("@is_valid", lapSummary.IsValid ? 1 : 0);
+        command.Parameters.AddWithValue("@avg_speed_kph", (object?)lapSummary.AverageSpeedKph ?? DBNull.Value);
+        command.Parameters.AddWithValue("@fuel_used_litres", (object?)lapSummary.FuelUsedLitres ?? DBNull.Value);
+        command.Parameters.AddWithValue("@ers_used", (object?)lapSummary.ErsUsed ?? DBNull.Value);
+        command.Parameters.AddWithValue("@start_tyre", lapSummary.StartTyre);
+        command.Parameters.AddWithValue("@end_tyre", lapSummary.EndTyre);
+        command.Parameters.AddWithValue("@created_at", SqliteStorageConverters.ToStorageTimestamp(lapSummary.ClosedAt));
     }
 }

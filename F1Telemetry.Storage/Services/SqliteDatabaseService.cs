@@ -135,6 +135,9 @@ public sealed class SqliteDatabaseService : IDatabaseService
                 session_uid TEXT NOT NULL,
                 track_id INTEGER,
                 session_type INTEGER,
+                total_laps INTEGER,
+                num_sessions_in_weekend INTEGER,
+                weekend_structure TEXT NULL,
                 started_at TEXT NOT NULL,
                 ended_at TEXT NULL
             );
@@ -306,6 +309,49 @@ public sealed class SqliteDatabaseService : IDatabaseService
             """;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
+        await EnsureColumnAsync(
+            connection,
+            "sessions",
+            "total_laps",
+            "ALTER TABLE sessions ADD COLUMN total_laps INTEGER NULL;",
+            cancellationToken);
+        await EnsureColumnAsync(
+            connection,
+            "sessions",
+            "num_sessions_in_weekend",
+            "ALTER TABLE sessions ADD COLUMN num_sessions_in_weekend INTEGER NULL;",
+            cancellationToken);
+        await EnsureColumnAsync(
+            connection,
+            "sessions",
+            "weekend_structure",
+            "ALTER TABLE sessions ADD COLUMN weekend_structure TEXT NULL;",
+            cancellationToken);
+    }
+
+    private static async Task EnsureColumnAsync(
+        SqliteConnection connection,
+        string tableName,
+        string columnName,
+        string alterTableSql,
+        CancellationToken cancellationToken)
+    {
+        using var schemaCommand = connection.CreateCommand();
+        schemaCommand.CommandText = $"PRAGMA table_info({tableName});";
+        await using (var reader = await schemaCommand.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(reader.GetString(1), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alterCommand = connection.CreateCommand();
+        alterCommand.CommandText = alterTableSql;
+        await alterCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private void ThrowIfDisposed()

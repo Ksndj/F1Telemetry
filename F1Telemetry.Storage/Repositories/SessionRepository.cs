@@ -1,3 +1,4 @@
+using System.Text.Json;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Internal;
 using F1Telemetry.Storage.Models;
@@ -29,13 +30,34 @@ public sealed class SessionRepository : ISessionRepository
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = """
-                    INSERT INTO sessions (id, session_uid, track_id, session_type, started_at, ended_at)
-                    VALUES (@id, @session_uid, @track_id, @session_type, @started_at, @ended_at);
+                    INSERT INTO sessions (
+                        id,
+                        session_uid,
+                        track_id,
+                        session_type,
+                        total_laps,
+                        num_sessions_in_weekend,
+                        weekend_structure,
+                        started_at,
+                        ended_at)
+                    VALUES (
+                        @id,
+                        @session_uid,
+                        @track_id,
+                        @session_type,
+                        @total_laps,
+                        @num_sessions_in_weekend,
+                        @weekend_structure,
+                        @started_at,
+                        @ended_at);
                     """;
                 command.Parameters.AddWithValue("@id", session.Id);
                 command.Parameters.AddWithValue("@session_uid", session.SessionUid);
                 command.Parameters.AddWithValue("@track_id", (object?)session.TrackId ?? DBNull.Value);
                 command.Parameters.AddWithValue("@session_type", (object?)session.SessionType ?? DBNull.Value);
+                command.Parameters.AddWithValue("@total_laps", (object?)session.TotalLaps ?? DBNull.Value);
+                command.Parameters.AddWithValue("@num_sessions_in_weekend", (object?)session.NumSessionsInWeekend ?? DBNull.Value);
+                command.Parameters.AddWithValue("@weekend_structure", SerializeWeekendStructure(session.WeekendStructure));
                 command.Parameters.AddWithValue("@started_at", SqliteStorageConverters.ToStorageTimestamp(session.StartedAt));
                 command.Parameters.AddWithValue("@ended_at", session.EndedAt is null ? DBNull.Value : SqliteStorageConverters.ToStorageTimestamp(session.EndedAt.Value));
                 await command.ExecuteNonQueryAsync(innerCancellationToken);
@@ -70,7 +92,15 @@ public sealed class SessionRepository : ISessionRepository
             {
                 using var command = connection.CreateCommand();
                 command.CommandText = """
-                    SELECT id, session_uid, track_id, session_type, started_at, ended_at
+                    SELECT id,
+                           session_uid,
+                           track_id,
+                           session_type,
+                           total_laps,
+                           num_sessions_in_weekend,
+                           weekend_structure,
+                           started_at,
+                           ended_at
                     FROM sessions
                     ORDER BY started_at DESC
                     LIMIT @count;
@@ -88,8 +118,11 @@ public sealed class SessionRepository : ISessionRepository
                             SessionUid = reader.GetString(1),
                             TrackId = reader.IsDBNull(2) ? null : reader.GetInt32(2),
                             SessionType = reader.IsDBNull(3) ? null : reader.GetInt32(3),
-                            StartedAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(4)),
-                            EndedAt = reader.IsDBNull(5) ? null : SqliteStorageConverters.FromStorageTimestamp(reader.GetString(5))
+                            TotalLaps = reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                            NumSessionsInWeekend = reader.IsDBNull(5) ? null : reader.GetInt32(5),
+                            WeekendStructure = reader.IsDBNull(6) ? Array.Empty<byte>() : DeserializeWeekendStructure(reader.GetString(6)),
+                            StartedAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(7)),
+                            EndedAt = reader.IsDBNull(8) ? null : SqliteStorageConverters.FromStorageTimestamp(reader.GetString(8))
                         });
                 }
 
@@ -177,5 +210,29 @@ public sealed class SessionRepository : ISessionRepository
         command.CommandText = $"DELETE FROM {tableName} WHERE session_id = @session_id;";
         command.Parameters.AddWithValue("@session_id", sessionId);
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static string SerializeWeekendStructure(IReadOnlyList<byte> weekendStructure)
+    {
+        return weekendStructure.Count == 0
+            ? "[]"
+            : JsonSerializer.Serialize(weekendStructure.ToArray());
+    }
+
+    private static IReadOnlyList<byte> DeserializeWeekendStructure(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return Array.Empty<byte>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<byte[]>(json) ?? Array.Empty<byte>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<byte>();
+        }
     }
 }
