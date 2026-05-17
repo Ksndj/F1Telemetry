@@ -61,6 +61,11 @@ public sealed record SessionState
     public byte? NumSessionsInWeekend { get; init; }
 
     /// <summary>
+    /// Gets the raw weekend session type sequence when known.
+    /// </summary>
+    public IReadOnlyList<byte> WeekendStructure { get; init; } = Array.Empty<byte>();
+
+    /// <summary>
     /// Gets the remaining session time in seconds.
     /// </summary>
     public ushort? SessionTimeLeft { get; init; }

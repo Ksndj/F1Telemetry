@@ -33,6 +33,9 @@ public sealed class StorageRepositoryTests
             SessionUid = "123456789",
             TrackId = 10,
             SessionType = 12,
+            TotalLaps = 10,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17],
             StartedAt = startedAt
         };
 
@@ -43,6 +46,8 @@ public sealed class StorageRepositoryTests
         var storedSession = Assert.Single(recentSessions);
         Assert.Equal(session.Id, storedSession.Id);
         Assert.Equal(session.SessionUid, storedSession.SessionUid);
+        Assert.Equal(10, storedSession.TotalLaps);
+        Assert.Equal([1, 10, 15, 5, 6, 7, 17], storedSession.WeekendStructure);
         Assert.Equal(endedAt, storedSession.EndedAt);
     }
 
@@ -167,6 +172,58 @@ public sealed class StorageRepositoryTests
         Assert.Equal(1.35f, recentLaps[0].FuelUsedLitres);
         Assert.Equal("Soft", recentLaps[0].EndTyre);
         Assert.Equal(4, recentLaps[1].LapNumber);
+    }
+
+    /// <summary>
+    /// Verifies that a richer summary for the same session lap updates the stored row instead of leaving sparse data.
+    /// </summary>
+    [Fact]
+    public async Task LapRepository_AddAsync_SameLapUpdatesExistingRow()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-lap-update");
+        ILapRepository repository = new LapRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-lap-update",
+            new LapSummary
+            {
+                LapNumber = 4,
+                LapTimeInMs = 90_500,
+                Sector1TimeInMs = 30_100,
+                Sector2TimeInMs = 30_200,
+                Sector3TimeInMs = 30_200,
+                IsValid = true,
+                ClosedAt = DateTimeOffset.Parse("2026-05-17T10:01:00Z")
+            });
+        await repository.AddAsync(
+            "session-lap-update",
+            new LapSummary
+            {
+                LapNumber = 4,
+                LapTimeInMs = 90_100,
+                Sector1TimeInMs = 30_000,
+                Sector2TimeInMs = 30_050,
+                Sector3TimeInMs = 30_050,
+                AverageSpeedKph = 203,
+                FuelUsedLitres = 1.75f,
+                ErsUsed = 1_220_000f,
+                IsValid = true,
+                StartTyre = "V17 / A19",
+                EndTyre = "V17 / A19",
+                ClosedAt = DateTimeOffset.Parse("2026-05-17T10:02:00Z")
+            });
+
+        var recentLaps = await repository.GetRecentAsync("session-lap-update", 10);
+        var storedLap = Assert.Single(recentLaps);
+
+        Assert.Equal(4, storedLap.LapNumber);
+        Assert.Equal(90_100, storedLap.LapTimeInMs);
+        Assert.Equal(203, storedLap.AverageSpeedKph);
+        Assert.Equal(1.75f, storedLap.FuelUsedLitres);
+        Assert.Equal("V17 / A19", storedLap.EndTyre);
     }
 
     /// <summary>

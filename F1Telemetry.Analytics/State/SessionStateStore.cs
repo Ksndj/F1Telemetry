@@ -44,6 +44,7 @@ public sealed class SessionStateStore
             WeekendLinkIdentifier = metadata.WeekendLinkIdentifier,
             SessionLinkIdentifier = metadata.SessionLinkIdentifier,
             NumSessionsInWeekend = metadata.NumSessionsInWeekend,
+            WeekendStructure = metadata.WeekendStructure.ToArray(),
             SessionTimeLeft = metadata.SessionTimeLeft,
             SessionDuration = metadata.SessionDuration,
             PitSpeedLimit = metadata.PitSpeedLimit,
@@ -97,6 +98,7 @@ public sealed class SessionStateStore
         uint weekendLinkIdentifier,
         uint sessionLinkIdentifier,
         byte numSessionsInWeekend,
+        IReadOnlyList<byte> weekendStructure,
         IReadOnlyDictionary<int, sbyte> marshalZoneFlags,
         DateTimeOffset updatedAt)
     {
@@ -116,6 +118,7 @@ public sealed class SessionStateStore
             WeekendLinkIdentifier = weekendLinkIdentifier,
             SessionLinkIdentifier = sessionLinkIdentifier,
             NumSessionsInWeekend = numSessionsInWeekend,
+            WeekendStructure = weekendStructure.ToArray(),
             MarshalZoneFlags = new Dictionary<int, sbyte>(marshalZoneFlags),
             UpdatedAt = updatedAt
         });
@@ -186,6 +189,8 @@ public sealed class SessionStateStore
         public uint? SessionLinkIdentifier { get; init; }
 
         public byte? NumSessionsInWeekend { get; init; }
+
+        public IReadOnlyList<byte> WeekendStructure { get; init; } = Array.Empty<byte>();
 
         public ushort? SessionTimeLeft { get; init; }
 

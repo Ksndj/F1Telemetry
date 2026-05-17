@@ -54,6 +54,26 @@ public sealed class SessionComparisonViewModelTests
     }
 
     /// <summary>
+    /// Verifies comparison rows use stored sprint-weekend context for ambiguous race sessions.
+    /// </summary>
+    [Fact]
+    public void SessionComparisonSessionItemViewModel_WithSprintWeekendContext_DisplaysSprintRace()
+    {
+        var session = CreateSession("session-sprint", 10, DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
+        {
+            SessionType = 15,
+            TotalLaps = 10,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+        };
+
+        var item = new SessionComparisonSessionItemViewModel(session);
+
+        Assert.Equal("冲刺赛", item.SessionTypeText);
+        Assert.Contains("冲刺赛", item.SummaryText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies the default track filter prefers the newest track with at least two sessions.
     /// </summary>
     [Fact]

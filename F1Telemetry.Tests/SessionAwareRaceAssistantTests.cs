@@ -35,6 +35,20 @@ public sealed class SessionAwareRaceAssistantTests
     }
 
     /// <summary>
+    /// Verifies sprint-weekend context disambiguates F1 25 Race packets that represent sprint races.
+    /// </summary>
+    [Fact]
+    public void SessionModeFormatter_Resolve_WithSprintWeekendContext_ReturnsSprintRace()
+    {
+        var mode = SessionModeFormatter.Resolve(
+            sessionType: 15,
+            totalLaps: 10,
+            weekendStructure: [1, 10, 15, 5, 6, 7, 17]);
+
+        Assert.Equal(SessionMode.SprintRace, mode);
+    }
+
+    /// <summary>
     /// Verifies qualifying overview focus avoids race pit-window language.
     /// </summary>
     [Fact]

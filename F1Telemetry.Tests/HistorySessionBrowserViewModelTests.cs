@@ -65,6 +65,29 @@ public sealed class HistorySessionBrowserViewModelTests
     }
 
     /// <summary>
+    /// Verifies stored weekend context keeps sprint races from displaying as grand prix races.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithSprintWeekendContext_DisplaysSprintRace()
+    {
+        var sprintSession = CreateSession("session-sprint", DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
+        {
+            SessionType = 15,
+            TotalLaps = 10,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+        };
+        var viewModel = new HistorySessionBrowserViewModel(
+            new FakeSessionRepository { Sessions = [sprintSession] },
+            new FakeLapRepository());
+
+        await viewModel.RefreshSessionsAsync();
+
+        Assert.Equal("冲刺赛", viewModel.SelectedSession?.SessionTypeText);
+        Assert.Contains("冲刺赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies selecting a session loads stored laps sorted by lap number ascending.
     /// </summary>
     [Fact]

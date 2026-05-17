@@ -766,7 +766,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 player.CurrentLapNumber,
                 GapFrontMs = gapFrontMs,
                 ThresholdMs = _options.TrafficRiskGapMs,
-                SessionMode = SessionModeFormatter.Resolve(currentState.SessionType).ToString()
+                SessionMode = ResolveSessionMode(currentState).ToString()
             },
             cooldownSeconds: _options.AdviceCooldownSeconds);
     }
@@ -855,7 +855,7 @@ public sealed class EventDetectionService : IEventDetectionService
                 GapFrontMs = gapFrontMs,
                 GapBehindMs = gapBehindMs,
                 ThresholdMs = _options.QualifyingCleanAirGapMs,
-                SessionMode = SessionModeFormatter.Resolve(currentState.SessionType).ToString()
+                SessionMode = ResolveSessionMode(currentState).ToString()
             },
             cooldownSeconds: _options.AdviceCooldownSeconds);
     }
@@ -1494,14 +1494,22 @@ public sealed class EventDetectionService : IEventDetectionService
 
     private static bool IsRaceLikeSession(SessionState sessionState)
     {
-        return SessionModeFormatter.Resolve(sessionState.SessionType) is SessionMode.Race or SessionMode.SprintRace;
+        return ResolveSessionMode(sessionState) is SessionMode.Race or SessionMode.SprintRace;
     }
 
     private static bool IsQualifyingLikeSession(SessionState sessionState)
     {
-        return SessionModeFormatter.Resolve(sessionState.SessionType) is SessionMode.Qualifying
+        return ResolveSessionMode(sessionState) is SessionMode.Qualifying
             or SessionMode.SprintQualifying
             or SessionMode.TimeTrial;
+    }
+
+    private static SessionMode ResolveSessionMode(SessionState sessionState)
+    {
+        return SessionModeFormatter.Resolve(
+            sessionState.SessionType,
+            sessionState.TotalLaps,
+            sessionState.WeekendStructure);
     }
 
     private static CarSnapshot? FindDirectFrontCar(SessionState currentState, CarSnapshot player)

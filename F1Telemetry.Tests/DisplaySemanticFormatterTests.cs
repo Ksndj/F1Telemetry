@@ -51,6 +51,17 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies sprint-weekend context is used when displaying ambiguous race sessions.
+    /// </summary>
+    [Fact]
+    public void SessionTypeFormatter_Format_WithSprintWeekendContext_ReturnsSprintRace()
+    {
+        var text = SessionTypeFormatter.Format(15, 10, [1, 10, 15, 5, 6, 7, 17]);
+
+        Assert.Equal("冲刺赛", text);
+    }
+
+    /// <summary>
     /// Verifies that visual tyre compound is used before actual compound.
     /// The dry visual mappings are calibrated from the 2026-04-26 practice raw log observations.
     /// </summary>

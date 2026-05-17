@@ -26,6 +26,21 @@ public sealed record StoredSession
     public int? SessionType { get; init; }
 
     /// <summary>
+    /// Gets the configured lap count when known.
+    /// </summary>
+    public int? TotalLaps { get; init; }
+
+    /// <summary>
+    /// Gets the number of sessions in the weekend when known.
+    /// </summary>
+    public int? NumSessionsInWeekend { get; init; }
+
+    /// <summary>
+    /// Gets the raw weekend session type sequence when known.
+    /// </summary>
+    public IReadOnlyList<byte> WeekendStructure { get; init; } = Array.Empty<byte>();
+
+    /// <summary>
     /// Gets the session start timestamp.
     /// </summary>
     public DateTimeOffset StartedAt { get; init; }
