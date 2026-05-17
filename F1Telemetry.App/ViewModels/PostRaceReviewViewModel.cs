@@ -6,6 +6,8 @@ using System.Windows.Input;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.Reports;
 using F1Telemetry.App.Services;
+using F1Telemetry.Analytics.Events;
+using F1Telemetry.Analytics.Strategy;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
@@ -462,6 +464,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     {
         var summaryRows = BuildSummaryMetricRows(selectedSession, laps, events, aiReports);
         var stintRows = PostRaceReviewStintRowViewModel.BuildFromLaps(laps);
+        var strategyTimeline = BuildStrategyTimeline(laps, events);
 
         foreach (var row in summaryRows)
         {
@@ -469,6 +472,11 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         }
 
         foreach (var row in events.Select(PostRaceReviewEventRowViewModel.FromStoredEvent))
+        {
+            EventTimelineRows.Add(row);
+        }
+
+        foreach (var row in strategyTimeline.Select(PostRaceReviewEventRowViewModel.FromStrategyTimeline))
         {
             EventTimelineRows.Add(row);
         }
@@ -512,8 +520,41 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             CultureInfo.InvariantCulture,
             "已加载赛后复盘：{0} 圈、{1} 事件、{2} 份 AI 报告。",
             laps.Count,
-            events.Count,
+            events.Count + strategyTimeline.Count,
             aiReports.Count);
+    }
+
+    private static IReadOnlyList<StrategyTimelineEntry> BuildStrategyTimeline(
+        IReadOnlyList<StoredLap> laps,
+        IReadOnlyList<StoredEvent> events)
+    {
+        var analyzer = new StintStrategyAnalyzer();
+        var lapInputs = laps
+            .Select(lap => new StrategyLapInput
+            {
+                LapNumber = lap.LapNumber,
+                LapTimeInMs = lap.LapTimeInMs is null or < 0 ? null : (uint)lap.LapTimeInMs.Value,
+                IsValid = lap.IsValid,
+                FuelUsedLitres = lap.FuelUsedLitres,
+                ErsUsed = lap.ErsUsed,
+                StartTyre = lap.StartTyre,
+                EndTyre = lap.EndTyre
+            })
+            .ToArray();
+        var raceEvents = events
+            .Select(storedEvent => new RaceEvent
+            {
+                EventType = storedEvent.EventType,
+                Severity = storedEvent.Severity,
+                LapNumber = storedEvent.LapNumber,
+                VehicleIdx = storedEvent.VehicleIdx,
+                DriverName = storedEvent.DriverName,
+                Message = storedEvent.Message,
+                Timestamp = storedEvent.CreatedAt
+            })
+            .ToArray();
+
+        return analyzer.Analyze(lapInputs, raceEvents).Timeline;
     }
 
     private IReadOnlyList<PostRaceReviewMetricRowViewModel> BuildSummaryMetricRows(
