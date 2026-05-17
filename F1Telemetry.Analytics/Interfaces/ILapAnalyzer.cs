@@ -32,6 +32,12 @@ public interface ILapAnalyzer
     IReadOnlyList<LapSample> CaptureCurrentLapSamples();
 
     /// <summary>
+    /// Returns an immutable snapshot of the stored samples for a completed lap.
+    /// </summary>
+    /// <param name="lapNumber">The completed lap number.</param>
+    IReadOnlyList<LapSample> CaptureCompletedLapSamples(int lapNumber);
+
+    /// <summary>
     /// Returns the most recent completed laps, ordered newest first.
     /// </summary>
     /// <param name="maxCount">The maximum number of laps to return.</param>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using F1Telemetry.Analytics.Events;
+using F1Telemetry.Analytics.Strategy;
 using F1Telemetry.Storage.Models;
 
 namespace F1Telemetry.App.ViewModels;
@@ -60,6 +61,25 @@ public sealed record PostRaceReviewEventRowViewModel
             SeverityText = FormatSeverity(storedEvent.Severity),
             TargetText = FormatTarget(storedEvent.DriverName, storedEvent.VehicleIdx),
             Message = string.IsNullOrWhiteSpace(storedEvent.Message) ? "-" : storedEvent.Message
+        };
+    }
+
+    /// <summary>
+    /// Creates a review timeline row from a V3 strategy timeline entry.
+    /// </summary>
+    /// <param name="entry">The strategy timeline entry.</param>
+    public static PostRaceReviewEventRowViewModel FromStrategyTimeline(StrategyTimelineEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return new PostRaceReviewEventRowViewModel
+        {
+            LapText = entry.LapNumber is null ? "未知圈" : $"Lap {entry.LapNumber.Value}",
+            TimeText = "-",
+            EventTypeText = $"V3 {entry.Category}",
+            SeverityText = entry.RiskLevel.ToString(),
+            TargetText = "策略时间线",
+            Message = string.IsNullOrWhiteSpace(entry.Detail) ? entry.Title : $"{entry.Title} · {entry.Detail}"
         };
     }
 

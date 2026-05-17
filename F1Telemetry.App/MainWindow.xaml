@@ -44,6 +44,10 @@
             <views:SessionComparisonView />
         </DataTemplate>
 
+        <DataTemplate x:Key="CornerAnalysisContentTemplate">
+            <views:CornerAnalysisView />
+        </DataTemplate>
+
         <DataTemplate x:Key="OpponentsContentTemplate">
             <views:OpponentsView />
         </DataTemplate>
@@ -415,6 +419,9 @@
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsSessionComparisonSelected}" Value="True">
                             <Setter Property="ContentTemplate" Value="{StaticResource SessionComparisonContentTemplate}" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsCornerAnalysisSelected}" Value="True">
+                            <Setter Property="ContentTemplate" Value="{StaticResource CornerAnalysisContentTemplate}" />
                         </DataTrigger>
                         <DataTrigger Binding="{Binding IsOpponentsSelected}" Value="True">
                             <Setter Property="ContentTemplate" Value="{StaticResource OpponentsContentTemplate}" />

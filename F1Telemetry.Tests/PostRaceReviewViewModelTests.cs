@@ -68,10 +68,11 @@ public sealed class PostRaceReviewViewModelTests
 
         Assert.Equal("session-a", viewModel.SelectedSession?.SessionId);
         Assert.NotEmpty(viewModel.SummaryMetricRows);
-        Assert.Single(viewModel.EventTimelineRows);
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "低燃油");
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "V3 Stint");
         Assert.Single(viewModel.AiReportRows);
         Assert.True(viewModel.LapTimeTrendPanel.HasData);
-        Assert.Contains("1 圈、1 事件、1 份 AI 报告", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.Contains("1 圈、2 事件、1 份 AI 报告", viewModel.StatusText, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -152,7 +153,11 @@ public sealed class PostRaceReviewViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.Equal(new[] { 1d, 2d, 3d }, viewModel.LapTimeTrendPanel.Series[0].Points.Select(point => point.X));
-        Assert.Equal(new[] { "Lap 1", "Lap 2", "未知圈" }, viewModel.EventTimelineRows.Select(row => row.LapText));
+        var storedEventRows = viewModel.EventTimelineRows
+            .Where(row => !row.EventTypeText.StartsWith("V3 ", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Equal(new[] { "Lap 1", "Lap 2", "未知圈" }, storedEventRows.Select(row => row.LapText));
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "V3 Stint");
         Assert.Equal(new[] { "Lap 1", "Lap 2", "Lap 3" }, viewModel.AiReportRows.Select(row => row.LapText));
     }
 
@@ -235,6 +240,52 @@ public sealed class PostRaceReviewViewModelTests
 
         Assert.Equal("前车旧胎风险", row.EventTypeText);
         Assert.Equal("前车旧胎风险", row.Category);
+    }
+
+    /// <summary>
+    /// Verifies V3 stint and race-event strategy entries are projected into the review timeline.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithStoredLaps_AddsV3StrategyTimelineRows()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-v3")]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-v3"] =
+                [
+                    CreateLap("session-v3", 1) with { StartTyre = "Medium", EndTyre = "Medium" },
+                    CreateLap("session-v3", 2) with { StartTyre = "Medium", EndTyre = "Medium" },
+                    CreateLap("session-v3", 3) with { StartTyre = "Hard", EndTyre = "Hard" }
+                ]
+            }
+        };
+        var eventRepository = new FakeEventRepository
+        {
+            EventsBySession =
+            {
+                ["session-v3"] =
+                [
+                    CreateEvent("session-v3", 2, 1) with
+                    {
+                        EventType = EventType.SafetyCar,
+                        Severity = EventSeverity.Warning,
+                        Message = "安全车影响策略窗口"
+                    }
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(sessionRepository, lapRepository, eventRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "V3 Stint" && row.Message.Contains("Medium", StringComparison.Ordinal));
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "V3 Stint" && row.Message.Contains("Hard", StringComparison.Ordinal));
+        Assert.Contains(viewModel.EventTimelineRows, row => row.EventTypeText == "V3 RaceEvent" && row.Message.Contains("安全车", StringComparison.Ordinal));
     }
 
     /// <summary>

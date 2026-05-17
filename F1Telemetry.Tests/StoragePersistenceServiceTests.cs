@@ -109,6 +109,160 @@ public sealed class StoragePersistenceServiceTests
         Assert.Contains(emittedLogs, message => message.Contains("队列已满", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Verifies completed-lap samples are persisted in batches for the active session.
+    /// </summary>
+    [Fact]
+    public async Task EnqueueLapSamples_WithActiveSession_PersistsStoredSamples()
+    {
+        var sessionRepository = new RecordingSessionRepository();
+        var sampleRepository = new RecordingLapSampleRepository();
+        var service = new StoragePersistenceService(
+            sessionRepository,
+            new RecordingLapRepository(),
+            new RecordingEventRepository(),
+            new RecordingAiReportRepository(),
+            sampleRepository);
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 0, sessionType: 15));
+        service.EnqueueLapSamples(
+            3,
+            [
+                CreateLapSample(3, 0, 120f, 5_000),
+                CreateLapSample(3, 1, 220f, 8_000)
+            ]);
+
+        await WaitUntilAsync(() => sampleRepository.StoredSamples.Count == 2);
+        await service.DisposeAsync();
+
+        var sessionId = Assert.Single(sessionRepository.CreatedSessions).Id;
+        Assert.All(sampleRepository.StoredSamples, sample => Assert.Equal(sessionId, sample.SessionId));
+        Assert.Equal(new[] { 0, 1 }, sampleRepository.StoredSamples.Select(sample => sample.SampleIndex));
+        Assert.All(sampleRepository.StoredSamples, sample => Assert.Equal(3, sample.LapNumber));
+    }
+
+    /// <summary>
+    /// Verifies sample writes queued before completion are drained before the session is closed.
+    /// </summary>
+    [Fact]
+    public async Task CompleteActiveSessionAsync_WithPendingLapSamples_DrainsSamplesBeforeClosing()
+    {
+        var sessionRepository = new RecordingSessionRepository();
+        var sampleRepository = new RecordingLapSampleRepository();
+        var releaseInitialization = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StoragePersistenceService(
+            sessionRepository,
+            new RecordingLapRepository(),
+            new RecordingEventRepository(),
+            new RecordingAiReportRepository(),
+            sampleRepository,
+            _ => releaseInitialization.Task);
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 0, sessionType: 15));
+        service.EnqueueLapSamples(4, [CreateLapSample(4, 0, 100f, 2_000)]);
+        var completeTask = service.CompleteActiveSessionAsync();
+
+        releaseInitialization.TrySetResult();
+        await completeTask;
+        await service.DisposeAsync();
+
+        var sessionId = Assert.Single(sessionRepository.CreatedSessions).Id;
+        var storedSample = Assert.Single(sampleRepository.StoredSamples);
+        Assert.Equal(sessionId, storedSample.SessionId);
+        Assert.Equal(4, storedSample.LapNumber);
+    }
+
+    /// <summary>
+    /// Verifies all buffered write types queued before stop are persisted before completion.
+    /// </summary>
+    [Fact]
+    public async Task CompleteActiveSessionAsync_WithPendingBufferedWrites_DrainsAllWriteTypes()
+    {
+        var sessionRepository = new RecordingSessionRepository();
+        var lapRepository = new RecordingLapRepository();
+        var eventRepository = new RecordingEventRepository();
+        var aiReportRepository = new RecordingAiReportRepository();
+        var releaseInitialization = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StoragePersistenceService(
+            sessionRepository,
+            lapRepository,
+            eventRepository,
+            aiReportRepository,
+            _ => releaseInitialization.Task);
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 0, sessionType: 15));
+        service.EnqueueLapSummary(CreateLapSummary(5));
+        service.EnqueueRaceEvent(CreateRaceEvent(5));
+        service.EnqueueAiReport(5, new AIAnalysisResult { IsSuccess = true, Summary = "ok" });
+        var completeTask = service.CompleteActiveSessionAsync();
+
+        releaseInitialization.TrySetResult();
+        await completeTask;
+        await service.DisposeAsync();
+
+        var sessionId = Assert.Single(sessionRepository.CreatedSessions).Id;
+        Assert.Equal(sessionId, Assert.Single(lapRepository.StoredLaps).SessionId);
+        Assert.Equal(sessionId, Assert.Single(eventRepository.StoredEvents).SessionId);
+        Assert.Equal(sessionId, Assert.Single(aiReportRepository.StoredReports).SessionId);
+    }
+
+    /// <summary>
+    /// Verifies a later session packet cannot steal writes that were queued for the previous session.
+    /// </summary>
+    [Fact]
+    public async Task ObserveParsedPacket_WithPendingOldSessionWrites_KeepsBufferedWritesOnOriginalSession()
+    {
+        var sessionRepository = new RecordingSessionRepository();
+        var lapRepository = new RecordingLapRepository();
+        var releaseInitialization = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new StoragePersistenceService(
+            sessionRepository,
+            lapRepository,
+            new RecordingEventRepository(),
+            new RecordingAiReportRepository(),
+            _ => releaseInitialization.Task);
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 0, sessionType: 15));
+        service.EnqueueLapSummary(CreateLapSummary(1));
+        service.ObserveParsedPacket(CreateSessionParsedPacket(43UL, trackId: 2, sessionType: 15));
+        service.EnqueueLapSummary(CreateLapSummary(2));
+        var completeTask = service.CompleteActiveSessionAsync();
+
+        releaseInitialization.TrySetResult();
+        await completeTask;
+        await service.DisposeAsync();
+
+        Assert.Equal(2, sessionRepository.CreatedSessions.Count);
+        Assert.Equal(
+            [sessionRepository.CreatedSessions[0].Id, sessionRepository.CreatedSessions[1].Id],
+            lapRepository.StoredLaps.Select(lap => lap.SessionId).ToArray());
+        Assert.Equal([1, 2], lapRepository.StoredLaps.Select(lap => lap.LapSummary.LapNumber).ToArray());
+    }
+
+    /// <summary>
+    /// Verifies repeated completion and disposal remain idempotent after buffered writes drain.
+    /// </summary>
+    [Fact]
+    public async Task CompleteAndDisposeRepeatedly_WithPendingWrites_DrainsOnceWithoutThrowing()
+    {
+        var lapRepository = new RecordingLapRepository();
+        var service = new StoragePersistenceService(
+            new RecordingSessionRepository(),
+            lapRepository,
+            new RecordingEventRepository(),
+            new RecordingAiReportRepository());
+
+        service.ObserveParsedPacket(CreateSessionParsedPacket(42UL, trackId: 0, sessionType: 15));
+        service.EnqueueLapSummary(CreateLapSummary(6));
+
+        await service.CompleteActiveSessionAsync();
+        await service.CompleteActiveSessionAsync();
+        await service.DisposeAsync();
+        await service.DisposeAsync();
+
+        Assert.Single(lapRepository.StoredLaps);
+    }
+
     private static ParsedPacket CreateSessionParsedPacket(ulong sessionUid, sbyte trackId, byte sessionType)
     {
         var header = new PacketHeader(
@@ -210,6 +364,46 @@ public sealed class StoragePersistenceServiceTests
         return new ParsedPacket(PacketId.Session, header, packet, datagram);
     }
 
+    private static LapSample CreateLapSample(int lapNumber, uint frameIdentifier, float lapDistance, uint timeMs)
+    {
+        return new LapSample
+        {
+            SampledAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddMilliseconds(timeMs),
+            FrameIdentifier = frameIdentifier,
+            LapNumber = lapNumber,
+            LapDistance = lapDistance,
+            CurrentLapTimeInMs = timeMs,
+            SpeedKph = 180,
+            Throttle = 0.7,
+            Brake = 0.1,
+            Steering = 0.2f,
+            IsValid = true
+        };
+    }
+
+    private static LapSummary CreateLapSummary(int lapNumber)
+    {
+        return new LapSummary
+        {
+            LapNumber = lapNumber,
+            FuelUsedLitres = 1.2f,
+            StartTyre = "Medium",
+            EndTyre = "Medium",
+            ClosedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+        };
+    }
+
+    private static RaceEvent CreateRaceEvent(int lapNumber)
+    {
+        return new RaceEvent
+        {
+            LapNumber = lapNumber,
+            Message = $"Lap {lapNumber} event",
+            Timestamp = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            DedupKey = $"event-{lapNumber}"
+        };
+    }
+
     private static async Task WaitUntilAsync(Func<bool> predicate)
     {
         var timeoutAt = DateTime.UtcNow.AddSeconds(5);
@@ -265,11 +459,11 @@ public sealed class StoragePersistenceServiceTests
 
     private sealed class RecordingLapRepository : ILapRepository
     {
-        public List<LapSummary> StoredLaps { get; } = [];
+        public List<StoredLapWrite> StoredLaps { get; } = [];
 
         public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
         {
-            StoredLaps.Add(lapSummary);
+            StoredLaps.Add(new StoredLapWrite(sessionId, lapSummary));
             return Task.CompletedTask;
         }
 
@@ -281,8 +475,11 @@ public sealed class StoragePersistenceServiceTests
 
     private sealed class RecordingEventRepository : IEventRepository
     {
+        public List<StoredEventWrite> StoredEvents { get; } = [];
+
         public Task AddAsync(string sessionId, RaceEvent raceEvent, CancellationToken cancellationToken = default)
         {
+            StoredEvents.Add(new StoredEventWrite(sessionId, raceEvent));
             return Task.CompletedTask;
         }
 
@@ -294,14 +491,49 @@ public sealed class StoragePersistenceServiceTests
 
     private sealed class RecordingAiReportRepository : IAIReportRepository
     {
+        public List<StoredAiReportWrite> StoredReports { get; } = [];
+
         public Task AddAsync(string sessionId, int lapNumber, AIAnalysisResult analysisResult, DateTimeOffset? createdAt = null, CancellationToken cancellationToken = default)
         {
+            StoredReports.Add(new StoredAiReportWrite(sessionId, lapNumber, analysisResult));
             return Task.CompletedTask;
         }
 
         public Task<IReadOnlyList<StoredAiReport>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredAiReport>>(Array.Empty<StoredAiReport>());
+        }
+    }
+
+    private sealed record StoredLapWrite(string SessionId, LapSummary LapSummary);
+
+    private sealed record StoredEventWrite(string SessionId, RaceEvent RaceEvent);
+
+    private sealed record StoredAiReportWrite(string SessionId, int LapNumber, AIAnalysisResult AnalysisResult);
+
+    private sealed class RecordingLapSampleRepository : ILapSampleRepository
+    {
+        public List<StoredLapSample> StoredSamples { get; } = [];
+
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            StoredSamples.Add(sample);
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            StoredSamples.AddRange(samples);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(string sessionId, int lapNumber, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(
+                StoredSamples
+                    .Where(sample => sample.SessionId == sessionId && sample.LapNumber == lapNumber)
+                    .OrderBy(sample => sample.SampleIndex)
+                    .ToArray());
         }
     }
 }

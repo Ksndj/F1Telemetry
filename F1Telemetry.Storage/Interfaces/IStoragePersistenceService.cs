@@ -26,6 +26,15 @@ public interface IStoragePersistenceService : IAsyncDisposable
     void EnqueueLapSummary(LapSummary lapSummary);
 
     /// <summary>
+    /// Queues high-frequency lap samples for persistence when the active session is known.
+    /// </summary>
+    /// <param name="lapNumber">The completed lap number associated with the samples.</param>
+    /// <param name="lapSamples">The samples to persist for offline analysis.</param>
+    void EnqueueLapSamples(int lapNumber, IReadOnlyList<LapSample> lapSamples)
+    {
+    }
+
+    /// <summary>
     /// Queues a detected race event for persistence.
     /// </summary>
     void EnqueueRaceEvent(RaceEvent raceEvent);

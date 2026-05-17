@@ -22,6 +22,7 @@ public sealed class HistorySessionItemViewModel
         _session = session;
         SessionId = _session.Id;
         SessionUid = string.IsNullOrWhiteSpace(_session.SessionUid) ? "-" : _session.SessionUid;
+        TrackId = _session.TrackId;
         TrackText = FormatTrack(_session.TrackId);
         SessionTypeText = FormatSessionType(_session.SessionType);
         StartedAtText = FormatTimestamp(_session.StartedAt);
@@ -40,6 +41,11 @@ public sealed class HistorySessionItemViewModel
     /// Gets the game session UID.
     /// </summary>
     public string SessionUid { get; }
+
+    /// <summary>
+    /// Gets the raw track identifier when available.
+    /// </summary>
+    public int? TrackId { get; }
 
     /// <summary>
     /// Gets the formatted track name.

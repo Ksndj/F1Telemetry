@@ -15,6 +15,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
     private ulong? _activeSessionUid;
     private SessionHistoryPacket? _latestPlayerHistory;
     private LapSummary[] _allLaps = Array.Empty<LapSummary>();
+    private Dictionary<int, LapSample[]> _completedLapSamples = new();
     private LapSummary? _bestLap;
     private LapSummary? _lastLap;
     private WheelSet<float>? _latestPlayerTyreWearPerWheel;
@@ -110,6 +111,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
             _currentLapBuilder = null;
             _latestPlayerHistory = null;
             _allLaps = Array.Empty<LapSummary>();
+            _completedLapSamples = new Dictionary<int, LapSample[]>();
             _bestLap = null;
             _lastLap = null;
             _latestPlayerTyreWearPerWheel = null;
@@ -130,6 +132,17 @@ public sealed class LapAnalyzer : ILapAnalyzer
         lock (_syncRoot)
         {
             return _currentLapBuilder?.CaptureSamples() ?? Array.Empty<LapSample>();
+        }
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<LapSample> CaptureCompletedLapSamples(int lapNumber)
+    {
+        lock (_syncRoot)
+        {
+            return _completedLapSamples.TryGetValue(lapNumber, out var samples)
+                ? samples.ToArray()
+                : Array.Empty<LapSample>();
         }
     }
 
@@ -206,6 +219,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
         }
 
         var summary = builder.BuildSummary(closingSample.SampledAt, closingSample);
+        var completedSamples = builder.CaptureSamples().ToArray();
         if (_latestPlayerHistory is not null)
         {
             summary = TryApplyOfficialTiming(summary, _latestPlayerHistory);
@@ -216,6 +230,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
             .ToArray();
 
         PublishLaps(updated);
+        _completedLapSamples[summary.LapNumber] = completedSamples;
     }
 
     private void PublishLaps(LapSummary[] laps)
