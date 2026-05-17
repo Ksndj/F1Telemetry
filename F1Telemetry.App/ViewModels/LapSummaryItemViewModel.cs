@@ -15,6 +15,11 @@ public sealed class LapSummaryItemViewModel
     private const string FastestSector3Foreground = "#F6C453";
 
     /// <summary>
+    /// Gets the completed lap number.
+    /// </summary>
+    public int LapNumber { get; init; }
+
+    /// <summary>
     /// Gets the completed lap label.
     /// </summary>
     public string LapText { get; init; } = "-";
@@ -128,6 +133,7 @@ public sealed class LapSummaryItemViewModel
 
         return new LapSummaryItemViewModel
         {
+            LapNumber = summary.LapNumber,
             LapText = $"Lap {summary.LapNumber}",
             LapTimeText = FormatLapTime(summary.LapTimeInMs),
             SectorsText = FormatSectorsText(sector1Text, sector2Text, sector3Text),
@@ -165,6 +171,7 @@ public sealed class LapSummaryItemViewModel
 
         return new LapSummaryItemViewModel
         {
+            LapNumber = lap.LapNumber,
             LapText = $"Lap {lap.LapNumber}",
             LapTimeText = FormatLapTime(lap.LapTimeInMs),
             SectorsText = FormatSectorsText(sector1Text, sector2Text, sector3Text),

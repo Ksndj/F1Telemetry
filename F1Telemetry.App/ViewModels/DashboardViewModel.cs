@@ -172,6 +172,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private bool _hasRequestedHistoryLoad;
     private bool _isPostRaceReviewRefreshRunning;
     private bool _isSessionComparisonRefreshRunning;
+    private bool _isCornerAnalysisRefreshRunning;
 
     /// <summary>
     /// Initializes a new dashboard view model.
@@ -212,7 +213,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         IEventBus<RaceEvent>? raceEventBus = null,
         HistorySessionBrowserViewModel? historyBrowser = null,
         PostRaceReviewViewModel? postRaceReview = null,
-        SessionComparisonViewModel? sessionComparison = null)
+        SessionComparisonViewModel? sessionComparison = null,
+        CornerAnalysisViewModel? cornerAnalysis = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -229,6 +231,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
         SessionComparison = sessionComparison ?? CreateNoOpSessionComparison();
+        CornerAnalysis = cornerAnalysis ?? CreateNoOpCornerAnalysis();
         _raceEventBus = raceEventBus ?? new InMemoryEventBus<RaceEvent>();
         _raceEventSpeechSubscriber = new RaceEventSpeechSubscriber(
             _raceEventBus,
@@ -373,6 +376,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public SessionComparisonViewModel SessionComparison { get; }
 
     /// <summary>
+    /// Gets the V3 corner analysis page view model.
+    /// </summary>
+    public CornerAnalysisViewModel CornerAnalysis { get; }
+
+    /// <summary>
     /// Gets a value indicating whether the sidebar is expanded.
     /// </summary>
     public bool IsSidebarExpanded
@@ -407,6 +415,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 OnPropertyChanged(nameof(IsLapHistorySelected));
                 OnPropertyChanged(nameof(IsPostRaceReviewSelected));
                 OnPropertyChanged(nameof(IsSessionComparisonSelected));
+                OnPropertyChanged(nameof(IsCornerAnalysisSelected));
                 OnPropertyChanged(nameof(IsOpponentsSelected));
                 OnPropertyChanged(nameof(IsLogsSelected));
                 OnPropertyChanged(nameof(IsAiTtsSelected));
@@ -417,6 +426,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 RequestHistoryBrowserRefreshIfNeeded();
                 RequestPostRaceReviewRefreshIfNeeded();
                 RequestSessionComparisonRefreshIfNeeded();
+                RequestCornerAnalysisRefreshIfNeeded();
             }
         }
     }
@@ -447,6 +457,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public bool IsSessionComparisonSelected => IsSelectedShellNavigationKey("session-comparison");
 
     /// <summary>
+    /// Gets a value indicating whether the V3 corner analysis page is selected.
+    /// </summary>
+    public bool IsCornerAnalysisSelected => IsSelectedShellNavigationKey("corner-analysis");
+
+    /// <summary>
     /// Gets a value indicating whether the opponents page is selected.
     /// </summary>
     public bool IsOpponentsSelected => IsSelectedShellNavigationKey("opponents");
@@ -475,6 +490,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         !IsLapHistorySelected &&
         !IsPostRaceReviewSelected &&
         !IsSessionComparisonSelected &&
+        !IsCornerAnalysisSelected &&
         !IsOpponentsSelected &&
         !IsLogsSelected &&
         !IsAiTtsSelected &&
@@ -1535,6 +1551,38 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
+    private void RequestCornerAnalysisRefreshIfNeeded()
+    {
+        if (_isCornerAnalysisRefreshRunning || !IsCornerAnalysisSelected)
+        {
+            return;
+        }
+
+        _ = RefreshCornerAnalysisAsync();
+    }
+
+    private async Task RefreshCornerAnalysisAsync()
+    {
+        _isCornerAnalysisRefreshRunning = true;
+        try
+        {
+            await CornerAnalysis.RefreshAsync(_lifecycleCts.Token);
+        }
+        catch (OperationCanceledException) when (_lifecycleCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"弯角分析刷新失败：{ex.Message}";
+            EnqueueEventLog("System", StatusMessage);
+            Debug.WriteLine($"Failed to refresh corner analysis: {ex}");
+        }
+        finally
+        {
+            _isCornerAnalysisRefreshRunning = false;
+        }
+    }
+
     private static HistorySessionBrowserViewModel CreateNoOpHistoryBrowser()
     {
         return new HistorySessionBrowserViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
@@ -1553,6 +1601,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private static SessionComparisonViewModel CreateNoOpSessionComparison()
     {
         return new SessionComparisonViewModel(new NoOpSessionRepository(), new NoOpLapRepository());
+    }
+
+    private static CornerAnalysisViewModel CreateNoOpCornerAnalysis()
+    {
+        return new CornerAnalysisViewModel(CreateNoOpHistoryBrowser(), new NoOpLapSampleRepository());
     }
 
     private void StopUiTimer()
@@ -2207,6 +2260,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
 
             _storagePersistenceService.EnqueueLapSummary(lap);
+            var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
+            _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
         }
     }
 
@@ -3263,6 +3318,27 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         public Task<IReadOnlyList<StoredAiReport>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredAiReport>>(Array.Empty<StoredAiReport>());
+        }
+    }
+
+    private sealed class NoOpLapSampleRepository : ILapSampleRepository
+    {
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
         }
     }
 }

@@ -47,6 +47,7 @@ public partial class App : Application
         var databaseService = new SqliteDatabaseService();
         var sessionRepository = new SessionRepository(databaseService);
         var lapRepository = new LapRepository(databaseService);
+        var lapSampleRepository = new LapSampleRepository(databaseService);
         var eventRepository = new EventRepository(databaseService);
         var aiReportRepository = new AIReportRepository(databaseService);
         var deletionConfirmationService = new MessageBoxHistorySessionDeletionConfirmationService();
@@ -57,6 +58,7 @@ public partial class App : Application
             lapRepository,
             eventRepository,
             aiReportRepository,
+            lapSampleRepository,
             databaseService.InitializeAsync,
             databaseService);
         var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer, eventDetectionService);
@@ -86,7 +88,8 @@ public partial class App : Application
                 eventRepository,
                 aiReportRepository,
                 new SaveFilePostRaceReviewReportExportService()),
-            sessionComparison: sessionComparison);
+            sessionComparison: sessionComparison,
+            cornerAnalysis: new CornerAnalysisViewModel(historyBrowser, lapSampleRepository));
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel
