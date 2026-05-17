@@ -21,6 +21,8 @@ namespace F1Telemetry.Tests;
 /// </summary>
 public sealed class MainWindowTests
 {
+    private const int ExpectedShellNavigationItemCount = 10;
+
     /// <summary>
     /// Verifies that the main window enables standard resize and taskbar behavior.
     /// </summary>
@@ -89,7 +91,7 @@ public sealed class MainWindowTests
                 Assert.NotNull(window.FindName("ContentHost"));
 
                 var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
-                Assert.Equal(9, navigationList.Items.Count);
+                Assert.Equal(ExpectedShellNavigationItemCount, navigationList.Items.Count);
                 Assert.Same(navigationItems[0], navigationList.SelectedItem);
                 Assert.Equal("实时概览", navigationItems[0].Name);
             }
@@ -108,8 +110,9 @@ public sealed class MainWindowTests
     {
         var navigationItems = ShellNavigationItemViewModel.CreateDefaultItems();
 
-        Assert.Equal(9, navigationItems.Count);
+        Assert.Equal(ExpectedShellNavigationItemCount, navigationItems.Count);
         Assert.All(navigationItems, item => Assert.False(string.IsNullOrWhiteSpace(item.IconGlyph)));
+        Assert.Contains(navigationItems, item => item.Key == "corner-analysis" && item.Name == "弯角分析");
     }
 
     /// <summary>
@@ -257,7 +260,7 @@ public sealed class MainWindowTests
             {
                 window.Show();
 
-                Assert.Equal(9, navigationItems.Count);
+                Assert.Equal(ExpectedShellNavigationItemCount, navigationItems.Count);
                 AssertContentHostShows<OverviewView>(window, "OverviewContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[1];
@@ -273,15 +276,18 @@ public sealed class MainWindowTests
                 AssertContentHostShows<SessionComparisonView>(window, "SessionComparisonContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[5];
-                AssertContentHostShows<OpponentsView>(window, "OpponentsContentTemplate");
+                AssertContentHostShows<CornerAnalysisView>(window, "CornerAnalysisContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[6];
-                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
+                AssertContentHostShows<OpponentsView>(window, "OpponentsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[7];
-                AssertContentHostShows<AiTtsView>(window, "AiTtsContentTemplate");
+                AssertContentHostShows<LogsView>(window, "LogsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = navigationItems[8];
+                AssertContentHostShows<AiTtsView>(window, "AiTtsContentTemplate");
+
+                viewModel.SelectedShellNavigationItem = navigationItems[9];
                 AssertContentHostShows<SettingsView>(window, "SettingsContentTemplate");
 
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("laps", "Laps alias");
@@ -296,7 +302,7 @@ public sealed class MainWindowTests
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("future-page", "Future page");
                 AssertContentHostUsesPlaceholder(window);
 
-                Assert.Equal(9, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
+                Assert.Equal(ExpectedShellNavigationItemCount, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
             }
             finally
             {
@@ -449,6 +455,7 @@ public sealed class MainWindowTests
                     string.Equals(value.Key, "laps", StringComparison.Ordinal);
                 IsPostRaceReviewSelected = string.Equals(value.Key, "post-race-review", StringComparison.Ordinal);
                 IsSessionComparisonSelected = string.Equals(value.Key, "session-comparison", StringComparison.Ordinal);
+                IsCornerAnalysisSelected = string.Equals(value.Key, "corner-analysis", StringComparison.Ordinal);
                 IsOpponentsSelected = string.Equals(value.Key, "opponents", StringComparison.Ordinal);
                 IsLogsSelected =
                     string.Equals(value.Key, "event-logs", StringComparison.Ordinal) ||
@@ -462,6 +469,7 @@ public sealed class MainWindowTests
                     !IsLapHistorySelected &&
                     !IsPostRaceReviewSelected &&
                     !IsSessionComparisonSelected &&
+                    !IsCornerAnalysisSelected &&
                     !IsOpponentsSelected &&
                     !IsLogsSelected &&
                     !IsAiTtsSelected &&
@@ -474,6 +482,7 @@ public sealed class MainWindowTests
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLapHistorySelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPostRaceReviewSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSessionComparisonSelected)));
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCornerAnalysisSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsOpponentsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLogsSelected)));
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAiTtsSelected)));
@@ -493,6 +502,8 @@ public sealed class MainWindowTests
         public bool IsPostRaceReviewSelected { get; private set; }
 
         public bool IsSessionComparisonSelected { get; private set; }
+
+        public bool IsCornerAnalysisSelected { get; private set; }
 
         public bool IsOpponentsSelected { get; private set; }
 
@@ -579,6 +590,8 @@ public sealed class MainWindowTests
         for (var i = 0; i < navigationList.Items.Count; i++)
         {
             var item = Assert.IsType<ShellNavigationItemViewModel>(navigationList.Items[i]);
+            navigationList.ScrollIntoView(item);
+            navigationList.UpdateLayout();
             var container = Assert.IsAssignableFrom<ListBoxItem>(
                 navigationList.ItemContainerGenerator.ContainerFromIndex(i));
             var elementWithTooltip = FindDescendant<FrameworkElement>(
@@ -602,7 +615,7 @@ public sealed class MainWindowTests
 
     private static bool IsShellPage(object value)
     {
-        return value is OverviewView or ChartsView or LapHistoryView or PostRaceReviewView or SessionComparisonView or OpponentsView or LogsView or AiTtsView or SettingsView or LegacyDashboardView;
+        return value is OverviewView or ChartsView or LapHistoryView or PostRaceReviewView or SessionComparisonView or CornerAnalysisView or OpponentsView or LogsView or AiTtsView or SettingsView or LegacyDashboardView;
     }
 
     private static T? FindDescendant<T>(DependencyObject root)
