@@ -19,6 +19,11 @@ public sealed record AppSettingsDocument
     public TtsOptions Tts { get; init; } = new();
 
     /// <summary>
+    /// Gets the manually configured race-weekend tyre plan block.
+    /// </summary>
+    public RaceWeekendTyrePlan RaceWeekendTyrePlan { get; init; } = new();
+
+    /// <summary>
     /// Gets the raw UDP log settings block.
     /// </summary>
     public UdpRawLogOptions UdpRawLog { get; init; } = new();

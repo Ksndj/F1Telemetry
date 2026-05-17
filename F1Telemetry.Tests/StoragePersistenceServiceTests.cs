@@ -535,5 +535,13 @@ public sealed class StoragePersistenceServiceTests
                     .OrderBy(sample => sample.SampleIndex)
                     .ToArray());
         }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
+        }
     }
 }

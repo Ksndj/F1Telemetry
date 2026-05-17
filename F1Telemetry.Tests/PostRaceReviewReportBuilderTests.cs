@@ -27,10 +27,11 @@ public sealed class PostRaceReviewReportBuilderTests
         Assert.Contains("## 会话摘要", markdown, StringComparison.Ordinal);
         Assert.Contains("## 摘要指标", markdown, StringComparison.Ordinal);
         Assert.Contains("## 单圈摘要", markdown, StringComparison.Ordinal);
+        Assert.Contains("## 四轮胎磨趋势", markdown, StringComparison.Ordinal);
         Assert.Contains("## Stint 摘要", markdown, StringComparison.Ordinal);
         Assert.Contains("## 事件时间线", markdown, StringComparison.Ordinal);
         Assert.Contains("## AI 每圈点评", markdown, StringComparison.Ordinal);
-        Assert.Contains("历史单圈未保存四轮胎磨数据", markdown, StringComparison.Ordinal);
+        Assert.Contains("12.1%", markdown, StringComparison.Ordinal);
         Assert.Contains("Lap 1 summary", markdown, StringComparison.Ordinal);
     }
 
@@ -63,9 +64,12 @@ public sealed class PostRaceReviewReportBuilderTests
 
         Assert.True(root.TryGetProperty("schemaVersion", out _));
         Assert.True(root.TryGetProperty("generatedAt", out _));
-        Assert.Equal("3.0.0", root.GetProperty("applicationVersion").GetString());
+        Assert.Equal("3.0.1", root.GetProperty("applicationVersion").GetString());
         Assert.Equal("uid-session-a", root.GetProperty("session").GetProperty("sessionUid").GetString());
         Assert.Equal(1, root.GetProperty("laps")[0].GetProperty("lapNumber").GetInt32());
+        Assert.Contains("覆盖", root.GetProperty("tyreWearTrendSummary").GetString(), StringComparison.Ordinal);
+        Assert.Equal(1, root.GetProperty("tyreWearTrend")[0].GetProperty("lapNumber").GetInt32());
+        Assert.Equal(12.1, root.GetProperty("tyreWearTrend")[0].GetProperty("rearLeft").GetSingle(), 1);
         Assert.Equal(2, root.GetProperty("laps")[1].GetProperty("lapNumber").GetInt32());
         Assert.Equal(1, root.GetProperty("events")[0].GetProperty("lapNumber").GetInt32());
         Assert.Equal(2, root.GetProperty("aiReports")[1].GetProperty("lapNumber").GetInt32());
@@ -82,6 +86,7 @@ public sealed class PostRaceReviewReportBuilderTests
             laps: [],
             events: [],
             reports: [],
+            tyreWearTrend: [],
             summaryMetrics: [],
             stints: []);
 
@@ -89,9 +94,11 @@ public sealed class PostRaceReviewReportBuilderTests
         using var json = JsonDocument.Parse(builder.BuildJson(data));
 
         Assert.Contains("暂无单圈记录", markdown, StringComparison.Ordinal);
+        Assert.Contains("暂无完整四轮胎磨样本", markdown, StringComparison.Ordinal);
         Assert.Contains("暂无事件记录", markdown, StringComparison.Ordinal);
         Assert.Contains("暂无 AI 报告", markdown, StringComparison.Ordinal);
         Assert.Equal(0, json.RootElement.GetProperty("laps").GetArrayLength());
+        Assert.Equal(0, json.RootElement.GetProperty("tyreWearTrend").GetArrayLength());
         Assert.Equal(0, json.RootElement.GetProperty("events").GetArrayLength());
         Assert.Equal(0, json.RootElement.GetProperty("aiReports").GetArrayLength());
     }
@@ -126,6 +133,7 @@ public sealed class PostRaceReviewReportBuilderTests
         IReadOnlyList<StoredLap>? laps = null,
         IReadOnlyList<StoredEvent>? events = null,
         IReadOnlyList<StoredAiReport>? reports = null,
+        IReadOnlyList<StoredLapTyreWearTrendPoint>? tyreWearTrend = null,
         IReadOnlyList<PostRaceReviewMetricRowViewModel>? summaryMetrics = null,
         IReadOnlyList<PostRaceReviewStintRowViewModel>? stints = null)
     {
@@ -141,6 +149,7 @@ public sealed class PostRaceReviewReportBuilderTests
         laps ??= [CreateLap(1)];
         events ??= [CreateEvent(1, 1)];
         reports ??= [CreateReport(1, 1)];
+        tyreWearTrend ??= [CreateTyreWearTrendPoint(1)];
         summaryMetrics ??=
         [
             new PostRaceReviewMetricRowViewModel
@@ -166,10 +175,11 @@ public sealed class PostRaceReviewReportBuilderTests
             laps,
             events,
             reports,
+            tyreWearTrend,
             summaryMetrics,
             stints,
             DateTimeOffset.Parse("2026-05-10T12:00:00Z"),
-            "3.0.0");
+            "3.0.1");
     }
 
     private static StoredLap CreateLap(int lapNumber)
@@ -224,6 +234,20 @@ public sealed class PostRaceReviewReportBuilderTests
             IsSuccess = true,
             ErrorMessage = "-",
             CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(id)
+        };
+    }
+
+    private static StoredLapTyreWearTrendPoint CreateTyreWearTrendPoint(int lapNumber)
+    {
+        return new StoredLapTyreWearTrendPoint
+        {
+            LapNumber = lapNumber,
+            SampleIndex = 20,
+            SampledAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            RearLeft = 12.1f,
+            RearRight = 12.2f,
+            FrontLeft = 11.1f,
+            FrontRight = 11.2f
         };
     }
 }

@@ -66,18 +66,39 @@ public sealed class PostRaceReviewChartBuilderTests
     }
 
     /// <summary>
-    /// Verifies historical tyre wear has an explicit unavailable state.
+    /// Verifies complete stored sample tyre wear renders as four wheel series.
     /// </summary>
     [Fact]
-    public void BuildTyreWearUnavailablePanel_DoesNotFakeStoredTyreWear()
+    public void BuildTyreWearTrendPanel_WithCompleteSamples_ReturnsFourWheelSeries()
     {
         var builder = new StoredLapPostRaceChartBuilder();
 
-        var panel = builder.BuildTyreWearUnavailablePanel();
+        var panel = builder.BuildTyreWearTrendPanel(
+        [
+            CreateTyreWearPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
+            CreateTyreWearPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f)
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.Equal(new[] { "后左", "后右", "前左", "前右" }, panel.Series.Select(series => series.Name));
+        Assert.Equal(new[] { 1d, 2d }, panel.Series[0].Points.Select(point => point.X));
+        Assert.Equal(12.1d, panel.Series[0].Points[0].Y, precision: 1);
+        Assert.Equal(13.1d, panel.Series[0].Points[1].Y, precision: 1);
+    }
+
+    /// <summary>
+    /// Verifies missing tyre wear sample data has an explicit empty state.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearTrendPanel_WithoutSamples_ReturnsEmptyPanel()
+    {
+        var builder = new StoredLapPostRaceChartBuilder();
+
+        var panel = builder.BuildTyreWearTrendPanel([]);
 
         Assert.False(panel.HasData);
         Assert.Empty(panel.Series);
-        Assert.Contains("未保存四轮胎磨数据", panel.EmptyStateText, StringComparison.Ordinal);
+        Assert.Contains("暂无完整四轮胎磨样本", panel.EmptyStateText, StringComparison.Ordinal);
     }
 
     private static StoredLap CreateLap(
@@ -98,6 +119,25 @@ public sealed class PostRaceReviewChartBuilderTests
             Sector3TimeInMs = sector3TimeInMs,
             IsValid = true,
             CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+        };
+    }
+
+    private static StoredLapTyreWearTrendPoint CreateTyreWearPoint(
+        int lapNumber,
+        float rearLeft,
+        float rearRight,
+        float frontLeft,
+        float frontRight)
+    {
+        return new StoredLapTyreWearTrendPoint
+        {
+            LapNumber = lapNumber,
+            SampleIndex = lapNumber * 10,
+            SampledAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            RearLeft = rearLeft,
+            RearRight = rearRight,
+            FrontLeft = frontLeft,
+            FrontRight = frontRight
         };
     }
 }

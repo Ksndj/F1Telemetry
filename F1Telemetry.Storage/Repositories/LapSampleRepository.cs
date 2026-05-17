@@ -222,6 +222,75 @@ public sealed class LapSampleRepository : ILapSampleRepository
             cancellationToken);
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+        string sessionId,
+        int count,
+        CancellationToken cancellationToken = default)
+    {
+        return _databaseService.ExecuteAsync(
+            async (connection, innerCancellationToken) =>
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    SELECT *
+                    FROM (
+                        SELECT lap_number,
+                               sample_index,
+                               sampled_at,
+                               tyre_wear_front_left,
+                               tyre_wear_front_right,
+                               tyre_wear_rear_left,
+                               tyre_wear_rear_right
+                        FROM (
+                            SELECT lap_number,
+                                   sample_index,
+                                   sampled_at,
+                                   tyre_wear_front_left,
+                                   tyre_wear_front_right,
+                                   tyre_wear_rear_left,
+                                   tyre_wear_rear_right,
+                                   ROW_NUMBER() OVER (
+                                       PARTITION BY lap_number
+                                       ORDER BY sample_index DESC, sampled_at DESC, id DESC) AS row_number
+                            FROM lap_samples
+                            WHERE session_id = @session_id
+                              AND tyre_wear_front_left IS NOT NULL
+                              AND tyre_wear_front_right IS NOT NULL
+                              AND tyre_wear_rear_left IS NOT NULL
+                              AND tyre_wear_rear_right IS NOT NULL
+                        )
+                        WHERE row_number = 1
+                        ORDER BY lap_number DESC
+                        LIMIT @count
+                    )
+                    ORDER BY lap_number ASC;
+                    """;
+                command.Parameters.AddWithValue("@session_id", sessionId);
+                command.Parameters.AddWithValue("@count", Math.Max(0, count));
+
+                using var reader = await command.ExecuteReaderAsync(innerCancellationToken);
+                var results = new List<StoredLapTyreWearTrendPoint>();
+                while (await reader.ReadAsync(innerCancellationToken))
+                {
+                    results.Add(
+                        new StoredLapTyreWearTrendPoint
+                        {
+                            LapNumber = reader.GetInt32(0),
+                            SampleIndex = reader.GetInt32(1),
+                            SampledAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(2)),
+                            FrontLeft = reader.GetFloat(3),
+                            FrontRight = reader.GetFloat(4),
+                            RearLeft = reader.GetFloat(5),
+                            RearRight = reader.GetFloat(6)
+                        });
+                }
+
+                return (IReadOnlyList<StoredLapTyreWearTrendPoint>)results;
+            },
+            cancellationToken);
+    }
+
     private static void AddSampleParameters(Microsoft.Data.Sqlite.SqliteCommand command, StoredLapSample sample)
     {
         command.Parameters.AddWithValue("@session_id", sample.SessionId);

@@ -16,7 +16,17 @@ public sealed class TrackSegmentMapProviderTests
     [Theory]
     [InlineData(0, "Australia")]
     [InlineData(2, "Shanghai")]
+    [InlineData(11, "Monza")]
+    [InlineData(12, "Singapore")]
     [InlineData(13, "Suzuka")]
+    [InlineData(14, "Abu Dhabi")]
+    [InlineData(15, "Austin")]
+    [InlineData(16, "Brazil")]
+    [InlineData(19, "Mexico")]
+    [InlineData(20, "Baku")]
+    [InlineData(26, "Zandvoort")]
+    [InlineData(31, "Las Vegas")]
+    [InlineData(32, "Qatar")]
     public void GetMap_SupportedTrack_ReturnsEstimatedMap(int trackId, string expectedTrackName)
     {
         var provider = new StaticTrackSegmentMapProvider();

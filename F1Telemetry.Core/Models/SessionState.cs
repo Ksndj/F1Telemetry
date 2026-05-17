@@ -81,6 +81,26 @@ public sealed record SessionState
     public byte? PitSpeedLimit { get; init; }
 
     /// <summary>
+    /// Gets the ideal pit window lap from the session packet.
+    /// </summary>
+    public byte? PitStopWindowIdealLap { get; init; }
+
+    /// <summary>
+    /// Gets the latest pit window lap from the session packet.
+    /// </summary>
+    public byte? PitStopWindowLatestLap { get; init; }
+
+    /// <summary>
+    /// Gets the estimated rejoin position after pitting.
+    /// </summary>
+    public byte? PitStopRejoinPosition { get; init; }
+
+    /// <summary>
+    /// Gets compact weather forecast samples for the current session.
+    /// </summary>
+    public IReadOnlyList<WeatherForecastSummary> WeatherForecastSamples { get; init; } = Array.Empty<WeatherForecastSummary>();
+
+    /// <summary>
     /// Gets the latest raw safety car status from the session packet.
     /// </summary>
     public byte? SafetyCarStatus { get; init; }
@@ -129,6 +149,11 @@ public sealed record SessionState
     /// Gets the latest player car snapshot.
     /// </summary>
     public CarSnapshot? PlayerCar { get; init; }
+
+    /// <summary>
+    /// Gets the latest game-reported player tyre inventory.
+    /// </summary>
+    public TyreInventorySnapshot? PlayerTyreInventory { get; init; }
 
     /// <summary>
     /// Gets the latest opponent car snapshots.

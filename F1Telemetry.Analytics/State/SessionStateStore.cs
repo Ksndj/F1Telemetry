@@ -48,6 +48,10 @@ public sealed class SessionStateStore
             SessionTimeLeft = metadata.SessionTimeLeft,
             SessionDuration = metadata.SessionDuration,
             PitSpeedLimit = metadata.PitSpeedLimit,
+            PitStopWindowIdealLap = metadata.PitStopWindowIdealLap,
+            PitStopWindowLatestLap = metadata.PitStopWindowLatestLap,
+            PitStopRejoinPosition = metadata.PitStopRejoinPosition,
+            WeatherForecastSamples = metadata.WeatherForecastSamples.ToArray(),
             SafetyCarStatus = metadata.SafetyCarStatus,
             MarshalZoneFlags = new Dictionary<int, sbyte>(metadata.MarshalZoneFlags),
             ActiveCarCount = metadata.ActiveCarCount,
@@ -58,6 +62,7 @@ public sealed class SessionStateStore
             PlayerFinalClassificationLaps = metadata.PlayerFinalClassificationLaps,
             PlayerFinalClassificationStatus = metadata.PlayerFinalClassificationStatus,
             PlayerCar = CarStateStore.CapturePlayerCar(),
+            PlayerTyreInventory = metadata.PlayerTyreInventory,
             Opponents = CarStateStore.CaptureOpponents(),
             Cars = CarStateStore.CaptureAllCars(),
             UpdatedAt = metadata.UpdatedAt
@@ -93,6 +98,10 @@ public sealed class SessionStateStore
         ushort sessionTimeLeft,
         ushort sessionDuration,
         byte pitSpeedLimit,
+        byte pitStopWindowIdealLap,
+        byte pitStopWindowLatestLap,
+        byte pitStopRejoinPosition,
+        IReadOnlyList<WeatherForecastSummary> weatherForecastSamples,
         byte safetyCarStatus,
         uint seasonLinkIdentifier,
         uint weekendLinkIdentifier,
@@ -113,6 +122,10 @@ public sealed class SessionStateStore
             SessionTimeLeft = sessionTimeLeft,
             SessionDuration = sessionDuration,
             PitSpeedLimit = pitSpeedLimit,
+            PitStopWindowIdealLap = pitStopWindowIdealLap,
+            PitStopWindowLatestLap = pitStopWindowLatestLap,
+            PitStopRejoinPosition = pitStopRejoinPosition,
+            WeatherForecastSamples = weatherForecastSamples.ToArray(),
             SafetyCarStatus = safetyCarStatus,
             SeasonLinkIdentifier = seasonLinkIdentifier,
             WeekendLinkIdentifier = weekendLinkIdentifier,
@@ -120,6 +133,17 @@ public sealed class SessionStateStore
             NumSessionsInWeekend = numSessionsInWeekend,
             WeekendStructure = weekendStructure.ToArray(),
             MarshalZoneFlags = new Dictionary<int, sbyte>(marshalZoneFlags),
+            UpdatedAt = updatedAt
+        });
+    }
+
+    internal void SetPlayerTyreInventory(TyreInventorySnapshot inventory, DateTimeOffset updatedAt)
+    {
+        ArgumentNullException.ThrowIfNull(inventory);
+
+        UpdateMetadata(metadata => metadata with
+        {
+            PlayerTyreInventory = inventory,
             UpdatedAt = updatedAt
         });
     }
@@ -198,6 +222,14 @@ public sealed class SessionStateStore
 
         public byte? PitSpeedLimit { get; init; }
 
+        public byte? PitStopWindowIdealLap { get; init; }
+
+        public byte? PitStopWindowLatestLap { get; init; }
+
+        public byte? PitStopRejoinPosition { get; init; }
+
+        public IReadOnlyList<WeatherForecastSummary> WeatherForecastSamples { get; init; } = Array.Empty<WeatherForecastSummary>();
+
         public byte? SafetyCarStatus { get; init; }
 
         public IReadOnlyDictionary<int, sbyte> MarshalZoneFlags { get; init; } = new Dictionary<int, sbyte>();
@@ -215,6 +247,8 @@ public sealed class SessionStateStore
         public byte? PlayerFinalClassificationLaps { get; init; }
 
         public byte? PlayerFinalClassificationStatus { get; init; }
+
+        public TyreInventorySnapshot? PlayerTyreInventory { get; init; }
 
         public DateTimeOffset UpdatedAt { get; init; }
     }

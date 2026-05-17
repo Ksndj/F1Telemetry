@@ -24,4 +24,12 @@ public interface ILapSampleRepository
         string sessionId,
         int lapNumber,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns one complete four-wheel tyre wear point per lap for a session.
+    /// </summary>
+    Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+        string sessionId,
+        int count,
+        CancellationToken cancellationToken = default);
 }

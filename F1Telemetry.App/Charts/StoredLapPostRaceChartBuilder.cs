@@ -113,11 +113,35 @@ public sealed class StoredLapPostRaceChartBuilder
     }
 
     /// <summary>
-    /// Builds the explicit unavailable state for stored-lap tyre wear.
+    /// Builds the stored-lap four-wheel tyre wear trend panel.
     /// </summary>
-    public ChartPanelViewModel BuildTyreWearUnavailablePanel()
+    /// <param name="trend">The per-lap tyre wear points to plot.</param>
+    public ChartPanelViewModel BuildTyreWearTrendPanel(IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
     {
-        return CreateEmptyPanel("四轮胎磨趋势", "圈号", "%", "历史单圈未保存四轮胎磨数据，无法生成胎磨趋势");
+        var rearLeft = BuildTyreWearPoints(trend, point => point.RearLeft);
+        var rearRight = BuildTyreWearPoints(trend, point => point.RearRight);
+        var frontLeft = BuildTyreWearPoints(trend, point => point.FrontLeft);
+        var frontRight = BuildTyreWearPoints(trend, point => point.FrontRight);
+        if (rearLeft.Count == 0 && rearRight.Count == 0 && frontLeft.Count == 0 && frontRight.Count == 0)
+        {
+            return BuildTyreWearEmptyPanel();
+        }
+
+        var series = new List<ChartSeriesModel>(capacity: 4);
+        AddSeries(series, "后左", Brushes.OrangeRed, rearLeft);
+        AddSeries(series, "后右", Brushes.Gold, rearRight);
+        AddSeries(series, "前左", Brushes.DeepSkyBlue, frontLeft);
+        AddSeries(series, "前右", Brushes.LimeGreen, frontRight);
+
+        return CreatePanel("四轮胎磨趋势", "圈号", "%", "该会话暂无完整四轮胎磨样本", series);
+    }
+
+    /// <summary>
+    /// Builds the empty state for stored-lap tyre wear.
+    /// </summary>
+    public ChartPanelViewModel BuildTyreWearEmptyPanel()
+    {
+        return CreateEmptyPanel("四轮胎磨趋势", "圈号", "%", "该会话暂无完整四轮胎磨样本，无法生成胎磨趋势");
     }
 
     private static void AddSeries(
@@ -174,6 +198,20 @@ public sealed class StoredLapPostRaceChartBuilder
                         };
                 })
             .OfType<ChartPointModel>()
+            .Where(point => double.IsFinite(point.X) && double.IsFinite(point.Y))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<ChartPointModel> BuildTyreWearPoints(
+        IReadOnlyList<StoredLapTyreWearTrendPoint> trend,
+        Func<StoredLapTyreWearTrendPoint, float> selector)
+    {
+        return trend
+            .Select(point => new ChartPointModel
+            {
+                X = point.LapNumber,
+                Y = selector(point)
+            })
             .Where(point => double.IsFinite(point.X) && double.IsFinite(point.Y))
             .ToArray();
     }

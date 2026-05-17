@@ -62,6 +62,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
     }
 
     /// <inheritdoc />
+    public async Task SaveRaceWeekendTyrePlanAsync(RaceWeekendTyrePlan plan, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var existing = await LoadDocumentCoreAsync(cancellationToken);
+        await WriteDocumentAsync(existing with { RaceWeekendTyrePlan = NormalizeRaceWeekendTyrePlan(plan) }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -96,6 +105,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
             {
                 Ai = ReadAiSettings(root),
                 Tts = ReadTtsSettings(root),
+                RaceWeekendTyrePlan = ReadRaceWeekendTyrePlan(root),
                 UdpRawLog = ReadUdpRawLogOptions(root),
                 Udp = ReadUdpSettings(root)
             };
@@ -187,6 +197,44 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             return new TtsOptions();
         }
+    }
+
+    private static RaceWeekendTyrePlan ReadRaceWeekendTyrePlan(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("raceWeekendTyrePlan", out var planElement))
+        {
+            return new RaceWeekendTyrePlan();
+        }
+
+        try
+        {
+            return NormalizeRaceWeekendTyrePlan(
+                new RaceWeekendTyrePlan
+                {
+                    InventoryText = ReadString(planElement, "inventoryText", RaceWeekendTyrePlan.DefaultInventoryText),
+                    MaxRecommendedWearPercent = ReadInt(
+                        planElement,
+                        "maxRecommendedWearPercent",
+                        RaceWeekendTyrePlan.DefaultMaxRecommendedWearPercent)
+                });
+        }
+        catch
+        {
+            return new RaceWeekendTyrePlan();
+        }
+    }
+
+    private static RaceWeekendTyrePlan NormalizeRaceWeekendTyrePlan(RaceWeekendTyrePlan plan)
+    {
+        var inventoryText = string.IsNullOrWhiteSpace(plan.InventoryText)
+            ? RaceWeekendTyrePlan.DefaultInventoryText
+            : plan.InventoryText.Trim();
+
+        return plan with
+        {
+            InventoryText = inventoryText,
+            MaxRecommendedWearPercent = Math.Clamp(plan.MaxRecommendedWearPercent, 0, 100)
+        };
     }
 
     private static UdpRawLogOptions ReadUdpRawLogOptions(JsonElement rootElement)

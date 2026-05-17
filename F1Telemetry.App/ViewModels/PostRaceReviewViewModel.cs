@@ -26,6 +26,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     private readonly ILapRepository _lapRepository;
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
+    private readonly ILapSampleRepository _lapSampleRepository;
     private readonly StoredLapPostRaceChartBuilder _chartBuilder;
     private readonly PostRaceReviewReportBuilder _reportBuilder;
     private readonly IPostRaceReviewReportExportService _reportExportService;
@@ -39,10 +40,12 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     private string _statusText = "请选择历史会话进行赛后复盘。";
     private string _emptyStateText = "请选择历史会话进行赛后复盘";
     private string _reportExportStatusText = "尚未导出复盘报告。";
+    private string _tyreWearStatusText = "请选择历史会话查看四轮胎磨趋势。";
     private HistorySessionItemViewModel? _lastLoadedSession;
     private IReadOnlyList<StoredLap> _lastLoadedLaps = Array.Empty<StoredLap>();
     private IReadOnlyList<StoredEvent> _lastLoadedEvents = Array.Empty<StoredEvent>();
     private IReadOnlyList<StoredAiReport> _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+    private IReadOnlyList<StoredLapTyreWearTrendPoint> _lastLoadedTyreWearTrend = Array.Empty<StoredLapTyreWearTrendPoint>();
     private IReadOnlyList<PostRaceReviewMetricRowViewModel> _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
     private IReadOnlyList<PostRaceReviewStintRowViewModel> _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
 
@@ -54,17 +57,20 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     /// <param name="eventRepository">The stored event repository.</param>
     /// <param name="aiReportRepository">The stored AI report repository.</param>
     /// <param name="reportExportService">The optional report export service.</param>
+    /// <param name="lapSampleRepository">The optional lap sample repository used for tyre wear trends.</param>
     public PostRaceReviewViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapRepository lapRepository,
         IEventRepository eventRepository,
         IAIReportRepository aiReportRepository,
-        IPostRaceReviewReportExportService? reportExportService = null)
+        IPostRaceReviewReportExportService? reportExportService = null,
+        ILapSampleRepository? lapSampleRepository = null)
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
+        _lapSampleRepository = lapSampleRepository ?? new NoOpLapSampleRepository();
         _chartBuilder = new StoredLapPostRaceChartBuilder();
         _reportBuilder = new PostRaceReviewReportBuilder();
         _reportExportService = reportExportService ?? new SaveFilePostRaceReviewReportExportService();
@@ -87,7 +93,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         SectorSplitTrendPanel = _chartBuilder.BuildSectorSplitPanel(Array.Empty<StoredLap>());
         FuelTrendPanel = _chartBuilder.BuildFuelPanel(Array.Empty<StoredLap>());
         ErsTrendPanel = _chartBuilder.BuildErsPanel(Array.Empty<StoredLap>());
-        TyreWearTrendPanel = _chartBuilder.BuildTyreWearUnavailablePanel();
+        TyreWearTrendPanel = _chartBuilder.BuildTyreWearEmptyPanel();
 
         SummaryMetricRows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasSummaryMetrics));
         EventTimelineRows.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasEventTimelineRows));
@@ -214,14 +220,18 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     public ChartPanelViewModel ErsTrendPanel { get; }
 
     /// <summary>
-    /// Gets the unavailable tyre wear panel.
+    /// Gets the four-wheel tyre wear trend panel.
     /// </summary>
     public ChartPanelViewModel TyreWearTrendPanel { get; }
 
     /// <summary>
-    /// Gets the unavailable tyre wear status text.
+    /// Gets the four-wheel tyre wear status text.
     /// </summary>
-    public string TyreWearStatusText => "历史单圈未保存四轮胎磨数据，无法生成胎磨趋势。";
+    public string TyreWearStatusText
+    {
+        get => _tyreWearStatusText;
+        private set => SetProperty(ref _tyreWearStatusText, value);
+    }
 
     /// <summary>
     /// Gets the stored event timeline rows.
@@ -327,8 +337,9 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             var lapsTask = _lapRepository.GetRecentAsync(sessionId, MaxStoredLaps, cancellationToken);
             var eventsTask = _eventRepository.GetRecentAsync(sessionId, MaxStoredEvents, cancellationToken);
             var aiReportsTask = _aiReportRepository.GetRecentAsync(sessionId, MaxStoredAiReports, cancellationToken);
+            var tyreWearTrendTask = _lapSampleRepository.GetTyreWearTrendAsync(sessionId, MaxStoredLaps, cancellationToken);
 
-            await Task.WhenAll(lapsTask, eventsTask, aiReportsTask);
+            await Task.WhenAll(lapsTask, eventsTask, aiReportsTask, tyreWearTrendTask);
 
             if (!IsCurrentLoad(loadVersion) || !ReferenceEquals(SelectedSession, selectedSession))
             {
@@ -338,8 +349,9 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             var laps = OrderLaps(lapsTask.Result);
             var events = OrderEvents(eventsTask.Result);
             var aiReports = OrderAiReports(aiReportsTask.Result);
+            var tyreWearTrend = OrderTyreWearTrend(tyreWearTrendTask.Result);
 
-            ApplyReviewData(selectedSession, laps, events, aiReports);
+            ApplyReviewData(selectedSession, laps, events, aiReports, tyreWearTrend);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -456,11 +468,22 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             .ToArray();
     }
 
+    private static IReadOnlyList<StoredLapTyreWearTrendPoint> OrderTyreWearTrend(
+        IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
+        return trend
+            .OrderBy(point => point.LapNumber)
+            .ThenBy(point => point.SampleIndex)
+            .ThenBy(point => point.SampledAt)
+            .ToArray();
+    }
+
     private void ApplyReviewData(
         HistorySessionItemViewModel selectedSession,
         IReadOnlyList<StoredLap> laps,
         IReadOnlyList<StoredEvent> events,
-        IReadOnlyList<StoredAiReport> aiReports)
+        IReadOnlyList<StoredAiReport> aiReports,
+        IReadOnlyList<StoredLapTyreWearTrendPoint> tyreWearTrend)
     {
         var summaryRows = BuildSummaryMetricRows(selectedSession, laps, events, aiReports);
         var stintRows = PostRaceReviewStintRowViewModel.BuildFromLaps(laps);
@@ -498,6 +521,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         _lastLoadedLaps = laps.ToArray();
         _lastLoadedEvents = events.ToArray();
         _lastLoadedAiReports = aiReports.ToArray();
+        _lastLoadedTyreWearTrend = tyreWearTrend.ToArray();
         _lastLoadedSummaryMetrics = summaryRows.ToArray();
         _lastLoadedStints = stintRows.ToArray();
 
@@ -505,9 +529,10 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         SectorSplitTrendPanel.UpdateFrom(_chartBuilder.BuildSectorSplitPanel(laps));
         FuelTrendPanel.UpdateFrom(_chartBuilder.BuildFuelPanel(laps));
         ErsTrendPanel.UpdateFrom(_chartBuilder.BuildErsPanel(laps));
-        TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearUnavailablePanel());
+        TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearTrendPanel(tyreWearTrend));
+        TyreWearStatusText = BuildTyreWearStatusText(tyreWearTrend);
 
-        var dataCount = laps.Count + events.Count + aiReports.Count;
+        var dataCount = laps.Count + events.Count + aiReports.Count + tyreWearTrend.Count;
         if (dataCount == 0)
         {
             StatusText = "该会话暂无赛后复盘数据。";
@@ -642,15 +667,17 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         AiReportPages.SetItems(AiReportRows, resetPage: true);
         _lastLoadedSession = null;
         _lastLoadedLaps = Array.Empty<StoredLap>();
-        _lastLoadedEvents = Array.Empty<StoredEvent>();
-        _lastLoadedAiReports = Array.Empty<StoredAiReport>();
-        _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
+            _lastLoadedEvents = Array.Empty<StoredEvent>();
+            _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+            _lastLoadedTyreWearTrend = Array.Empty<StoredLapTyreWearTrendPoint>();
+            _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
         _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
         LapTimeTrendPanel.UpdateFrom(_chartBuilder.BuildLapTimePanel(Array.Empty<StoredLap>()));
         SectorSplitTrendPanel.UpdateFrom(_chartBuilder.BuildSectorSplitPanel(Array.Empty<StoredLap>()));
         FuelTrendPanel.UpdateFrom(_chartBuilder.BuildFuelPanel(Array.Empty<StoredLap>()));
         ErsTrendPanel.UpdateFrom(_chartBuilder.BuildErsPanel(Array.Empty<StoredLap>()));
-        TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearUnavailablePanel());
+        TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearEmptyPanel());
+        TyreWearStatusText = "请选择历史会话查看四轮胎磨趋势。";
     }
 
     private async Task<PostRaceReviewReportData?> EnsureReportDataAsync(CancellationToken cancellationToken)
@@ -685,6 +712,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             _lastLoadedLaps,
             _lastLoadedEvents,
             _lastLoadedAiReports,
+            _lastLoadedTyreWearTrend,
             _lastLoadedSummaryMetrics,
             _lastLoadedStints,
             DateTimeOffset.UtcNow,
@@ -766,5 +794,53 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         return time.TotalMinutes >= 1
             ? $"{(int)time.TotalMinutes}:{time.Seconds:00}.{time.Milliseconds:000}"
             : $"{time.Seconds}.{time.Milliseconds:000}s";
+    }
+
+    private static string BuildTyreWearStatusText(IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
+        if (trend.Count == 0)
+        {
+            return "该会话暂无完整四轮胎磨样本，无法生成胎磨趋势。";
+        }
+
+        var firstLap = trend.Min(point => point.LapNumber);
+        var lastLap = trend.Max(point => point.LapNumber);
+        var latest = trend.MaxBy(point => point.LapNumber);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "已生成 {0} 圈四轮胎磨趋势（Lap {1}-{2}），最新圈最高胎磨 {3:0.0}%。",
+            trend.Count,
+            firstLap,
+            lastLap,
+            latest is null ? 0 : Math.Max(Math.Max(latest.RearLeft, latest.RearRight), Math.Max(latest.FrontLeft, latest.FrontRight)));
+    }
+
+    private sealed class NoOpLapSampleRepository : ILapSampleRepository
+    {
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
+        }
     }
 }

@@ -74,6 +74,36 @@ public sealed record AIAnalysisContext
     public ushort? GapToBehindInMs { get; init; }
 
     /// <summary>
+    /// Gets the compact weather forecast summary for strategy recommendations.
+    /// </summary>
+    public string WeatherForecastSummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the compact pit window summary for strategy recommendations.
+    /// </summary>
+    public string PitWindowSummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the compact ranking and gap summary for strategy recommendations.
+    /// </summary>
+    public string PositionStrategySummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the compact front and rear opponent strategy summary.
+    /// </summary>
+    public string OpponentStrategySummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the hard tyre inventory constraints derived from manual input and game data.
+    /// </summary>
+    public string TyreInventorySummary { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the compact historical session context selected by the user or inferred from the weekend.
+    /// </summary>
+    public string HistoricalSessionSummary { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the compact driving trend summary derived from live telemetry samples.
     /// </summary>
     public string TelemetryAnalysisSummary { get; init; } = string.Empty;

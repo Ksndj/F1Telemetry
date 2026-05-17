@@ -87,7 +87,8 @@ public partial class App : Application
                 lapRepository,
                 eventRepository,
                 aiReportRepository,
-                new SaveFilePostRaceReviewReportExportService()),
+                new SaveFilePostRaceReviewReportExportService(),
+                lapSampleRepository),
             sessionComparison: sessionComparison,
             cornerAnalysis: new CornerAnalysisViewModel(historyBrowser, lapSampleRepository));
         var mainWindow = new MainWindow
