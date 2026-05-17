@@ -188,6 +188,89 @@ public sealed class SqliteDatabaseService : IDatabaseService
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS lap_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                sample_index INTEGER NOT NULL,
+                sampled_at TEXT NOT NULL,
+                frame_identifier INTEGER NOT NULL,
+                lap_number INTEGER NOT NULL,
+                lap_distance REAL NULL,
+                total_distance REAL NULL,
+                current_lap_time_ms INTEGER NULL,
+                last_lap_time_ms INTEGER NULL,
+                speed_kph REAL NULL,
+                throttle REAL NULL,
+                brake REAL NULL,
+                steering REAL NULL,
+                gear INTEGER NULL,
+                fuel_remaining_litres REAL NULL,
+                fuel_laps_remaining REAL NULL,
+                ers_store_energy REAL NULL,
+                tyre_wear REAL NULL,
+                tyre_wear_front_left REAL NULL,
+                tyre_wear_front_right REAL NULL,
+                tyre_wear_rear_left REAL NULL,
+                tyre_wear_rear_right REAL NULL,
+                position INTEGER NULL,
+                delta_front_ms INTEGER NULL,
+                delta_leader_ms INTEGER NULL,
+                pit_status INTEGER NULL,
+                is_valid INTEGER NOT NULL,
+                visual_tyre_compound INTEGER NULL,
+                actual_tyre_compound INTEGER NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS corner_summaries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                lap_number INTEGER NOT NULL,
+                corner_number INTEGER NOT NULL,
+                corner_name TEXT NOT NULL,
+                start_distance_m REAL NULL,
+                apex_distance_m REAL NULL,
+                end_distance_m REAL NULL,
+                entry_speed_kph REAL NULL,
+                apex_speed_kph REAL NULL,
+                exit_speed_kph REAL NULL,
+                min_speed_kph REAL NULL,
+                max_brake REAL NULL,
+                average_throttle REAL NULL,
+                average_steering REAL NULL,
+                time_loss_ms REAL NULL,
+                advice_text TEXT NOT NULL,
+                payload_json TEXT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS strategy_advices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                lap_number INTEGER NULL,
+                advice_type TEXT NOT NULL,
+                priority INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                expected_gain_ms REAL NULL,
+                risk_level TEXT NOT NULL,
+                payload_json TEXT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS race_engineer_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                lap_number INTEGER NULL,
+                report_type TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                spoken_text TEXT NOT NULL,
+                detail_json TEXT NULL,
+                is_success INTEGER NOT NULL,
+                error_message TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_laps_session_created_at_desc
                 ON laps (session_id, created_at DESC);
 
@@ -196,6 +279,30 @@ public sealed class SqliteDatabaseService : IDatabaseService
 
             CREATE INDEX IF NOT EXISTS idx_ai_reports_session_created_at_desc
                 ON ai_reports (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_lap_samples_session_lap_order
+                ON lap_samples (session_id, lap_number, sample_index, sampled_at, id);
+
+            CREATE INDEX IF NOT EXISTS idx_lap_samples_session_created_at_desc
+                ON lap_samples (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_corner_summaries_session_lap_corner
+                ON corner_summaries (session_id, lap_number, corner_number);
+
+            CREATE INDEX IF NOT EXISTS idx_corner_summaries_session_created_at_desc
+                ON corner_summaries (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_strategy_advices_session_lap_created_at_desc
+                ON strategy_advices (session_id, lap_number, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_strategy_advices_session_created_at_desc
+                ON strategy_advices (session_id, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_race_engineer_reports_session_lap_created_at_desc
+                ON race_engineer_reports (session_id, lap_number, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_race_engineer_reports_session_created_at_desc
+                ON race_engineer_reports (session_id, created_at DESC);
             """;
 
         await command.ExecuteNonQueryAsync(cancellationToken);

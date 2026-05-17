@@ -17,6 +17,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     private const int DefaultMaxCriticalCommands = 32;
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
+    private readonly ILapSampleRepository? _lapSampleRepository;
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
     private readonly Func<CancellationToken, Task>? _initializeAsync;
@@ -43,12 +44,39 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         IDatabaseService? ownedDatabaseService = null,
         int maxBufferedCommands = DefaultMaxBufferedCommands,
         int maxCriticalCommands = DefaultMaxCriticalCommands)
+        : this(
+            sessionRepository,
+            lapRepository,
+            eventRepository,
+            aiReportRepository,
+            lapSampleRepository: null,
+            initializeAsync,
+            ownedDatabaseService,
+            maxBufferedCommands,
+            maxCriticalCommands)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new persistence coordinator with optional lap-sample persistence.
+    /// </summary>
+    public StoragePersistenceService(
+        ISessionRepository sessionRepository,
+        ILapRepository lapRepository,
+        IEventRepository eventRepository,
+        IAIReportRepository aiReportRepository,
+        ILapSampleRepository? lapSampleRepository,
+        Func<CancellationToken, Task>? initializeAsync = null,
+        IDatabaseService? ownedDatabaseService = null,
+        int maxBufferedCommands = DefaultMaxBufferedCommands,
+        int maxCriticalCommands = DefaultMaxCriticalCommands)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedCommands);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCriticalCommands);
 
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
+        _lapSampleRepository = lapSampleRepository;
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
         _initializeAsync = initializeAsync;
@@ -84,6 +112,18 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     {
         ArgumentNullException.ThrowIfNull(lapSummary);
         EnqueueCommand(new PersistLapCommand(lapSummary));
+    }
+
+    /// <inheritdoc />
+    public void EnqueueLapSamples(int lapNumber, IReadOnlyList<LapSample> lapSamples)
+    {
+        ArgumentNullException.ThrowIfNull(lapSamples);
+        if (lapSamples.Count == 0 || _lapSampleRepository is null)
+        {
+            return;
+        }
+
+        EnqueueCommand(new PersistLapSamplesCommand(lapNumber, lapSamples.ToArray()));
     }
 
     /// <inheritdoc />
@@ -287,6 +327,18 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                         await _lapRepository.AddAsync(activeSessionId, persistLap.LapSummary, _workerCts.Token);
                         break;
 
+                    case PersistLapSamplesCommand persistLapSamples:
+                        if (activeSessionId is null || _lapSampleRepository is null)
+                        {
+                            EmitLog("未发现活动会话，已跳过圈采样持久化。");
+                            break;
+                        }
+
+                        await _lapSampleRepository.AddRangeAsync(
+                            MapLapSamples(activeSessionId, persistLapSamples.LapNumber, persistLapSamples.LapSamples),
+                            _workerCts.Token);
+                        break;
+
                     case PersistEventCommand persistEvent:
                         if (activeSessionId is null)
                         {
@@ -392,6 +444,49 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         LogEmitted?.Invoke(this, message);
     }
 
+    private static IReadOnlyList<StoredLapSample> MapLapSamples(
+        string activeSessionId,
+        int lapNumber,
+        IReadOnlyList<LapSample> lapSamples)
+    {
+        return lapSamples
+            .Select(
+                (sample, index) => new StoredLapSample
+                {
+                    SessionId = activeSessionId,
+                    SampleIndex = index,
+                    SampledAt = sample.SampledAt,
+                    FrameIdentifier = sample.FrameIdentifier,
+                    LapNumber = lapNumber,
+                    LapDistance = sample.LapDistance,
+                    TotalDistance = sample.TotalDistance,
+                    CurrentLapTimeInMs = sample.CurrentLapTimeInMs is null ? null : checked((int)sample.CurrentLapTimeInMs.Value),
+                    LastLapTimeInMs = sample.LastLapTimeInMs is null ? null : checked((int)sample.LastLapTimeInMs.Value),
+                    SpeedKph = sample.SpeedKph,
+                    Throttle = sample.Throttle,
+                    Brake = sample.Brake,
+                    Steering = sample.Steering,
+                    Gear = sample.Gear,
+                    FuelRemainingLitres = sample.FuelRemaining,
+                    FuelLapsRemaining = sample.FuelLapsRemaining,
+                    ErsStoreEnergy = sample.ErsStoreEnergy,
+                    TyreWear = sample.TyreWear,
+                    TyreWearFrontLeft = sample.TyreWearPerWheel?.FrontLeft,
+                    TyreWearFrontRight = sample.TyreWearPerWheel?.FrontRight,
+                    TyreWearRearLeft = sample.TyreWearPerWheel?.RearLeft,
+                    TyreWearRearRight = sample.TyreWearPerWheel?.RearRight,
+                    Position = sample.Position,
+                    DeltaFrontInMs = sample.DeltaFrontInMs,
+                    DeltaLeaderInMs = sample.DeltaLeaderInMs,
+                    PitStatus = sample.PitStatus,
+                    IsValid = sample.IsValid,
+                    VisualTyreCompound = sample.VisualTyreCompound,
+                    ActualTyreCompound = sample.ActualTyreCompound,
+                    CreatedAt = sample.SampledAt
+                })
+            .ToArray();
+    }
+
     private abstract record StorageCommand(bool IsCritical);
 
     private sealed record ObserveSessionPacketCommand(
@@ -401,6 +496,10 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         DateTimeOffset ObservedAt) : StorageCommand(true);
 
     private sealed record PersistLapCommand(LapSummary LapSummary) : StorageCommand(false);
+
+    private sealed record PersistLapSamplesCommand(
+        int LapNumber,
+        IReadOnlyList<LapSample> LapSamples) : StorageCommand(false);
 
     private sealed record PersistEventCommand(RaceEvent RaceEvent) : StorageCommand(false);
 

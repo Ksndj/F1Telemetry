@@ -119,6 +119,10 @@ public sealed class SessionRepository : ISessionRepository
                         return false;
                     }
 
+                    await DeleteAssociatedRowsAsync(connection, transaction, "race_engineer_reports", sessionId, innerCancellationToken);
+                    await DeleteAssociatedRowsAsync(connection, transaction, "strategy_advices", sessionId, innerCancellationToken);
+                    await DeleteAssociatedRowsAsync(connection, transaction, "corner_summaries", sessionId, innerCancellationToken);
+                    await DeleteAssociatedRowsAsync(connection, transaction, "lap_samples", sessionId, innerCancellationToken);
                     await DeleteAssociatedRowsAsync(connection, transaction, "ai_reports", sessionId, innerCancellationToken);
                     await DeleteAssociatedRowsAsync(connection, transaction, "events", sessionId, innerCancellationToken);
                     await DeleteAssociatedRowsAsync(connection, transaction, "laps", sessionId, innerCancellationToken);

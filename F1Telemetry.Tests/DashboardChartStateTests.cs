@@ -457,6 +457,11 @@ public sealed class DashboardChartStateTests
             return Array.Empty<LapSample>();
         }
 
+        public IReadOnlyList<LapSample> CaptureCompletedLapSamples(int lapNumber)
+        {
+            return Array.Empty<LapSample>();
+        }
+
         public IReadOnlyList<LapSummary> CaptureRecentLaps(int maxCount)
         {
             return laps.Take(maxCount).Reverse().ToArray();
