@@ -136,6 +136,40 @@ public sealed class HistorySessionBrowserViewModelTests
     }
 
     /// <summary>
+    /// Verifies qualifying sessions with persisted laps populate the history lap list.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithQualifyingLaps_ShowsHistoryLapRows()
+    {
+        var session = CreateSession("session-q", DateTimeOffset.Parse("2026-05-17T10:15:00Z")) with
+        {
+            SessionType = 5
+        };
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [session]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-q"] =
+                [
+                    CreateLap("session-q", 1, 1),
+                    CreateLap("session-q", 2, 2)
+                ]
+            }
+        };
+        var viewModel = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+
+        await viewModel.RefreshSessionsAsync();
+
+        Assert.Equal("排位赛", viewModel.SelectedSession?.SessionTypeText);
+        Assert.Equal(new[] { "Lap 1", "Lap 2" }, viewModel.HistoryLaps.Select(lap => lap.LapText));
+        Assert.Contains("已加载 2 条单圈记录", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies session and lap lists expose paged projections.
     /// </summary>
     [Fact]

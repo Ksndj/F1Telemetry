@@ -36,7 +36,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
         {
             if (parsedPacket.Packet is SessionHistoryPacket historyPacket)
             {
-                ObserveSessionHistory(historyPacket, sessionState.PlayerCarIndex.Value);
+                ObserveSessionHistory(historyPacket, sessionState.PlayerCarIndex.Value, parsedPacket.Datagram.ReceivedAt);
                 return;
             }
 
@@ -169,7 +169,7 @@ public sealed class LapAnalyzer : ILapAnalyzer
         return Volatile.Read(ref _lastLap);
     }
 
-    private void ObserveSessionHistory(SessionHistoryPacket packet, byte playerCarIndex)
+    private void ObserveSessionHistory(SessionHistoryPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
     {
         if (packet.CarIndex != playerCarIndex)
         {
@@ -179,16 +179,22 @@ public sealed class LapAnalyzer : ILapAnalyzer
         _latestPlayerHistory = packet;
 
         var currentLaps = Volatile.Read(ref _allLaps);
-        if (currentLaps.Length == 0)
+        var updatedByLapNumber = new Dictionary<int, LapSummary>();
+        foreach (var summary in currentLaps.Select(summary => TryApplyOfficialTiming(summary, packet)))
         {
-            return;
+            updatedByLapNumber[summary.LapNumber] = summary;
         }
 
-        var updated = currentLaps
-            .Select(summary => TryApplyOfficialTiming(summary, packet))
-            .ToArray();
+        foreach (var officialLap in CreateOfficialLapSummaries(packet, receivedAt))
+        {
+            updatedByLapNumber[officialLap.LapNumber] = updatedByLapNumber.TryGetValue(officialLap.LapNumber, out var existingSummary)
+                ? TryApplyOfficialTiming(existingSummary, packet)
+                : officialLap;
+        }
 
-        PublishLaps(updated);
+        PublishLaps(updatedByLapNumber.Values
+            .OrderBy(summary => summary.LapNumber)
+            .ToArray());
     }
 
     private void CloseCurrentLap(LapSample closingSample)
@@ -342,6 +348,35 @@ public sealed class LapAnalyzer : ILapAnalyzer
             Sector3TimeInMs = sector3Time,
             IsValid = lapHistory.IsLapValid
         };
+    }
+
+    private static IEnumerable<LapSummary> CreateOfficialLapSummaries(SessionHistoryPacket packet, DateTimeOffset receivedAt)
+    {
+        var lapCount = Math.Min(packet.NumLaps, packet.LapHistory.Length);
+        for (var index = 0; index < lapCount; index++)
+        {
+            var lapHistory = packet.LapHistory[index];
+            if (lapHistory.LapTimeInMs == 0)
+            {
+                continue;
+            }
+
+            var sector1Time = ToSectorMilliseconds(lapHistory.Sector1TimeMinutesPart, lapHistory.Sector1TimeMsPart);
+            var sector2Time = ToSectorMilliseconds(lapHistory.Sector2TimeMinutesPart, lapHistory.Sector2TimeMsPart);
+            var sector3Time = ToSectorMilliseconds(lapHistory.Sector3TimeMinutesPart, lapHistory.Sector3TimeMsPart)
+                ?? TryInferSector3Milliseconds(lapHistory.LapTimeInMs, sector1Time, sector2Time);
+
+            yield return new LapSummary
+            {
+                LapNumber = index + 1,
+                LapTimeInMs = lapHistory.LapTimeInMs,
+                Sector1TimeInMs = sector1Time,
+                Sector2TimeInMs = sector2Time,
+                Sector3TimeInMs = sector3Time,
+                IsValid = lapHistory.IsLapValid,
+                ClosedAt = receivedAt
+            };
+        }
     }
 
     private static uint? ToSectorMilliseconds(byte minutesPart, ushort millisecondsPart)

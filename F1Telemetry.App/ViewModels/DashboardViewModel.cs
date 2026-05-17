@@ -162,7 +162,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private ulong? _activeSessionUid;
     private string? _lastPostRaceAiSummaryKey;
     private string? _lastStagedPostRaceAiKey;
-    private string? _lastPersistedLapKey;
+    private readonly HashSet<string> _persistedLapKeys = new(StringComparer.Ordinal);
     private int? _lastTrendRefreshLapNumber;
     private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
     private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
@@ -1812,7 +1812,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
-                _lastPersistedLapKey = null;
+                _persistedLapKeys.Clear();
                 _lastTrendRefreshLapNumber = null;
                 ResetChartPanels();
             }
@@ -1856,7 +1856,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
-            _lastPersistedLapKey = null;
+            _persistedLapKeys.Clear();
             _lastTrendRefreshLapNumber = null;
             ResetChartPanels();
             StatusMessage = "UDP 监听已停止。";
@@ -1913,7 +1913,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
         _lastStagedPostRaceAiKey = null;
-        _lastPersistedLapKey = null;
+        _persistedLapKeys.Clear();
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
         _raceEventInsightBuffer.Reset();
@@ -2082,7 +2082,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         UpdatePlayerCard(sessionState, playerCar);
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
-        PersistLatestLapIfNeeded();
+        PersistUnpersistedLapsIfNeeded();
         TrackLatestEvent(sessionState.LastEventCode);
         RefreshPostRaceAiStatus(sessionState);
         _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, playerCar);
@@ -2190,22 +2190,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         TyreWearTrendChartPanel.UpdateFrom(_trendChartBuilder.BuildTyreWearTrendPanel(Array.Empty<LapSummary>()));
     }
 
-    private void PersistLatestLapIfNeeded()
+    private void PersistUnpersistedLapsIfNeeded()
     {
-        var lastLap = _lapAnalyzer.CaptureLastLap();
-        if (lastLap is null)
+        var laps = _lapAnalyzer.CaptureAllLaps();
+        if (laps.Count == 0)
         {
             return;
         }
 
-        var lapKey = BuildSessionLapKey(lastLap.LapNumber);
-        if (string.Equals(_lastPersistedLapKey, lapKey, StringComparison.Ordinal))
+        foreach (var lap in laps.OrderBy(lap => lap.LapNumber))
         {
-            return;
-        }
+            var lapKey = BuildSessionLapKey(lap.LapNumber);
+            if (!_persistedLapKeys.Add(lapKey))
+            {
+                continue;
+            }
 
-        _lastPersistedLapKey = lapKey;
-        _storagePersistenceService.EnqueueLapSummary(lastLap);
+            _storagePersistenceService.EnqueueLapSummary(lap);
+        }
     }
 
     private void TrackLatestEvent(string? eventCode)
@@ -2854,8 +2856,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             CurrentErsStoreEnergy = playerCar?.ErsStoreEnergy,
             CurrentTyre = playerCar is null ? "-" : BuildTyreText(playerCar),
             CurrentTyreAgeLaps = playerCar?.TyresAgeLaps,
-            GapToFrontInMs = playerCar?.DeltaToCarInFrontInMs,
-            GapToBehindInMs = carBehind?.DeltaToCarInFrontInMs,
+            GapToFrontInMs = NormalizeGapMs(playerCar?.DeltaToCarInFrontInMs),
+            GapToBehindInMs = NormalizeGapMs(carBehind?.DeltaToCarInFrontInMs),
             TelemetryAnalysisSummary = telemetryAnalysisSummary,
             DamageSummary = DamageSummaryFormatter.Format(playerCar?.Damage),
             RecentEvents = _raceEventInsightBuffer.CaptureMessages()
@@ -3030,11 +3032,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             0 => "晴",
             1 => "少云",
-            2 => "多云",
-            3 => "阴",
-            4 => "小雨",
-            5 => "大雨",
-            6 => "风暴",
+            2 => "阴",
+            3 => "小雨",
+            4 => "大雨",
+            5 => "风暴",
             null => "-",
             _ => $"天气 {sessionState.Weather}"
         };
@@ -3189,7 +3190,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string FormatGapMs(ushort? gapMs)
     {
-        return gapMs is null ? "-" : $"{gapMs.Value / 1000d:0.000}s";
+        var normalizedGap = NormalizeGapMs(gapMs);
+        return normalizedGap is null ? "-" : $"{normalizedGap.Value / 1000d:0.000}s";
+    }
+
+    private static ushort? NormalizeGapMs(ushort? gapMs)
+    {
+        return gapMs.HasValue && gapMs.Value > 0 ? gapMs.Value : null;
     }
 
     private sealed class NoOpSessionRepository : ISessionRepository

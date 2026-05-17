@@ -795,6 +795,11 @@ public sealed class EventDetectionService : IEventDetectionService
                     return;
                 }
 
+                if (!IsUsableGapMs(knownGapFrontMs))
+                {
+                    return;
+                }
+
                 if (knownGapFrontMs <= _options.QualifyingCleanAirGapMs)
                 {
                     return;
@@ -816,6 +821,11 @@ public sealed class EventDetectionService : IEventDetectionService
             if (rearCar.CurrentLapNumber == player.CurrentLapNumber)
             {
                 if (rearCar.DeltaToCarInFrontInMs is not { } knownGapBehindMs)
+                {
+                    return;
+                }
+
+                if (!IsUsableGapMs(knownGapBehindMs))
                 {
                     return;
                 }
@@ -910,6 +920,12 @@ public sealed class EventDetectionService : IEventDetectionService
             return;
         }
 
+        if (!IsUsableGapMs(gapFrontMs))
+        {
+            _attackWindowArmed = true;
+            return;
+        }
+
         if (gapFrontMs > _options.GapWindowResetThresholdMs)
         {
             _attackWindowArmed = true;
@@ -989,6 +1005,12 @@ public sealed class EventDetectionService : IEventDetectionService
                 timestamp: currentState.UpdatedAt,
                 lapNumber: (int?)player.CurrentLapNumber,
                 message: "后车差距数据不可用，已跳过防守窗口播报。");
+            return;
+        }
+
+        if (!IsUsableGapMs(gapBehindMs))
+        {
+            _defenseWindowArmed = true;
             return;
         }
 
@@ -1524,6 +1546,11 @@ public sealed class EventDetectionService : IEventDetectionService
             return false;
         }
 
+        if (!IsUsableGapMs(currentGapFrontMs))
+        {
+            return false;
+        }
+
         gapFrontMs = currentGapFrontMs;
         return true;
     }
@@ -1536,8 +1563,18 @@ public sealed class EventDetectionService : IEventDetectionService
             return false;
         }
 
+        if (!IsUsableGapMs(currentGapBehindMs))
+        {
+            return false;
+        }
+
         gapBehindMs = currentGapBehindMs;
         return true;
+    }
+
+    private static bool IsUsableGapMs(ushort gapMs)
+    {
+        return gapMs > 0;
     }
 
     private static bool IsSameLap(CarSnapshot player, CarSnapshot otherCar)
