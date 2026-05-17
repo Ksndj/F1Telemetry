@@ -92,6 +92,75 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Contains("暂未支持", viewModel.EmptyStateText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies repository failures are converted into a stable error state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WhenSampleRepositoryThrows_ShowsFailureState()
+    {
+        var historyBrowser = CreateHistoryBrowserWithSupportedLap("session-error");
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, new ThrowingLapSampleRepository());
+
+        await viewModel.RefreshAsync();
+
+        Assert.Empty(viewModel.CornerRows);
+        Assert.Contains("加载失败", viewModel.EmptyStateText, StringComparison.Ordinal);
+        Assert.Contains("sample read failed", viewModel.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies corrupt stored samples do not surface as unhandled refresh exceptions.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WhenStoredSampleCannotBeProjected_ShowsFailureState()
+    {
+        var historyBrowser = CreateHistoryBrowserWithSupportedLap("session-corrupt");
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                CreateSample("session-corrupt", 7, 0, 270, 10_000, 210, 0.8, 0.0)
+                    with
+                    {
+                        FrameIdentifier = -1
+                    }
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Empty(viewModel.CornerRows);
+        Assert.Contains("加载失败", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.NotEmpty(viewModel.ErrorMessage);
+    }
+
+    private static HistorySessionBrowserViewModel CreateHistoryBrowserWithSupportedLap(string sessionId)
+    {
+        return new HistorySessionBrowserViewModel(
+            new RecordingSessionRepository
+            {
+                Sessions =
+                [
+                    new StoredSession
+                    {
+                        Id = sessionId,
+                        SessionUid = $"uid-{sessionId}",
+                        TrackId = 0,
+                        SessionType = 15,
+                        StartedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z")
+                    }
+                ]
+            },
+            new RecordingLapRepository
+            {
+                Laps =
+                [
+                    new StoredLap { SessionId = sessionId, LapNumber = 7, IsValid = true, StartTyre = "Medium", EndTyre = "Medium", CreatedAt = DateTimeOffset.Parse("2026-05-17T10:07:00Z") }
+                ]
+            });
+    }
+
     private static StoredLapSample CreateSample(
         string sessionId,
         int lapNumber,
@@ -166,6 +235,18 @@ public sealed class CornerAnalysisViewModelTests
                     .Where(sample => sample.SessionId == sessionId && sample.LapNumber == lapNumber)
                     .OrderBy(sample => sample.SampleIndex)
                     .ToArray());
+        }
+    }
+
+    private sealed class ThrowingLapSampleRepository : ILapSampleRepository
+    {
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(string sessionId, int lapNumber, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("sample read failed");
         }
     }
 }

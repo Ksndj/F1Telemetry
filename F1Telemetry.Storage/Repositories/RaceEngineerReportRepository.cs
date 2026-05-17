@@ -1,3 +1,4 @@
+using F1Telemetry.Core.Security;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Internal;
 using F1Telemetry.Storage.Models;
@@ -154,11 +155,13 @@ public sealed class RaceEngineerReportRepository : IRaceEngineerReportRepository
         command.Parameters.AddWithValue("@session_id", report.SessionId);
         command.Parameters.AddWithValue("@lap_number", (object?)report.LapNumber ?? DBNull.Value);
         command.Parameters.AddWithValue("@report_type", report.ReportType);
-        command.Parameters.AddWithValue("@summary", report.Summary);
-        command.Parameters.AddWithValue("@spoken_text", report.SpokenText);
-        command.Parameters.AddWithValue("@detail_json", (object?)report.DetailJson ?? DBNull.Value);
+        command.Parameters.AddWithValue("@summary", SensitiveContentSanitizer.Sanitize(report.Summary));
+        command.Parameters.AddWithValue("@spoken_text", SensitiveContentSanitizer.Sanitize(report.SpokenText));
+        command.Parameters.AddWithValue(
+            "@detail_json",
+            (object?)SensitiveContentSanitizer.SanitizeNullable(report.DetailJson) ?? DBNull.Value);
         command.Parameters.AddWithValue("@is_success", report.IsSuccess ? 1 : 0);
-        command.Parameters.AddWithValue("@error_message", report.ErrorMessage);
+        command.Parameters.AddWithValue("@error_message", SensitiveContentSanitizer.Sanitize(report.ErrorMessage));
         command.Parameters.AddWithValue("@created_at", SqliteStorageConverters.ToStorageTimestamp(report.CreatedAt));
     }
 }

@@ -30,6 +30,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     private readonly int _maxCriticalCommands;
     private readonly CancellationTokenSource _workerCts = new();
     private readonly Task _workerTask;
+    private long _nextCommandSequence;
     private bool _disposed;
 
     /// <summary>
@@ -229,6 +230,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                 }
                 else
                 {
+                    command = command with { Sequence = _nextCommandSequence++ };
                     _criticalCommands.Enqueue(command);
                     accepted = true;
                 }
@@ -239,6 +241,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             }
             else
             {
+                command = command with { Sequence = _nextCommandSequence++ };
                 _bufferedCommands.Enqueue(command);
                 accepted = true;
             }
@@ -389,6 +392,13 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
 
     private StorageCommand? DequeueNextCommandUnsafe()
     {
+        if (_criticalCommands.Count > 0 && _bufferedCommands.Count > 0)
+        {
+            return _criticalCommands.Peek().Sequence <= _bufferedCommands.Peek().Sequence
+                ? _criticalCommands.Dequeue()
+                : _bufferedCommands.Dequeue();
+        }
+
         if (_criticalCommands.Count > 0)
         {
             return _criticalCommands.Dequeue();
@@ -487,7 +497,10 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             .ToArray();
     }
 
-    private abstract record StorageCommand(bool IsCritical);
+    private abstract record StorageCommand(bool IsCritical)
+    {
+        public long Sequence { get; init; } = -1;
+    }
 
     private sealed record ObserveSessionPacketCommand(
         string SessionUid,

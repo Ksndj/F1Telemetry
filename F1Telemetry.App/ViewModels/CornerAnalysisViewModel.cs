@@ -22,6 +22,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private bool _isLoading;
     private string _statusText = "请选择历史会话后刷新弯角分析。";
     private string _emptyStateText = "等待历史会话和圈采样数据。";
+    private string _errorMessage = string.Empty;
 
     /// <summary>
     /// Initializes a new corner analysis ViewModel.
@@ -93,6 +94,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Gets the latest corner-analysis loading error, when available.
+    /// </summary>
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetProperty(ref _errorMessage, value);
+    }
+
+    /// <summary>
     /// Refreshes the selected session corner analysis.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -105,6 +115,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
         IsLoading = true;
         CornerRows.Clear();
+        ErrorMessage = string.Empty;
         try
         {
             if (HistoryBrowser.SelectedSession is null)
@@ -152,6 +163,19 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
             EmptyStateText = CornerRows.Count == 0 ? "没有可显示的弯角摘要。" : string.Empty;
             StatusText = $"已生成 Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            EmptyStateText = "弯角数据加载已取消。";
+            StatusText = EmptyStateText;
+            ErrorMessage = EmptyStateText;
+        }
+        catch (Exception ex)
+        {
+            CornerRows.Clear();
+            EmptyStateText = "弯角数据加载失败。";
+            StatusText = EmptyStateText;
+            ErrorMessage = $"弯角数据加载失败：{ex.Message}";
         }
         finally
         {

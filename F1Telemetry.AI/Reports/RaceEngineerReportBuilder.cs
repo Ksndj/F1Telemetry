@@ -1,5 +1,8 @@
 using System.Globalization;
 using System.Text;
+using F1Telemetry.Analytics.Corners;
+using F1Telemetry.Analytics.Tracks;
+using F1Telemetry.Core.Security;
 
 namespace F1Telemetry.AI.Reports;
 
@@ -8,17 +11,6 @@ namespace F1Telemetry.AI.Reports;
 /// </summary>
 public sealed class RaceEngineerReportBuilder
 {
-    private static readonly string[] ForbiddenFragments =
-    [
-        "api key",
-        "apikey",
-        "authorization:",
-        "bearer ",
-        "\"m_header\"",
-        "\"packetId\"",
-        ".jsonl"
-    ];
-
     /// <summary>
     /// Builds a deterministic race engineer report from compressed evidence.
     /// </summary>
@@ -29,10 +21,10 @@ public sealed class RaceEngineerReportBuilder
 
         var supportedFindings = BuildSupportedFindings(input);
         var inferredSuggestions = BuildInferredSuggestions(input);
-        var warnings = SanitizeLines(NormalizeLines(input.DataQualityWarnings));
+        var warnings = BuildDataQualityWarnings(input);
         var summary = string.IsNullOrWhiteSpace(input.SessionSummary)
             ? "V3 race engineer report generated from compressed telemetry summaries."
-            : SanitizeForbiddenFragments(input.SessionSummary.Trim());
+            : SensitiveContentSanitizer.Sanitize(input.SessionSummary);
         supportedFindings = SanitizeLines(supportedFindings);
         inferredSuggestions = SanitizeLines(inferredSuggestions);
         var markdown = BuildMarkdown(summary, supportedFindings, inferredSuggestions, warnings);
@@ -64,11 +56,12 @@ public sealed class RaceEngineerReportBuilder
             stint.AdjustedAverageLapTimeMs is null ? "n/a" : $"{stint.AdjustedAverageLapTimeMs.Value:0} ms")));
         findings.AddRange(input.CornerSummaries.Select(corner => string.Format(
             CultureInfo.InvariantCulture,
-            "Corner {0}: min speed {1}, time loss {2}, confidence {3}.",
+            "Corner {0}: min speed {1}, time loss {2}, confidence {3}, warnings {4}.",
             corner.Segment.Name,
             corner.MinSpeedKph is null ? "n/a" : $"{corner.MinSpeedKph.Value:0.0} kph",
             corner.TimeLossToReferenceInMs is null ? "n/a" : $"{corner.TimeLossToReferenceInMs.Value} ms",
-            corner.Confidence)));
+            corner.Confidence,
+            FormatCornerWarnings(corner))));
 
         return findings.Count == 0
             ? new[] { "No compact race evidence was supplied." }
@@ -97,6 +90,43 @@ public sealed class RaceEngineerReportBuilder
         return NormalizeLines(suggestions);
     }
 
+    private static IReadOnlyList<string> BuildDataQualityWarnings(RaceEngineerReportInput input)
+    {
+        var warnings = new List<string>();
+        warnings.AddRange(NormalizeLines(input.DataQualityWarnings));
+        warnings.AddRange(input.StrategyAdvices.SelectMany(advice => NormalizeLines(advice.DataQualityWarnings)));
+
+        foreach (var corner in input.CornerSummaries)
+        {
+            warnings.AddRange(corner.Warnings.Select(FormatDataQualityWarning));
+            if (corner.Confidence is ConfidenceLevel.Low or ConfidenceLevel.Unknown)
+            {
+                warnings.Add($"Corner {corner.Segment.Name}: confidence {corner.Confidence}; treat the conclusion as a data-quality-limited observation.");
+            }
+        }
+
+        return SanitizeLines(warnings);
+    }
+
+    private static string FormatCornerWarnings(CornerSummary corner)
+    {
+        return corner.Warnings.Count == 0
+            ? "none"
+            : string.Join("; ", corner.Warnings.Select(FormatDataQualityWarning));
+    }
+
+    private static string FormatDataQualityWarning(DataQualityWarning warning)
+    {
+        return warning switch
+        {
+            DataQualityWarning.EstimatedTrackMap => "EstimatedTrackMap: 赛道分段为估算，结论仅供参考。",
+            DataQualityWarning.UnsupportedTrack => "UnsupportedTrack: unsupported track map; do not draw deterministic conclusions.",
+            DataQualityWarning.LowSampleDensity => "LowSampleDensity: sample density is low; treat the conclusion as observational.",
+            DataQualityWarning.MissingReferenceLap => "MissingReferenceLap: no reference lap was supplied; time-loss conclusions are unavailable.",
+            _ => $"{warning}: data quality limitation."
+        };
+    }
+
     private static string BuildMarkdown(
         string summary,
         IReadOnlyList<string> supportedFindings,
@@ -116,15 +146,7 @@ public sealed class RaceEngineerReportBuilder
     private static string BuildSafePrompt(string markdown)
     {
         var prompt = "Generate a concise Chinese race engineer report from the following compressed evidence only. Do not invent precision beyond the listed confidence and warnings.\n\n" + markdown;
-        foreach (var forbiddenFragment in ForbiddenFragments)
-        {
-            if (prompt.Contains(forbiddenFragment, StringComparison.OrdinalIgnoreCase))
-            {
-                prompt = prompt.Replace(forbiddenFragment, "[redacted]", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        return prompt;
+        return SensitiveContentSanitizer.Sanitize(prompt);
     }
 
     private static void AppendSection(StringBuilder builder, string title, IReadOnlyList<string> lines)
@@ -150,22 +172,8 @@ public sealed class RaceEngineerReportBuilder
     private static IReadOnlyList<string> SanitizeLines(IEnumerable<string> lines)
     {
         return lines
-            .Select(SanitizeForbiddenFragments)
+            .Select(SensitiveContentSanitizer.Sanitize)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-    }
-
-    private static string SanitizeForbiddenFragments(string text)
-    {
-        var sanitized = text;
-        foreach (var forbiddenFragment in ForbiddenFragments)
-        {
-            if (sanitized.Contains(forbiddenFragment, StringComparison.OrdinalIgnoreCase))
-            {
-                sanitized = sanitized.Replace(forbiddenFragment, "[redacted]", StringComparison.OrdinalIgnoreCase);
-            }
-        }
-
-        return sanitized;
     }
 }

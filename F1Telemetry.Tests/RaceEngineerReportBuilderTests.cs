@@ -80,17 +80,107 @@ public sealed class RaceEngineerReportBuilderTests
 
         var report = builder.Build(new RaceEngineerReportInput
         {
-            SessionSummary = "API Key should not appear. Authorization: Bearer secret. raw.jsonl packetId m_header"
+            SessionSummary = "API Key should not appear. Authorization: Bearer secret. raw.jsonl packetId m_header",
+            LapSummaries = ["api_key=lap-secret token=lap-token"],
+            KeyEvents = ["HTTP Authorization: Bearer event-token"]
         });
 
         Assert.DoesNotContain("API Key", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Authorization:", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Bearer ", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Bearer secret", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lap-secret", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("event-token", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("packetId", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("m_header", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(".jsonl", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("API Key", report.Markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Authorization:", report.Markdown, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Bearer ", report.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Bearer secret", report.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lap-secret", report.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("event-token", report.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("packetId", report.Markdown, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("m_header", report.Markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(".jsonl", report.Markdown, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("[redacted]", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[REDACTED]", report.SafePrompt, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies estimated track-map warnings are included even when no global warning was supplied.
+    /// </summary>
+    [Fact]
+    public void Build_WithEstimatedCornerWarning_IncludesReferenceOnlyLimitation()
+    {
+        var builder = new RaceEngineerReportBuilder();
+
+        var report = builder.Build(new RaceEngineerReportInput
+        {
+            CornerSummaries =
+            [
+                new CornerSummary
+                {
+                    Segment = new TrackSegment { Name = "Turn 1", SegmentType = TrackSegmentType.Corner, CornerNumber = 1 },
+                    MinSpeedKph = 118,
+                    TimeLossToReferenceInMs = 200,
+                    Confidence = ConfidenceLevel.Low,
+                    Warnings = [DataQualityWarning.EstimatedTrackMap]
+                }
+            ]
+        });
+
+        Assert.Contains(report.DataQualityWarnings, warning => warning.Contains("EstimatedTrackMap", StringComparison.Ordinal));
+        Assert.Contains("赛道分段为估算，结论仅供参考", report.Markdown, StringComparison.Ordinal);
+        Assert.Contains("赛道分段为估算，结论仅供参考", report.SafePrompt, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies corner-level warnings are preserved in findings and quality warnings.
+    /// </summary>
+    [Fact]
+    public void Build_WithCornerWarnings_DoesNotDropDataQualityWarnings()
+    {
+        var builder = new RaceEngineerReportBuilder();
+
+        var report = builder.Build(new RaceEngineerReportInput
+        {
+            CornerSummaries =
+            [
+                new CornerSummary
+                {
+                    Segment = new TrackSegment { Name = "Turn 3", SegmentType = TrackSegmentType.Corner, CornerNumber = 3 },
+                    Confidence = ConfidenceLevel.Low,
+                    Warnings = [DataQualityWarning.LowSampleDensity, DataQualityWarning.MissingReferenceLap]
+                }
+            ]
+        });
+
+        Assert.Contains(report.DataSupportedFindings, finding => finding.Contains("LowSampleDensity", StringComparison.Ordinal));
+        Assert.Contains(report.DataQualityWarnings, warning => warning.Contains("MissingReferenceLap", StringComparison.Ordinal));
+        Assert.Contains("sample density is low", report.Markdown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies unsupported or unknown-confidence corners are clearly marked as data-quality limited.
+    /// </summary>
+    [Fact]
+    public void Build_WithUnsupportedLowConfidenceCorner_MarksDataQualityLimitation()
+    {
+        var builder = new RaceEngineerReportBuilder();
+
+        var report = builder.Build(new RaceEngineerReportInput
+        {
+            CornerSummaries =
+            [
+                new CornerSummary
+                {
+                    Segment = new TrackSegment { Name = "Unknown", SegmentType = TrackSegmentType.Corner },
+                    Confidence = ConfidenceLevel.Unknown,
+                    Warnings = [DataQualityWarning.UnsupportedTrack]
+                }
+            ]
+        });
+
+        Assert.Contains(report.DataQualityWarnings, warning => warning.Contains("UnsupportedTrack", StringComparison.Ordinal));
+        Assert.Contains(report.DataQualityWarnings, warning => warning.Contains("confidence Unknown", StringComparison.Ordinal));
+        Assert.Contains("do not draw deterministic conclusions", report.SafePrompt, StringComparison.OrdinalIgnoreCase);
     }
 }
