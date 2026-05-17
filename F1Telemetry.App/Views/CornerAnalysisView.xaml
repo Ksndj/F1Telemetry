@@ -45,6 +45,29 @@
                         <TextBlock Margin="0,8,0,0"
                                    Style="{StaticResource MutedTextStyle}"
                                    Text="{Binding CornerAnalysis.StatusText}" />
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="160" />
+                                <ColumnDefinition Width="18" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox MinWidth="260"
+                                      Height="34"
+                                      DisplayMemberPath="SummaryText"
+                                      ItemsSource="{Binding CornerAnalysis.HistoryBrowser.HistorySessions}"
+                                      SelectedItem="{Binding CornerAnalysis.HistoryBrowser.SelectedSession, Mode=TwoWay}" />
+                            <ComboBox Grid.Column="2"
+                                      Height="34"
+                                      DisplayMemberPath="LapText"
+                                      ItemsSource="{Binding CornerAnalysis.HistoryBrowser.HistoryLaps}"
+                                      SelectedItem="{Binding CornerAnalysis.SelectedLap, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="4"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource MutedTextStyle}"
+                                       Text="{Binding CornerAnalysis.SelectionText}" />
+                        </Grid>
                     </StackPanel>
                     <Button Grid.Column="1"
                             Width="112"

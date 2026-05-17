@@ -13,6 +13,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -189,6 +190,62 @@
             </Border>
 
             <Border Grid.Row="1"
+                    Grid.ColumnSpan="2"
+                    Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="260" />
+                        <ColumnDefinition Width="160" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="赛前轮胎库存" />
+                    <TextBlock Grid.Column="2"
+                               HorizontalAlignment="Right"
+                               Foreground="#7FA5D8"
+                               Text="{Binding RaceWeekendTyrePlanStatusText}"
+                               TextWrapping="Wrap" />
+
+                    <TextBox Grid.Row="1"
+                             Margin="0,14,18,0"
+                             MinHeight="72"
+                             Padding="10,8"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             VerticalScrollBarVisibility="Auto"
+                             Text="{Binding RaceWeekendTyrePlanText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <StackPanel Grid.Row="1"
+                                Grid.Column="1"
+                                Margin="0,14,18,0">
+                        <TextBlock Foreground="#7FA5D8"
+                                   Text="推荐磨损上限" />
+                        <Slider Margin="0,12,0,0"
+                                Minimum="0"
+                                Maximum="100"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding RaceWeekendTyreMaxWearPercent}" />
+                    </StackPanel>
+                    <TextBlock Grid.Row="1"
+                               Grid.Column="2"
+                               Margin="0,44,0,0"
+                               Foreground="#D7E4F3"
+                               Text="{Binding RaceWeekendTyreMaxWearPercent, StringFormat={}{0}%}" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2"
                     Grid.ColumnSpan="2"
                     Margin="0,16,0,0"
                     Padding="20"

@@ -312,10 +312,10 @@ public sealed class PostRaceReviewViewModelTests
     }
 
     /// <summary>
-    /// Verifies historical tyre wear is explicitly unavailable instead of fabricated.
+    /// Verifies missing tyre wear samples are explicitly unavailable instead of fabricated.
     /// </summary>
     [Fact]
-    public async Task RefreshAsync_WithoutStoredWheelWear_ShowsUnavailableTyreWearState()
+    public async Task RefreshAsync_WithoutStoredWheelWearSamples_ShowsEmptyTyreWearState()
     {
         var sessionRepository = new FakeSessionRepository
         {
@@ -333,7 +333,44 @@ public sealed class PostRaceReviewViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.False(viewModel.TyreWearTrendPanel.HasData);
-        Assert.Contains("未保存四轮胎磨数据", viewModel.TyreWearStatusText, StringComparison.Ordinal);
+        Assert.Contains("暂无完整四轮胎磨样本", viewModel.TyreWearStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies stored lap samples drive the post-race tyre wear trend panel.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithStoredWheelWearSamples_ShowsTyreWearTrend()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-a")]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-a"] = [CreateLap("session-a", 1), CreateLap("session-a", 2)]
+            }
+        };
+        var lapSampleRepository = new FakeLapSampleRepository
+        {
+            TyreWearTrendBySession =
+            {
+                ["session-a"] =
+                [
+                    CreateTyreWearTrendPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
+                    CreateTyreWearTrendPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f)
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(sessionRepository, lapRepository, lapSampleRepository: lapSampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.True(viewModel.TyreWearTrendPanel.HasData);
+        Assert.Equal(new[] { "后左", "后右", "前左", "前右" }, viewModel.TyreWearTrendPanel.Series.Select(series => series.Name));
+        Assert.Contains("已生成 2 圈四轮胎磨趋势", viewModel.TyreWearStatusText, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -357,7 +394,7 @@ public sealed class PostRaceReviewViewModelTests
             {
                 ReportsBySession = { ["session-a"] = [CreateReport("session-a", 1, 1)] }
             },
-            exportService);
+            reportExportService: exportService);
 
         await viewModel.RefreshAsync();
         await viewModel.ExportReportAsync(PostRaceReviewReportFormat.Markdown);
@@ -478,6 +515,7 @@ public sealed class PostRaceReviewViewModelTests
         FakeLapRepository? lapRepository = null,
         FakeEventRepository? eventRepository = null,
         FakeAiReportRepository? aiReportRepository = null,
+        FakeLapSampleRepository? lapSampleRepository = null,
         FakeReportExportService? reportExportService = null)
     {
         sessionRepository ??= new FakeSessionRepository();
@@ -488,7 +526,8 @@ public sealed class PostRaceReviewViewModelTests
             lapRepository,
             eventRepository ?? new FakeEventRepository(),
             aiReportRepository ?? new FakeAiReportRepository(),
-            reportExportService ?? new FakeReportExportService());
+            reportExportService ?? new FakeReportExportService(),
+            lapSampleRepository ?? new FakeLapSampleRepository());
     }
 
     private static FakeSessionRepository CreateSessionRepositoryWithSession()
@@ -564,6 +603,25 @@ public sealed class PostRaceReviewViewModelTests
             IsSuccess = true,
             ErrorMessage = "-",
             CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(id)
+        };
+    }
+
+    private static StoredLapTyreWearTrendPoint CreateTyreWearTrendPoint(
+        int lapNumber,
+        float rearLeft,
+        float rearRight,
+        float frontLeft,
+        float frontRight)
+    {
+        return new StoredLapTyreWearTrendPoint
+        {
+            LapNumber = lapNumber,
+            SampleIndex = lapNumber * 10,
+            SampledAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            RearLeft = rearLeft,
+            RearRight = rearRight,
+            FrontLeft = frontLeft,
+            FrontRight = frontRight
         };
     }
 
@@ -659,6 +717,40 @@ public sealed class PostRaceReviewViewModelTests
                 ReportsBySession.TryGetValue(sessionId, out var reports)
                     ? reports.Take(count).ToArray()
                     : (IReadOnlyList<StoredAiReport>)Array.Empty<StoredAiReport>());
+        }
+    }
+
+    private sealed class FakeLapSampleRepository : ILapSampleRepository
+    {
+        public Dictionary<string, IReadOnlyList<StoredLapTyreWearTrendPoint>> TyreWearTrendBySession { get; } = new(StringComparer.Ordinal);
+
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(
+                TyreWearTrendBySession.TryGetValue(sessionId, out var trend)
+                    ? trend.Take(count).ToArray()
+                    : (IReadOnlyList<StoredLapTyreWearTrendPoint>)Array.Empty<StoredLapTyreWearTrendPoint>());
         }
     }
 

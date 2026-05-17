@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows.Input;
 using F1Telemetry.Analytics.Corners;
 using F1Telemetry.Analytics.Laps;
@@ -19,6 +21,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
     private readonly CornerMetricsExtractor _cornerMetricsExtractor;
     private readonly RelayCommand _refreshCommand;
+    private LapSummaryItemViewModel? _selectedLap;
+    private int? _selectedLapNumber;
     private bool _isLoading;
     private string _statusText = "请选择历史会话后刷新弯角分析。";
     private string _emptyStateText = "等待历史会话和圈采样数据。";
@@ -43,6 +47,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         _cornerMetricsExtractor = cornerMetricsExtractor ?? new CornerMetricsExtractor();
         _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoading);
         CornerRows = new ObservableCollection<CornerSummaryRowViewModel>();
+        HistoryBrowser.HistoryLaps.CollectionChanged += OnHistoryLapsChanged;
+        HistoryBrowser.PropertyChanged += OnHistoryBrowserPropertyChanged;
     }
 
     /// <summary>
@@ -59,6 +65,35 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     /// Gets corner analysis rows.
     /// </summary>
     public ObservableCollection<CornerSummaryRowViewModel> CornerRows { get; }
+
+    /// <summary>
+    /// Gets or sets the selected historical lap for corner analysis.
+    /// </summary>
+    public LapSummaryItemViewModel? SelectedLap
+    {
+        get => _selectedLap;
+        set
+        {
+            if (SetProperty(ref _selectedLap, value))
+            {
+                _selectedLapNumber = value?.LapNumber;
+                OnPropertyChanged(nameof(SelectionText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the currently selected session and lap summary.
+    /// </summary>
+    public string SelectionText
+    {
+        get
+        {
+            var sessionText = HistoryBrowser.SelectedSession?.SummaryText ?? "未选择会话";
+            var lapText = SelectedLap?.LapText ?? "未选择圈";
+            return $"{sessionText} · {lapText}";
+        }
+    }
 
     /// <summary>
     /// Gets a value indicating whether data is loading.
@@ -131,7 +166,10 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 return;
             }
 
-            var lapNumber = SelectLapNumber();
+            await HistoryBrowser.LoadSelectedSessionLapsAsync(cancellationToken);
+            SelectDefaultLapIfNeeded();
+
+            var lapNumber = SelectedLap?.LapNumber;
             if (lapNumber is null)
             {
                 EmptyStateText = "该会话没有可用于弯角分析的历史圈记录。";
@@ -162,7 +200,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             }
 
             EmptyStateText = CornerRows.Count == 0 ? "没有可显示的弯角摘要。" : string.Empty;
-            StatusText = $"已生成 Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
+            StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -183,12 +221,49 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         }
     }
 
-    private int? SelectLapNumber()
+    private void OnHistoryLapsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        return HistoryBrowser.HistoryLaps
+        if (HistoryBrowser.HistoryLaps.Count == 0)
+        {
+            if (_selectedLap is not null)
+            {
+                _selectedLap = null;
+                OnPropertyChanged(nameof(SelectedLap));
+            }
+        }
+
+        OnPropertyChanged(nameof(SelectionText));
+    }
+
+    private void OnHistoryBrowserPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(HistorySessionBrowserViewModel.SelectedSession))
+        {
+            SelectedLap = null;
+            OnPropertyChanged(nameof(SelectionText));
+        }
+
+        if (e.PropertyName == nameof(HistorySessionBrowserViewModel.IsLoadingLaps)
+            && !HistoryBrowser.IsLoadingLaps)
+        {
+            SelectDefaultLapIfNeeded();
+        }
+    }
+
+    private void SelectDefaultLapIfNeeded()
+    {
+        if (SelectedLap is not null && HistoryBrowser.HistoryLaps.Contains(SelectedLap))
+        {
+            return;
+        }
+
+        SelectedLap = _selectedLapNumber is null
+            ? null
+            : HistoryBrowser.HistoryLaps.FirstOrDefault(lap => lap.LapNumber == _selectedLapNumber.Value);
+
+        SelectedLap ??= HistoryBrowser.HistoryLaps
             .Where(lap => lap.LapNumber > 0)
             .OrderByDescending(lap => lap.LapNumber)
-            .Select(lap => (int?)lap.LapNumber)
             .FirstOrDefault();
     }
 

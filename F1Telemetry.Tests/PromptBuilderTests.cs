@@ -52,12 +52,20 @@ public sealed class PromptBuilderTests
         Assert.Contains("Recent laps:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Current fuel remaining laps:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Current tyre:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Weather forecast:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Pit window:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Position strategy:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Opponent strategy:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Tyre inventory constraints:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("Historical sessions:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Driving trend summary:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Recent events:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Lap 14", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("fuel used 1.24 L", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("当前圈最高速度 312 km/h", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("Rear car pitted.", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("未来 10 分钟小雨", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("游戏库存可推荐", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("V16", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("A16", prompt.UserMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("L16", prompt.UserMessage, StringComparison.Ordinal);
@@ -146,6 +154,25 @@ public sealed class PromptBuilderTests
     }
 
     /// <summary>
+    /// Verifies tyre recommendations are constrained by manual inventory and game tyre set availability.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_RaceTyreGuidanceForbidsUnavailableInventory()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext(sessionMode: SessionMode.Race));
+        var combinedPrompt = prompt.SystemMessage + Environment.NewLine + prompt.UserMessage;
+
+        Assert.Contains("tyre inventory constraints", combinedPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("禁止推荐不存在", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("不可用", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("超出磨损上限", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("保胎", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("push", combinedPrompt, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("省油", combinedPrompt, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that compact damage summaries enter the AI prompt without exposing raw UDP details.
     /// </summary>
     [Fact]
@@ -189,6 +216,24 @@ public sealed class PromptBuilderTests
             CurrentTyreAgeLaps = 7,
             GapToFrontInMs = 1_250,
             GapToBehindInMs = 980,
+            WeatherForecastSummary = sessionMode == SessionMode.Race
+                ? "当前 阴，未来 10 分钟小雨，雨量 45%。"
+                : string.Empty,
+            PitWindowSummary = sessionMode == SessionMode.Race
+                ? "进站窗口 Lap 18-22，预计出站 P8。"
+                : string.Empty,
+            PositionStrategySummary = sessionMode == SessionMode.Race
+                ? "当前 P6/20，前车上圈 1:31.200，后车上圈 1:31.600。"
+                : string.Empty,
+            OpponentStrategySummary = sessionMode == SessionMode.Race
+                ? "前车黄胎胎龄 12，刚进站 0 次；后车红胎胎龄 4，可能 undercut。"
+                : string.Empty,
+            TyreInventorySummary = sessionMode == SessionMode.Race
+                ? "赛前手动库存：Soft=1; Medium=2; Hard=1；推荐磨损上限 60%；游戏库存可推荐：#2 黄胎 磨损12% 可用是；硬约束：不得推荐不可用、超磨损上限、赛前未输入或游戏库存不存在的轮胎。"
+                : string.Empty,
+            HistoricalSessionSummary = sessionMode == SessionMode.Race
+                ? "已选择历史对比：赞德福特 正赛；最近 5 圈最佳 1:30.800，均值 1:31.200。"
+                : string.Empty,
             TelemetryAnalysisSummary = "当前圈最高速度 312 km/h；最大油门 100%；最大刹车 72%；近 2 圈燃油 1.18-1.24 L。",
             DamageSummary = damageSummary,
             RecentEvents = includeRecentCollections

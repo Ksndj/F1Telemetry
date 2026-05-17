@@ -34,6 +34,8 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(100, settings.Tts.Volume);
         Assert.Equal(0, settings.Tts.Rate);
         Assert.Equal(8, settings.Tts.CooldownSeconds);
+        Assert.Equal(RaceWeekendTyrePlan.DefaultInventoryText, settings.RaceWeekendTyrePlan.InventoryText);
+        Assert.Equal(RaceWeekendTyrePlan.DefaultMaxRecommendedWearPercent, settings.RaceWeekendTyrePlan.MaxRecommendedWearPercent);
         Assert.False(settings.UdpRawLog.Enabled);
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
@@ -265,6 +267,62 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(72, persisted.Tts.Volume);
         Assert.Equal(-1, persisted.Tts.Rate);
         Assert.Equal(12, persisted.Tts.CooldownSeconds);
+    }
+
+    /// <summary>
+    /// Verifies saving the race-weekend tyre plan preserves all other settings blocks.
+    /// </summary>
+    [Fact]
+    public async Task SaveRaceWeekendTyrePlanAsync_PreservesExistingBlocksAndWritesPlan()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "tts": {
+                "enabled": true,
+                "voiceName": "Voice A",
+                "volume": 80,
+                "rate": 1,
+                "cooldownSeconds": 9
+              },
+              "udp": {
+                "listenPort": 20778
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveRaceWeekendTyrePlanAsync(
+            new RaceWeekendTyrePlan
+            {
+                InventoryText = "Soft=1; Medium=2; Hard=1; Intermediate=1; Wet=1",
+                MaxRecommendedWearPercent = 58
+            });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.Tts.TtsEnabled);
+        Assert.Equal(20778, persisted.Udp.ListenPort);
+        Assert.Equal("Soft=1; Medium=2; Hard=1; Intermediate=1; Wet=1", persisted.RaceWeekendTyrePlan.InventoryText);
+        Assert.Equal(58, persisted.RaceWeekendTyrePlan.MaxRecommendedWearPercent);
+        Assert.Equal(
+            "Soft=1; Medium=2; Hard=1; Intermediate=1; Wet=1",
+            json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("inventoryText").GetString());
+        Assert.Equal(58, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("maxRecommendedWearPercent").GetInt32());
     }
 
     /// <summary>

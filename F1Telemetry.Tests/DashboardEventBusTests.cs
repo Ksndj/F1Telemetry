@@ -319,6 +319,11 @@ public sealed class DashboardEventBusTests
             return Task.CompletedTask;
         }
 
+        public Task SaveRaceWeekendTyrePlanAsync(RaceWeekendTyrePlan plan, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;

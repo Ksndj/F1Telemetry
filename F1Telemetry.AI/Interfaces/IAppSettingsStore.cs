@@ -25,6 +25,11 @@ public interface IAppSettingsStore
     Task SaveTtsSettingsAsync(TtsOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves the race-weekend tyre plan block while preserving other settings.
+    /// </summary>
+    Task SaveRaceWeekendTyrePlanAsync(RaceWeekendTyrePlan plan, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Saves the raw UDP log settings block while preserving other blocks.
     /// </summary>
     Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default);

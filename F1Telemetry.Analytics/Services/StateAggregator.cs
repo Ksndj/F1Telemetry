@@ -94,7 +94,7 @@ public sealed class StateAggregator : IStateAggregator
                 ApplyEvent(packet, receivedAt);
                 break;
             case TyreSetsPacket packet:
-                ApplyTyreSets(packet, receivedAt);
+                ApplyTyreSets(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
                 break;
             case SessionHistoryPacket packet:
                 ApplySessionHistory(packet, receivedAt);
@@ -130,6 +130,10 @@ public sealed class StateAggregator : IStateAggregator
             sessionTimeLeft: packet.SessionTimeLeft,
             sessionDuration: packet.SessionDuration,
             pitSpeedLimit: packet.PitSpeedLimit,
+            pitStopWindowIdealLap: packet.PitStopWindowIdealLap,
+            pitStopWindowLatestLap: packet.PitStopWindowLatestLap,
+            pitStopRejoinPosition: packet.PitStopRejoinPosition,
+            weatherForecastSamples: BuildWeatherForecastSamples(packet),
             safetyCarStatus: packet.SafetyCarStatus,
             seasonLinkIdentifier: packet.SeasonLinkIdentifier,
             weekendLinkIdentifier: packet.WeekendLinkIdentifier,
@@ -397,12 +401,17 @@ public sealed class StateAggregator : IStateAggregator
         SessionStateStore.SetLastEventCode(packet.RawEventCode, receivedAt);
     }
 
-    private void ApplyTyreSets(TyreSetsPacket packet, DateTimeOffset receivedAt)
+    private void ApplyTyreSets(TyreSetsPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
     {
         var carIndex = packet.CarIndex;
         if (carIndex >= 22 || !SessionStateStore.CarStateStore.HasTelemetryAccess(carIndex))
         {
             return;
+        }
+
+        if (carIndex == playerCarIndex)
+        {
+            SessionStateStore.SetPlayerTyreInventory(BuildTyreInventorySnapshot(packet, receivedAt), receivedAt);
         }
 
         var fittedIndex = packet.FittedIndex;
@@ -420,6 +429,64 @@ public sealed class StateAggregator : IStateAggregator
                 VisualTyreCompound = tyreSet.VisualTyreCompound
             },
             receivedAt);
+    }
+
+    private static IReadOnlyList<WeatherForecastSummary> BuildWeatherForecastSamples(SessionPacket packet)
+    {
+        var sampleCount = Math.Min(packet.NumWeatherForecastSamples, packet.WeatherForecastSamples.Length);
+        if (sampleCount <= 0)
+        {
+            return Array.Empty<WeatherForecastSummary>();
+        }
+
+        var samples = new WeatherForecastSummary[sampleCount];
+        for (var index = 0; index < sampleCount; index++)
+        {
+            var sample = packet.WeatherForecastSamples[index];
+            samples[index] = new WeatherForecastSummary
+            {
+                SessionType = sample.SessionType,
+                TimeOffsetMinutes = sample.TimeOffset,
+                Weather = sample.Weather,
+                TrackTemperature = sample.TrackTemperature,
+                TrackTemperatureChange = sample.TrackTemperatureChange,
+                AirTemperature = sample.AirTemperature,
+                AirTemperatureChange = sample.AirTemperatureChange,
+                RainPercentage = sample.RainPercentage
+            };
+        }
+
+        return samples;
+    }
+
+    private static TyreInventorySnapshot BuildTyreInventorySnapshot(TyreSetsPacket packet, DateTimeOffset receivedAt)
+    {
+        var sets = new TyreSetSnapshot[packet.TyreSets.Length];
+        for (var index = 0; index < packet.TyreSets.Length; index++)
+        {
+            var tyreSet = packet.TyreSets[index];
+            sets[index] = new TyreSetSnapshot
+            {
+                Index = checked((byte)index),
+                ActualTyreCompound = tyreSet.ActualTyreCompound,
+                VisualTyreCompound = tyreSet.VisualTyreCompound,
+                Wear = tyreSet.Wear,
+                Available = tyreSet.Available,
+                RecommendedSession = tyreSet.RecommendedSession,
+                LifeSpan = tyreSet.LifeSpan,
+                UsableLife = tyreSet.UsableLife,
+                LapDeltaTime = tyreSet.LapDeltaTime,
+                Fitted = tyreSet.Fitted
+            };
+        }
+
+        return new TyreInventorySnapshot
+        {
+            CarIndex = packet.CarIndex,
+            FittedIndex = packet.FittedIndex < packet.TyreSets.Length ? packet.FittedIndex : null,
+            Sets = sets,
+            UpdatedAt = receivedAt
+        };
     }
 
     private static IReadOnlyDictionary<int, sbyte> BuildMarshalZoneFlags(SessionPacket packet)

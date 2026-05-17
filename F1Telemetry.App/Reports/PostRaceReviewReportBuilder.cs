@@ -48,13 +48,14 @@ public sealed class PostRaceReviewReportBuilder
 
         AppendMetricTable(builder, data.SummaryMetrics);
         AppendLapTable(builder, data.Laps);
+        AppendTyreWearTrendTable(builder, data.TyreWearTrend);
         AppendStintTable(builder, data.Stints);
         AppendEventTable(builder, data.Events);
         AppendAiReportTable(builder, data.AiReports);
 
         builder.AppendLine("## 数据限制");
         builder.AppendLine();
-        builder.AppendLine("- 历史单圈未保存四轮胎磨数据，无法生成四轮胎磨趋势。");
+        builder.AppendLine("- 四轮胎磨趋势仅使用每圈最后一个同时具备四轮胎磨的已保存 lap_samples 样本。");
         builder.AppendLine("- stint 摘要仅基于已保存的 StartTyre / EndTyre 标签轻量推断。");
 
         return builder.ToString();
@@ -81,13 +82,14 @@ public sealed class PostRaceReviewReportBuilder
                 data.Session.StartedAtText,
                 data.Session.EndedAtText,
                 data.Session.DurationText,
-                data.Session.SummaryText),
+            data.Session.SummaryText),
             data.SummaryMetrics.Select(row => new JsonMetric(row.Label, row.Value, row.Detail)).ToArray(),
             data.Laps.Select(ToJsonLap).ToArray(),
+            BuildTyreWearTrendSummary(data.TyreWearTrend),
+            data.TyreWearTrend.Select(ToJsonTyreWearTrendPoint).ToArray(),
             data.Stints.Select(row => new JsonStint(row.StintText, row.LapRangeText, row.TyreText, row.EvidenceText)).ToArray(),
             data.Events.Select(ToJsonEvent).ToArray(),
-            data.AiReports.Select(ToJsonAiReport).ToArray(),
-            "历史单圈未保存四轮胎磨数据，无法生成四轮胎磨趋势。");
+            data.AiReports.Select(ToJsonAiReport).ToArray());
 
         return JsonSerializer.Serialize(report, JsonOptions);
     }
@@ -161,6 +163,38 @@ public sealed class PostRaceReviewReportBuilder
         foreach (var stint in stints)
         {
             AppendTableRow(builder, stint.StintText, stint.LapRangeText, stint.TyreText, stint.EvidenceText);
+        }
+
+        builder.AppendLine();
+    }
+
+    private static void AppendTyreWearTrendTable(
+        StringBuilder builder,
+        IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
+        builder.AppendLine("## 四轮胎磨趋势");
+        builder.AppendLine();
+        if (trend.Count == 0)
+        {
+            builder.AppendLine("暂无完整四轮胎磨样本。");
+            builder.AppendLine();
+            return;
+        }
+
+        builder.AppendLine(BuildTyreWearTrendSummary(trend));
+        builder.AppendLine();
+        builder.AppendLine("| Lap | 后左 | 后右 | 前左 | 前右 | 样本 |");
+        builder.AppendLine("| --- | --- | --- | --- | --- | --- |");
+        foreach (var point in trend)
+        {
+            AppendTableRow(
+                builder,
+                point.LapNumber.ToString(CultureInfo.InvariantCulture),
+                FormatPercent(point.RearLeft),
+                FormatPercent(point.RearRight),
+                FormatPercent(point.FrontLeft),
+                FormatPercent(point.FrontRight),
+                point.SampleIndex.ToString(CultureInfo.InvariantCulture));
         }
 
         builder.AppendLine();
@@ -243,6 +277,40 @@ public sealed class PostRaceReviewReportBuilder
             lap.CreatedAt);
     }
 
+    private static JsonTyreWearTrendPoint ToJsonTyreWearTrendPoint(StoredLapTyreWearTrendPoint point)
+    {
+        return new JsonTyreWearTrendPoint(
+            point.LapNumber,
+            point.SampleIndex,
+            point.SampledAt,
+            point.RearLeft,
+            point.RearRight,
+            point.FrontLeft,
+            point.FrontRight);
+    }
+
+    private static string BuildTyreWearTrendSummary(IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
+        if (trend.Count == 0)
+        {
+            return "暂无完整四轮胎磨样本。";
+        }
+
+        var firstLap = trend.Min(point => point.LapNumber);
+        var lastLap = trend.Max(point => point.LapNumber);
+        var latest = trend.MaxBy(point => point.LapNumber);
+        var latestMaxWear = latest is null
+            ? 0
+            : Math.Max(Math.Max(latest.RearLeft, latest.RearRight), Math.Max(latest.FrontLeft, latest.FrontRight));
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "覆盖 {0} 圈（Lap {1}-{2}），最新圈最高胎磨 {3:0.0}%。",
+            trend.Count,
+            firstLap,
+            lastLap,
+            latestMaxWear);
+    }
+
     private static JsonEvent ToJsonEvent(StoredEvent storedEvent)
     {
         var row = PostRaceReviewEventRowViewModel.FromStoredEvent(storedEvent);
@@ -313,6 +381,11 @@ public sealed class PostRaceReviewReportBuilder
         return string.IsNullOrWhiteSpace(value) ? "-" : value.Trim();
     }
 
+    private static string FormatPercent(float value)
+    {
+        return $"{value:0.0}%";
+    }
+
     private sealed record JsonReport(
         string SchemaVersion,
         DateTimeOffset GeneratedAt,
@@ -320,10 +393,11 @@ public sealed class PostRaceReviewReportBuilder
         JsonSession Session,
         IReadOnlyList<JsonMetric> SummaryMetrics,
         IReadOnlyList<JsonLap> Laps,
+        string TyreWearTrendSummary,
+        IReadOnlyList<JsonTyreWearTrendPoint> TyreWearTrend,
         IReadOnlyList<JsonStint> Stints,
         IReadOnlyList<JsonEvent> Events,
-        IReadOnlyList<JsonAiReport> AiReports,
-        string TyreWearLimitation);
+        IReadOnlyList<JsonAiReport> AiReports);
 
     private sealed record JsonSession(
         string SessionId,
@@ -352,6 +426,15 @@ public sealed class PostRaceReviewReportBuilder
         DateTimeOffset CreatedAt);
 
     private sealed record JsonStint(string Stint, string LapRange, string Tyre, string Evidence);
+
+    private sealed record JsonTyreWearTrendPoint(
+        int LapNumber,
+        int SampleIndex,
+        DateTimeOffset SampledAt,
+        float RearLeft,
+        float RearRight,
+        float FrontLeft,
+        float FrontRight);
 
     private sealed record JsonEvent(
         long Id,
@@ -385,6 +468,7 @@ public sealed class PostRaceReviewReportBuilder
 /// <param name="Laps">The ordered stored laps.</param>
 /// <param name="Events">The ordered stored events.</param>
 /// <param name="AiReports">The ordered stored AI reports.</param>
+/// <param name="TyreWearTrend">The ordered per-lap tyre wear trend points.</param>
 /// <param name="SummaryMetrics">The summary metric rows.</param>
 /// <param name="Stints">The inferred stint rows.</param>
 /// <param name="GeneratedAt">The report generation timestamp.</param>
@@ -394,6 +478,7 @@ public sealed record PostRaceReviewReportData(
     IReadOnlyList<StoredLap> Laps,
     IReadOnlyList<StoredEvent> Events,
     IReadOnlyList<StoredAiReport> AiReports,
+    IReadOnlyList<StoredLapTyreWearTrendPoint> TyreWearTrend,
     IReadOnlyList<PostRaceReviewMetricRowViewModel> SummaryMetrics,
     IReadOnlyList<PostRaceReviewStintRowViewModel> Stints,
     DateTimeOffset GeneratedAt,

@@ -57,6 +57,58 @@ public sealed class CornerAnalysisViewModelTests
     }
 
     /// <summary>
+    /// Verifies the selected historical lap controls which stored samples are analyzed.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithSelectedLap_AnalyzesSelectedLapSamples()
+    {
+        var sessionRepository = new RecordingSessionRepository
+        {
+            Sessions =
+            [
+                new StoredSession
+                {
+                    Id = "session-selected",
+                    SessionUid = "uid-selected",
+                    TrackId = 0,
+                    SessionType = 15,
+                    StartedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z")
+                }
+            ]
+        };
+        var lapRepository = new RecordingLapRepository
+        {
+            Laps =
+            [
+                new StoredLap { SessionId = "session-selected", LapNumber = 3, LapTimeInMs = 92_000, IsValid = true, StartTyre = "Medium", EndTyre = "Medium", CreatedAt = DateTimeOffset.Parse("2026-05-17T10:03:00Z") },
+                new StoredLap { SessionId = "session-selected", LapNumber = 8, LapTimeInMs = 90_000, IsValid = true, StartTyre = "Medium", EndTyre = "Medium", CreatedAt = DateTimeOffset.Parse("2026-05-17T10:08:00Z") }
+            ]
+        };
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                CreateSample("session-selected", 3, 0, 270, 10_000, 210, 0.8, 0.0),
+                CreateSample("session-selected", 3, 1, 330, 10_600, 160, 0.2, 0.6),
+                CreateSample("session-selected", 3, 2, 410, 11_500, 110, 0.1, 0.9),
+                CreateSample("session-selected", 3, 3, 500, 12_700, 190, 0.9, 0.0),
+                CreateSample("session-selected", 8, 0, 270, 10_000, 220, 0.8, 0.0)
+            ]
+        };
+        var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository);
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+        await historyBrowser.RefreshSessionsAsync();
+        viewModel.SelectedLap = historyBrowser.HistoryLaps.Single(lap => lap.LapNumber == 3);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal("session-selected", sampleRepository.RequestedSessionId);
+        Assert.Equal(3, sampleRepository.RequestedLapNumber);
+        Assert.Contains("Lap 3", viewModel.StatusText, StringComparison.Ordinal);
+        Assert.NotEmpty(viewModel.CornerRows);
+    }
+
+    /// <summary>
     /// Verifies unsupported track ids surface a clear empty state.
     /// </summary>
     [Fact]
@@ -224,17 +276,32 @@ public sealed class CornerAnalysisViewModelTests
     {
         public IReadOnlyList<StoredLapSample> Samples { get; init; } = Array.Empty<StoredLapSample>();
 
+        public string? RequestedSessionId { get; private set; }
+
+        public int? RequestedLapNumber { get; private set; }
+
         public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(string sessionId, int lapNumber, CancellationToken cancellationToken = default)
         {
+            RequestedSessionId = sessionId;
+            RequestedLapNumber = lapNumber;
+
             return Task.FromResult<IReadOnlyList<StoredLapSample>>(
                 Samples
                     .Where(sample => sample.SessionId == sessionId && sample.LapNumber == lapNumber)
                     .OrderBy(sample => sample.SampleIndex)
                     .ToArray());
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
         }
     }
 
@@ -245,6 +312,14 @@ public sealed class CornerAnalysisViewModelTests
         public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(string sessionId, int lapNumber, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("sample read failed");
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("sample read failed");
         }
