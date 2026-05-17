@@ -673,6 +673,27 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
+    /// Verifies that a zero same-lap front gap is treated as unavailable for qualifying traffic speech.
+    /// </summary>
+    [Fact]
+    public void Observe_QualifyingZeroFrontGap_DoesNotEmitTrafficRisk()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 12, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 7, fuelLapsRemaining: 7.2f, tyreWear: 25f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 0, updatedAt: timestamp, tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, updatedAt: timestamp, tyresAgeLaps: 4),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 7, gapToFrontMs: 2_400, updatedAt: timestamp, tyresAgeLaps: 4)));
+
+        Assert.DoesNotContain(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.TrafficRisk);
+    }
+
+    /// <summary>
     /// Verifies qualifying emits a clean-air window when nearby same-lap traffic clears.
     /// </summary>
     [Fact]
@@ -701,6 +722,51 @@ public sealed class EventDetectionServiceTests
             CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, gapToFrontMs: 4_000, updatedAt: timestamp.AddMilliseconds(100), tyresAgeLaps: 2)));
 
         Assert.Contains(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.QualifyingCleanAirWindow);
+    }
+
+    /// <summary>
+    /// Verifies zero front and rear gaps do not produce a false clean-air window in qualifying.
+    /// </summary>
+    [Fact]
+    public void Observe_QualifyingZeroFrontAndRearGaps_DoesNotEmitCleanAirWindow()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 17, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 5,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 6, fuelLapsRemaining: 8.1f, tyreWear: 18f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 0, updatedAt: timestamp, tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, updatedAt: timestamp, tyresAgeLaps: 2),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 6, gapToFrontMs: 0, updatedAt: timestamp, tyresAgeLaps: 2)));
+
+        Assert.DoesNotContain(service.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.QualifyingCleanAirWindow);
+    }
+
+    /// <summary>
+    /// Verifies zero race gaps do not enter attack or defense windows.
+    /// </summary>
+    [Fact]
+    public void Observe_RaceZeroGaps_DoesNotEmitGapWindows()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        var timestamp = new DateTimeOffset(2026, 5, 10, 10, 18, 0, TimeSpan.Zero);
+
+        service.Observe(CreateStateWithMetadata(
+            sessionType: 15,
+            safetyCarStatus: 0,
+            marshalZoneFlags: null,
+            activeCarCount: 3,
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 8, fuelLapsRemaining: 6.0f, tyreWear: 35f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: 0, ersStoreEnergy: 2_000_000f, updatedAt: timestamp),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8, updatedAt: timestamp),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8, gapToFrontMs: 0, updatedAt: timestamp)));
+
+        var detectedEvents = service.DrainPendingEvents();
+
+        Assert.DoesNotContain(detectedEvents, raceEvent => raceEvent.EventType == EventType.AttackWindow);
+        Assert.DoesNotContain(detectedEvents, raceEvent => raceEvent.EventType == EventType.DefenseWindow);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
+using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
@@ -117,21 +118,57 @@ public sealed class DashboardChartStateTests
         });
     }
 
-    private static DashboardViewModel CreateDashboardViewModel(FakePacketDispatcher dispatcher, SessionStateStore? sessionStateStore = null)
+    /// <summary>
+    /// Verifies a bulk backfill of official lap history is persisted as individual lap summaries.
+    /// </summary>
+    [Fact]
+    public void RefreshCentralState_PersistsAllUnstoredLapSummaries()
+    {
+        RunOnStaThread(() =>
+        {
+            var storage = new FakeStoragePersistenceService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: new FakeLapAnalyzer(
+                [
+                    new LapSummary { LapNumber = 1, LapTimeInMs = 90_000, ClosedAt = DateTimeOffset.UtcNow },
+                    new LapSummary { LapNumber = 2, LapTimeInMs = 89_500, ClosedAt = DateTimeOffset.UtcNow }
+                ]),
+                storagePersistenceService: storage);
+
+            try
+            {
+                InvokeRefreshCentralState(viewModel);
+                InvokeRefreshCentralState(viewModel);
+
+                Assert.Equal(new[] { 1, 2 }, storage.EnqueuedLapSummaries.Select(lap => lap.LapNumber));
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    private static DashboardViewModel CreateDashboardViewModel(
+        FakePacketDispatcher dispatcher,
+        SessionStateStore? sessionStateStore = null,
+        ILapAnalyzer? lapAnalyzer = null,
+        FakeStoragePersistenceService? storagePersistenceService = null)
     {
         var ttsQueue = new TtsQueue(new FakeTtsService(), new TtsOptions());
         return new DashboardViewModel(
             new FakeUdpListener(),
             dispatcher,
             sessionStateStore ?? new SessionStateStore(new CarStateStore()),
-            new LapAnalyzer(),
+            lapAnalyzer ?? new LapAnalyzer(),
             new EventDetectionService(),
             new FakeAiAnalysisService(),
             new FakeAppSettingsStore(),
             new FakeUdpRawLogWriter(),
             new TtsMessageFactory(),
             ttsQueue,
-            new FakeStoragePersistenceService(),
+            storagePersistenceService ?? new FakeStoragePersistenceService(),
             Dispatcher.CurrentDispatcher,
             new WindowsVoiceCatalog(() => new WindowsVoiceCatalogResult(Array.Empty<string>(), string.Empty, "No voices.")));
     }
@@ -370,12 +407,15 @@ public sealed class DashboardChartStateTests
     {
         public event EventHandler<string>? LogEmitted;
 
+        public List<LapSummary> EnqueuedLapSummaries { get; } = [];
+
         public void ObserveParsedPacket(ParsedPacket parsedPacket)
         {
         }
 
         public void EnqueueLapSummary(LapSummary lapSummary)
         {
+            EnqueuedLapSummaries.Add(lapSummary);
         }
 
         public void EnqueueRaceEvent(RaceEvent raceEvent)
@@ -394,6 +434,42 @@ public sealed class DashboardChartStateTests
         public ValueTask DisposeAsync()
         {
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class FakeLapAnalyzer(IReadOnlyList<LapSummary> laps) : ILapAnalyzer
+    {
+        public void Observe(ParsedPacket parsedPacket, SessionState sessionState)
+        {
+        }
+
+        public void ResetForSession(ulong sessionUid)
+        {
+        }
+
+        public IReadOnlyList<LapSummary> CaptureAllLaps()
+        {
+            return laps;
+        }
+
+        public IReadOnlyList<LapSample> CaptureCurrentLapSamples()
+        {
+            return Array.Empty<LapSample>();
+        }
+
+        public IReadOnlyList<LapSummary> CaptureRecentLaps(int maxCount)
+        {
+            return laps.Take(maxCount).Reverse().ToArray();
+        }
+
+        public LapSummary? CaptureBestLap()
+        {
+            return laps.OrderBy(lap => lap.LapTimeInMs).FirstOrDefault();
+        }
+
+        public LapSummary? CaptureLastLap()
+        {
+            return laps.LastOrDefault();
         }
     }
 

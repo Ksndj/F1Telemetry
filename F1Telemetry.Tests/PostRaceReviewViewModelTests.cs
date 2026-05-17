@@ -75,6 +75,33 @@ public sealed class PostRaceReviewViewModelTests
     }
 
     /// <summary>
+    /// Verifies qualifying sessions with stored laps still build review metrics and lap charts.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithQualifyingSessionLaps_LoadsReviewMetrics()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession("session-q") with { SessionType = 5 }]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                ["session-q"] = [CreateLap("session-q", 1), CreateLap("session-q", 2)]
+            }
+        };
+        var viewModel = CreateViewModel(sessionRepository, lapRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal("session-q", viewModel.SelectedSession?.SessionId);
+        Assert.NotEmpty(viewModel.SummaryMetricRows);
+        Assert.True(viewModel.LapTimeTrendPanel.HasData);
+        Assert.Contains("2 圈", viewModel.StatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies repository return order is normalized for review display.
     /// </summary>
     [Fact]

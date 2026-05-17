@@ -144,7 +144,8 @@ public sealed class LapAnalyzerTests
                 actualTyreCompound: 19)));
 
         var allLaps = analyzer.CaptureAllLaps();
-        var summary = Assert.Single(allLaps);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, allLaps.Select(lap => lap.LapNumber));
+        var summary = Assert.Single(allLaps, lap => lap.LapNumber == 5);
 
         Assert.Equal(5, summary.LapNumber);
         Assert.Equal((uint)91_500, summary.LapTimeInMs);
@@ -165,7 +166,178 @@ public sealed class LapAnalyzerTests
         Assert.False(summary.StartedInPit);
         Assert.True(summary.EndedInPit);
         Assert.Same(summary, analyzer.CaptureLastLap());
-        Assert.Same(summary, analyzer.CaptureBestLap());
+        Assert.Equal(1, analyzer.CaptureBestLap()?.LapNumber);
+    }
+
+    /// <summary>
+    /// Verifies player session history packets can backfill completed qualifying laps without live lap summaries.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerSessionHistoryWithoutRealtimeSummary_CreatesOfficialCompletedLaps()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new SessionHistoryPacket(
+                    CarIndex: 3,
+                    NumLaps: 4,
+                    NumTyreStints: 0,
+                    BestLapTimeLapNumber: 1,
+                    BestSector1LapNumber: 1,
+                    BestSector2LapNumber: 2,
+                    BestSector3LapNumber: 4,
+                    LapHistory:
+                    [
+                        new LapHistoryData(90_000, 30_000, 0, 30_500, 0, 29_500, 0, 0x01),
+                        new LapHistoryData(91_000, 30_200, 0, 30_700, 0, 30_100, 0, 0x00),
+                        new LapHistoryData(0, 0, 0, 0, 0, 0, 0, 0x00),
+                        new LapHistoryData(92_000, 30_400, 0, 30_800, 0, 0, 0, 0x01)
+                    ],
+                    TyreStints: Array.Empty<TyreStintHistoryData>()),
+                playerCarIndex: 3,
+                frameIdentifier: 110),
+            CreateState(CreatePlayerCar(
+                lapNumber: 5,
+                lapDistance: 120f,
+                currentLapTimeInMs: 10_000,
+                lastLapTimeInMs: 92_000,
+                speedKph: 180,
+                throttle: 0.82,
+                brake: 0.05,
+                steering: 0.10f,
+                gear: 7,
+                fuelRemaining: 29.4f,
+                fuelLapsRemaining: 13.2f,
+                ersStoreEnergy: 3.7f,
+                tyreWear: 4.5f,
+                position: 4,
+                deltaFront: 900,
+                deltaLeader: 6_400,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+
+        var allLaps = analyzer.CaptureAllLaps();
+
+        Assert.Equal(new[] { 1, 2, 4 }, allLaps.Select(summary => summary.LapNumber));
+        Assert.Equal((uint)90_000, allLaps[0].LapTimeInMs);
+        Assert.True(allLaps[0].IsValid);
+        Assert.False(allLaps[1].IsValid);
+        Assert.Equal((uint)30_800, allLaps[2].Sector2TimeInMs);
+        Assert.Equal((uint)30_800, allLaps[2].Sector3TimeInMs);
+        Assert.Equal(4, analyzer.CaptureLastLap()?.LapNumber);
+        Assert.Equal(1, analyzer.CaptureBestLap()?.LapNumber);
+    }
+
+    /// <summary>
+    /// Verifies official history updates an existing live lap summary without adding a duplicate row.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerSessionHistoryWithExistingLap_UpdatesWithoutDuplicate()
+    {
+        var analyzer = new LapAnalyzer();
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 120),
+            CreateState(CreatePlayerCar(
+                lapNumber: 2,
+                lapDistance: 120f,
+                currentLapTimeInMs: 10_000,
+                lastLapTimeInMs: 94_000,
+                speedKph: 180,
+                throttle: 0.82,
+                brake: 0.05,
+                steering: 0.10f,
+                gear: 7,
+                fuelRemaining: 29.4f,
+                fuelLapsRemaining: 13.2f,
+                ersStoreEnergy: 3.7f,
+                tyreWear: 4.5f,
+                position: 4,
+                deltaFront: 900,
+                deltaLeader: 6_400,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 121),
+            CreateState(CreatePlayerCar(
+                lapNumber: 3,
+                lapDistance: 35f,
+                currentLapTimeInMs: 250,
+                lastLapTimeInMs: 90_000,
+                speedKph: 155,
+                throttle: 0.70,
+                brake: 0.00,
+                steering: 0.02f,
+                gear: 5,
+                fuelRemaining: 28.4f,
+                fuelLapsRemaining: 12.7f,
+                ersStoreEnergy: 3.0f,
+                tyreWear: 5.7f,
+                position: 3,
+                deltaFront: 280,
+                deltaLeader: 4_850,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+
+        analyzer.Observe(
+            CreateParsedPacket(
+                new SessionHistoryPacket(
+                    CarIndex: 3,
+                    NumLaps: 2,
+                    NumTyreStints: 0,
+                    BestLapTimeLapNumber: 2,
+                    BestSector1LapNumber: 2,
+                    BestSector2LapNumber: 2,
+                    BestSector3LapNumber: 2,
+                    LapHistory:
+                    [
+                        new LapHistoryData(0, 0, 0, 0, 0, 0, 0, 0),
+                        new LapHistoryData(89_500, 30_000, 0, 30_100, 0, 29_400, 0, 0x01)
+                    ],
+                    TyreStints: Array.Empty<TyreStintHistoryData>()),
+                playerCarIndex: 3,
+                frameIdentifier: 122),
+            CreateState(CreatePlayerCar(
+                lapNumber: 3,
+                lapDistance: 100f,
+                currentLapTimeInMs: 1_000,
+                lastLapTimeInMs: 90_000,
+                speedKph: 180,
+                throttle: 0.80,
+                brake: 0.00,
+                steering: 0.01f,
+                gear: 6,
+                fuelRemaining: 28.2f,
+                fuelLapsRemaining: 12.6f,
+                ersStoreEnergy: 2.9f,
+                tyreWear: 5.8f,
+                position: 3,
+                deltaFront: 250,
+                deltaLeader: 4_700,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+
+        var summary = Assert.Single(analyzer.CaptureAllLaps());
+
+        Assert.Equal(2, summary.LapNumber);
+        Assert.Equal((uint)89_500, summary.LapTimeInMs);
+        Assert.Equal((uint)29_400, summary.Sector3TimeInMs);
+        Assert.NotNull(summary.AverageSpeedKph);
     }
 
     /// <summary>

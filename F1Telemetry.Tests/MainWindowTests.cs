@@ -225,6 +225,7 @@ public sealed class MainWindowTests
         AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistorySessionPages");
         AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistoryLapPages");
         Assert.Contains("HistoryBrowser.DeleteSessionCommand", lapHistoryXaml, StringComparison.Ordinal);
+        AssertHistoryLapHeader(lapHistoryXaml);
 
         AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.HistoryBrowser.HistorySessionPages");
         AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.EventTimelinePages");
@@ -364,6 +365,14 @@ public sealed class MainWindowTests
         Assert.Contains($"{bindingPath}.PreviousPageCommand", xaml, StringComparison.Ordinal);
         Assert.Contains($"{bindingPath}.PageText", xaml, StringComparison.Ordinal);
         Assert.Contains($"{bindingPath}.NextPageCommand", xaml, StringComparison.Ordinal);
+    }
+
+    private static void AssertHistoryLapHeader(string xaml)
+    {
+        foreach (var header in new[] { "圈号", "圈速", "分段", "均速", "燃油", "ERS", "磨损", "状态", "轮胎", "进站" })
+        {
+            Assert.Contains($"Text=\"{header}\"", xaml, StringComparison.Ordinal);
+        }
     }
 
     private static void AssertHorizontalScrollBarVisibilityDisabled(string xaml)

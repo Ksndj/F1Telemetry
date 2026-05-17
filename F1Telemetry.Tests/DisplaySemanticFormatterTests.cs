@@ -188,6 +188,51 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies that the F1 25 weather enum displays rain and storm values correctly.
+    /// </summary>
+    [Theory]
+    [InlineData((byte)3, "小雨")]
+    [InlineData((byte)4, "大雨")]
+    [InlineData((byte)5, "风暴")]
+    public void DashboardViewModel_BuildWeatherText_MapsRainAndStormCodes(byte weather, string expected)
+    {
+        var text = InvokeDashboardWeatherText(new SessionState
+        {
+            Weather = weather,
+            TrackTemperature = 16,
+            AirTemperature = 14
+        });
+
+        Assert.Contains(expected, text, StringComparison.Ordinal);
+        Assert.Contains("赛道 16°C", text, StringComparison.Ordinal);
+        Assert.Contains("空气 14°C", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies zero timing gaps are displayed as unavailable instead of a false 0.000s gap.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_BuildPlayerGapText_HidesZeroGaps()
+    {
+        var player = CreateCar(position: 2, deltaToLeaderInMs: 10_000) with
+        {
+            IsPlayer = true,
+            DeltaToCarInFrontInMs = 0
+        };
+        var behind = CreateCar(position: 3, deltaToLeaderInMs: 10_000) with
+        {
+            DeltaToCarInFrontInMs = 0
+        };
+
+        var text = InvokeDashboardPlayerGapText(
+            new SessionState { Cars = new[] { player, behind } },
+            player);
+
+        Assert.Equal("前车 - · 后车 -", text);
+        Assert.DoesNotContain("0.000s", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that the player card current-lap field no longer duplicates total-lap progress.
     /// </summary>
     [Fact]
@@ -321,6 +366,20 @@ public sealed class DisplaySemanticFormatterTests
     private static string InvokeDashboardLapText(SessionState sessionState, CarSnapshot? playerCar)
     {
         var method = typeof(DashboardViewModel).GetMethod("BuildLapText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState, playerCar }));
+    }
+
+    private static string InvokeDashboardWeatherText(SessionState sessionState)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildWeatherText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState }));
+    }
+
+    private static string InvokeDashboardPlayerGapText(SessionState sessionState, CarSnapshot playerCar)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildPlayerGapText", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState, playerCar }));
     }

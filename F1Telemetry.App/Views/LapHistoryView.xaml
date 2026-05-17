@@ -207,6 +207,7 @@
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                     <RowDefinition Height="*" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
@@ -219,11 +220,36 @@
                                            Foreground="#9AB0C9"
                                            Text="{Binding HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话。}"
                                            TextWrapping="Wrap" />
-                                <ItemsControl Grid.Row="2"
+                                <Grid Grid.Row="2"
+                                      Margin="14,12,14,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="72" />
+                                        <ColumnDefinition Width="92" />
+                                        <ColumnDefinition Width="230" />
+                                        <ColumnDefinition Width="88" />
+                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="74" />
+                                        <ColumnDefinition Width="76" />
+                                        <ColumnDefinition Width="64" />
+                                        <ColumnDefinition Width="140" />
+                                        <ColumnDefinition Width="96" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Foreground="#7FA5D8" Text="圈号" />
+                                    <TextBlock Grid.Column="1" Foreground="#7FA5D8" Text="圈速" />
+                                    <TextBlock Grid.Column="2" Foreground="#7FA5D8" Text="分段" />
+                                    <TextBlock Grid.Column="3" Foreground="#7FA5D8" Text="均速" />
+                                    <TextBlock Grid.Column="4" Foreground="#7FA5D8" Text="燃油" />
+                                    <TextBlock Grid.Column="5" Foreground="#7FA5D8" Text="ERS" />
+                                    <TextBlock Grid.Column="6" Foreground="#7FA5D8" Text="磨损" />
+                                    <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="状态" />
+                                    <TextBlock Grid.Column="8" Foreground="#7FA5D8" Text="轮胎" />
+                                    <TextBlock Grid.Column="9" Foreground="#7FA5D8" Text="进站" />
+                                </Grid>
+                                <ItemsControl Grid.Row="3"
                                               Margin="0,12,0,0"
                                               ItemTemplate="{StaticResource LapSummaryRowTemplate}"
                                               ItemsSource="{Binding HistoryBrowser.HistoryLapPages.Items}" />
-                                <StackPanel Grid.Row="3"
+                                <StackPanel Grid.Row="4"
                                             Margin="0,8,0,0"
                                             HorizontalAlignment="Right"
                                             Orientation="Horizontal">
