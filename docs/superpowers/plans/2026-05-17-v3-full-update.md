@@ -1,6 +1,6 @@
 # F1Telemetry V3 Full Update Implementation Plan
 
-**Status:** V3 基础能力已通过 PR #55 合并到 `main`。Merge commit: `681c289cea4f59aa86343e9513efe5d43494c863`。本次不改变发布版本号，也不包含安装包发布。
+**Status:** V3 基础能力已通过 PR #55 合并到 `main`。Merge commit: `681c289cea4f59aa86343e9513efe5d43494c863`。新版应用版本提升到 `3.0.0`，并通过 Inno Setup 打包为 Windows x64 安装包。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

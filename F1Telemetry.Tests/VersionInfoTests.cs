@@ -17,7 +17,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void CurrentVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("2.0.0-beta4", VersionInfo.CurrentVersion);
+        Assert.Equal("3.0.0", VersionInfo.CurrentVersion);
     }
 
     /// <summary>
@@ -26,7 +26,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v2.0.0-beta4", VersionInfo.DisplayVersion);
+        Assert.Equal("v3.0.0", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed class VersionInfoTests
         var viewModel = Assert.IsType<DashboardViewModel>(
             RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
 
-        Assert.Contains("2.0.0-beta4", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.Contains("3.0.0", viewModel.AppTitleText, StringComparison.Ordinal);
         Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
@@ -76,17 +76,17 @@ public sealed class VersionInfoTests
         var publishScript = File.ReadAllText(Path.Combine(root, "build", "publish.ps1"));
         var innoScript = File.ReadAllText(Path.Combine(root, "build", "F1Telemetry.iss"));
 
-        Assert.Contains("<Version>2.0.0-beta4</Version>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<VersionPrefix>2.0.0</VersionPrefix>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<AssemblyVersion>2.0.0.0</AssemblyVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<FileVersion>2.0.0.0</FileVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<InformationalVersion>2.0.0-beta4</InformationalVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("/p:Version=2.0.0-beta4", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:AssemblyVersion=2.0.0.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:FileVersion=2.0.0.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:InformationalVersion=2.0.0-beta4", publishScript, StringComparison.Ordinal);
-        Assert.Contains("#define MyAppVersion \"2.0.0-beta4\"", innoScript, StringComparison.Ordinal);
-        Assert.Contains("OutputBaseFilename=F1Telemetry-2.0.0-beta4-win-x64-setup", innoScript, StringComparison.Ordinal);
+        Assert.Contains("<Version>3.0.0</Version>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>3.0.0</VersionPrefix>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<AssemblyVersion>3.0.0.0</AssemblyVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<FileVersion>3.0.0.0</FileVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<InformationalVersion>3.0.0</InformationalVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("/p:Version=3.0.0", publishScript, StringComparison.Ordinal);
+        Assert.Contains("/p:AssemblyVersion=3.0.0.0", publishScript, StringComparison.Ordinal);
+        Assert.Contains("/p:FileVersion=3.0.0.0", publishScript, StringComparison.Ordinal);
+        Assert.Contains("/p:InformationalVersion=3.0.0", publishScript, StringComparison.Ordinal);
+        Assert.Contains("#define MyAppVersion \"3.0.0\"", innoScript, StringComparison.Ordinal);
+        Assert.Contains("OutputBaseFilename=F1Telemetry-3.0.0-win-x64-setup", innoScript, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

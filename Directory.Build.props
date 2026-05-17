@@ -1,10 +1,10 @@
 <Project>
   <PropertyGroup>
-    <Version>2.0.0-beta4</Version>
-    <VersionPrefix>2.0.0</VersionPrefix>
-    <AssemblyVersion>2.0.0.0</AssemblyVersion>
-    <FileVersion>2.0.0.0</FileVersion>
-    <InformationalVersion>2.0.0-beta4</InformationalVersion>
+    <Version>3.0.0</Version>
+    <VersionPrefix>3.0.0</VersionPrefix>
+    <AssemblyVersion>3.0.0.0</AssemblyVersion>
+    <FileVersion>3.0.0.0</FileVersion>
+    <InformationalVersion>3.0.0</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <F1TelemetryArtifactsRoot Condition="'$(F1TelemetryArtifactsRoot)' == ''">$(MSBuildThisFileDirectory).artifacts\</F1TelemetryArtifactsRoot>
     <BaseIntermediateOutputPath>$(F1TelemetryArtifactsRoot)obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
