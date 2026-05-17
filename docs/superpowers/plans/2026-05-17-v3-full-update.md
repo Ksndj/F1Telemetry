@@ -1,5 +1,7 @@
 # F1Telemetry V3 Full Update Implementation Plan
 
+**Status:** V3 基础能力已通过 PR #55 合并到 `main`。Merge commit: `681c289cea4f59aa86343e9513efe5d43494c863`。本次不改变发布版本号，也不包含安装包发布。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement V3 as a strategy analysis and corner-level driving analysis layer on top of the existing V2 history, review, EventBus, AI, TTS, and SQLite foundations.
@@ -121,5 +123,5 @@
 - [ ] Run module tests in this order: `TrackSegmentMapProviderTests`, `CornerMetricsExtractorTests`, `LapSampleRepositoryTests`, `StoragePersistenceServiceTests`, `StintStrategyAnalyzerTests`, `StrategyRiskAnalyzerTests`, `RaceEngineerReportBuilderTests`, `CornerAnalysisViewModelTests`, `PostRaceReviewViewModelTests`.
 - [ ] Run `dotnet build .\F1Telemetry.sln -m:1`.
 - [ ] Verify `git status --short` only contains intended V3 files before staging.
-- [ ] Push `codex/v3-full-update` to `origin`.
-- [ ] Create a Draft PR summarizing V3-M1 through V3-M7, tests run, and residual risks.
+- [x] Push `codex/v3-full-update` to `origin`.
+- [x] Merge PR #55 summarizing V3-M1 through V3-M7, tests run, and residual risks.
