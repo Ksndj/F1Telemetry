@@ -31,6 +31,11 @@ public enum EventType
     HighTyreWear,
 
     /// <summary>
+    /// Indicates that tyre wear is entering the late-stint band before the pit window.
+    /// </summary>
+    TyreWearLateStint,
+
+    /// <summary>
     /// Indicates that the player's tyre temperature is above the dynamic track-temperature threshold.
     /// </summary>
     HighTyreTemperature,
@@ -124,6 +129,11 @@ public enum EventType
     /// Indicates that an active safety car status has cleared and a restart phase is expected.
     /// </summary>
     SafetyCarRestart,
+
+    /// <summary>
+    /// Indicates that the previous completed lap was meaningfully faster or slower than an adjacent car.
+    /// </summary>
+    LapTimeComparison,
 
     /// <summary>
     /// Indicates that a red flag transition provides a tyre-change review opportunity.

@@ -298,11 +298,11 @@ public sealed class EventDetectionServiceTests
         });
 
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 3.1f, tyreWear: 50f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 3.1f, tyreWear: 30f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 2.9f, tyreWear: 51f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 2.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 2.5f, tyreWear: 52f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 18, fuelLapsRemaining: 2.5f, tyreWear: 32f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20)));
 
         var detectedEvents = service.DrainPendingEvents();
 
@@ -322,18 +322,18 @@ public sealed class EventDetectionServiceTests
         });
 
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.1f, tyreWear: 50f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.1f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.9f, tyreWear: 51f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.9f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
 
         service.Reset();
 
         Assert.Empty(service.DrainPendingEvents());
 
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.2f, tyreWear: 52f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 3.2f, tyreWear: 30f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
         service.Observe(CreateState(
-            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.8f, tyreWear: 53f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 1, fuelLapsRemaining: 2.8f, tyreWear: 31f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
 
         var raceEvent = Assert.Single(service.DrainPendingEvents());
         Assert.Equal(EventType.LowFuel, raceEvent.EventType);
@@ -770,10 +770,10 @@ public sealed class EventDetectionServiceTests
     }
 
     /// <summary>
-    /// Verifies race pit-window advice emits from tyre age or tyre wear thresholds.
+    /// Verifies race tyre wear advice follows the configured threshold bands.
     /// </summary>
     [Fact]
-    public void Observe_RaceTyreAgeOrWearThreshold_EmitsPitWindow()
+    public void Observe_RaceTyreWearThresholdBands_EmitExpectedAdvice()
     {
         var ageService = new EventDetectionService(new EventDetectionOptions());
         var wearService = new EventDetectionService(new EventDetectionOptions());
@@ -805,7 +805,9 @@ public sealed class EventDetectionServiceTests
             activeCarCount: 1,
             CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 29, fuelLapsRemaining: 4.6f, tyreWear: 72f, pitStatus: 0, numPitStops: 1, visualTyreCompound: 17, actualTyreCompound: 20, gapToFrontMs: null, updatedAt: timestamp.AddSeconds(1), tyresAgeLaps: 8)));
 
-        Assert.Contains(ageService.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RacePitWindow);
+        var ageEvents = ageService.DrainPendingEvents();
+        Assert.Contains(ageEvents, raceEvent => raceEvent.EventType == EventType.TyreWearLateStint);
+        Assert.DoesNotContain(ageEvents, raceEvent => raceEvent.EventType == EventType.RacePitWindow);
         Assert.Contains(wearService.DrainPendingEvents(), raceEvent => raceEvent.EventType == EventType.RacePitWindow);
     }
 
@@ -860,7 +862,9 @@ public sealed class EventDetectionServiceTests
 
         var raceEvent = Assert.Single(service.DrainPendingEvents());
         Assert.Equal(EventType.LowErs, raceEvent.EventType);
-        Assert.Contains("ERS 剩余 500000 焦耳", raceEvent.Message, StringComparison.Ordinal);
+        Assert.Contains("ERS 剩 0.5 MJ", raceEvent.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("焦耳", raceEvent.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("500000", raceEvent.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Low ERS", raceEvent.Message, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -915,6 +919,157 @@ public sealed class EventDetectionServiceTests
             CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8, gapToFrontMs: null)));
 
         Assert.Empty(service.DrainPendingEvents());
+    }
+
+    /// <summary>
+    /// Verifies tyre wear below the configured pit-window band does not emit pit advice.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreWearFarBelowUserThreshold_DoesNotEmitPitWindow()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        service.UpdateRaceAdviceThresholds(62);
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 6.0f, tyreWear: 30.5f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 5.9f, tyreWear: 31.2f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+
+        var events = service.DrainPendingEvents();
+
+        Assert.DoesNotContain(events, raceEvent => raceEvent.EventType is EventType.RacePitWindow or EventType.TyreWearLateStint);
+    }
+
+    /// <summary>
+    /// Verifies tyre wear near the configured threshold emits only a light late-stint reminder.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreWearNearUserThreshold_EmitsLightReminder()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        service.UpdateRaceAdviceThresholds(62);
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 6.0f, tyreWear: 57f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 5.9f, tyreWear: 58f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.TyreWearLateStint);
+        Assert.Contains("轮胎逐渐进入后段", raceEvent.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("进站窗口", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies tyre wear at or above the configured threshold emits one pit-window reminder for the lap.
+    /// </summary>
+    [Fact]
+    public void Observe_TyreWearAtUserThreshold_EmitsPitWindowOncePerLap()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+        service.UpdateRaceAdviceThresholds(62);
+
+        var state = CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 6.0f, tyreWear: 63f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 4, lapNumber: 12, fuelLapsRemaining: 6.1f, tyreWear: 61f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19)));
+        service.Observe(state);
+        service.Observe(state with { UpdatedAt = state.UpdatedAt.AddSeconds(2) });
+
+        var pitWindowEvents = service.DrainPendingEvents()
+            .Where(candidate => candidate.EventType == EventType.RacePitWindow)
+            .ToArray();
+
+        var raceEvent = Assert.Single(pitWindowEvents);
+        Assert.Contains("已接近进站窗口", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies final classification clears pending real-time strategy speech events.
+    /// </summary>
+    [Fact]
+    public void Observe_FinalClassification_ClearsRealtimeSpeechEvents()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 5.9f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, ersStoreEnergy: 1_500_000f)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 5.8f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, ersStoreEnergy: 500_000f)));
+
+        var finishedState = CreateState(
+            CreatePlayerCar(carIndex: 3, position: 1, lapNumber: 8, fuelLapsRemaining: 5.8f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, gapToFrontMs: null, ersStoreEnergy: 400_000f))
+            with
+            {
+                HasFinalClassification = true,
+                FinalClassificationReceivedAt = DateTimeOffset.UtcNow
+            };
+        service.Observe(finishedState);
+
+        Assert.Empty(service.DrainPendingEvents());
+    }
+
+    /// <summary>
+    /// Verifies a completed lap faster than the front car creates a chase reminder.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerFasterThanFrontCarOnCompletedLap_EmitsChaseReminder()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 8, fuelLapsRemaining: 6.0f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 9, fuelLapsRemaining: 5.9f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19) with { LastLapTimeInMs = 90_000 },
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 9) with { LastLapTimeInMs = 90_500 }));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.LapTimeComparison);
+        Assert.Contains("上一圈比前车快 0.5 秒", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies a completed lap slower than the rear car creates a defensive reminder.
+    /// </summary>
+    [Fact]
+    public void Observe_PlayerSlowerThanRearCarOnCompletedLap_EmitsDefenseReminder()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8),
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 8, fuelLapsRemaining: 6.0f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19),
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8)));
+        service.Observe(CreateState(
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 9) with { LastLapTimeInMs = 90_600 },
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 9, fuelLapsRemaining: 5.9f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19) with { LastLapTimeInMs = 90_500 },
+            CreateOpponent(carIndex: 4, driverName: "Rear Runner", position: 3, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 9) with { LastLapTimeInMs = 90_000 }));
+
+        var raceEvent = Assert.Single(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.LapTimeComparison);
+        Assert.Contains("上一圈比后车慢 0.5 秒", raceEvent.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies small or invalid adjacent-car lap deltas are not spoken.
+    /// </summary>
+    [Fact]
+    public void Observe_LapComparisonBelowThresholdOrDifferentLap_DoesNotEmit()
+    {
+        var service = new EventDetectionService(new EventDetectionOptions());
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 8, fuelLapsRemaining: 6.0f, tyreWear: 36f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19),
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 8)));
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 9, fuelLapsRemaining: 5.9f, tyreWear: 37f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19) with { LastLapTimeInMs = 90_000 },
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 9) with { LastLapTimeInMs = 90_200 }));
+
+        Assert.DoesNotContain(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.LapTimeComparison);
+
+        service.Observe(CreateState(
+            CreatePlayerCar(carIndex: 3, position: 2, lapNumber: 10, fuelLapsRemaining: 5.8f, tyreWear: 38f, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19) with { LastLapTimeInMs = 90_000 },
+            CreateOpponent(carIndex: 2, driverName: "Front Runner", position: 1, pitStatus: 0, numPitStops: 0, visualTyreCompound: 16, actualTyreCompound: 19, lapNumber: 9) with { LastLapTimeInMs = 91_000 }));
+
+        Assert.DoesNotContain(service.DrainPendingEvents(), candidate => candidate.EventType == EventType.LapTimeComparison);
     }
 
     private static SessionState CreateState(params CarSnapshot[] cars)

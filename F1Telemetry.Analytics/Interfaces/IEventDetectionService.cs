@@ -23,4 +23,12 @@ public interface IEventDetectionService
     /// Clears cached detection state so a new session starts from a clean baseline.
     /// </summary>
     void Reset();
+
+    /// <summary>
+    /// Updates user-configurable race advice thresholds.
+    /// </summary>
+    /// <param name="maxRecommendedWearPercent">The current recommended tyre wear ceiling.</param>
+    void UpdateRaceAdviceThresholds(float maxRecommendedWearPercent)
+    {
+    }
 }

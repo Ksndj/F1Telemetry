@@ -208,15 +208,34 @@ public sealed class AppSettingsStore : IAppSettingsStore
 
         try
         {
-            return NormalizeRaceWeekendTyrePlan(
-                new RaceWeekendTyrePlan
-                {
-                    InventoryText = ReadString(planElement, "inventoryText", RaceWeekendTyrePlan.DefaultInventoryText),
-                    MaxRecommendedWearPercent = ReadInt(
-                        planElement,
-                        "maxRecommendedWearPercent",
-                        RaceWeekendTyrePlan.DefaultMaxRecommendedWearPercent)
-                });
+            var maxWear = ReadInt(
+                planElement,
+                "maxRecommendedWearPercent",
+                RaceWeekendTyrePlan.DefaultMaxRecommendedWearPercent);
+            var hasStructuredInventory = planElement.TryGetProperty("softCount", out _) ||
+                                         planElement.TryGetProperty("mediumCount", out _) ||
+                                         planElement.TryGetProperty("hardCount", out _) ||
+                                         planElement.TryGetProperty("intermediateCount", out _) ||
+                                         planElement.TryGetProperty("wetCount", out _);
+
+            if (hasStructuredInventory)
+            {
+                return NormalizeRaceWeekendTyrePlan(
+                    new RaceWeekendTyrePlan
+                    {
+                        SoftCount = ReadInt(planElement, "softCount", 0),
+                        MediumCount = ReadInt(planElement, "mediumCount", 0),
+                        HardCount = ReadInt(planElement, "hardCount", 0),
+                        IntermediateCount = ReadInt(planElement, "intermediateCount", 0),
+                        WetCount = ReadInt(planElement, "wetCount", 0),
+                        InventoryText = ReadString(planElement, "inventoryText", RaceWeekendTyrePlan.DefaultInventoryText),
+                        MaxRecommendedWearPercent = maxWear
+                    });
+            }
+
+            return RaceWeekendTyrePlan.FromLegacyInventoryText(
+                ReadString(planElement, "inventoryText", RaceWeekendTyrePlan.DefaultInventoryText),
+                maxWear);
         }
         catch
         {
@@ -226,15 +245,22 @@ public sealed class AppSettingsStore : IAppSettingsStore
 
     private static RaceWeekendTyrePlan NormalizeRaceWeekendTyrePlan(RaceWeekendTyrePlan plan)
     {
-        var inventoryText = string.IsNullOrWhiteSpace(plan.InventoryText)
-            ? RaceWeekendTyrePlan.DefaultInventoryText
-            : plan.InventoryText.Trim();
+        var hasStructuredCounts = plan.SoftCount > 0 ||
+                                  plan.MediumCount > 0 ||
+                                  plan.HardCount > 0 ||
+                                  plan.IntermediateCount > 0 ||
+                                  plan.WetCount > 0;
 
-        return plan with
+        if (!hasStructuredCounts &&
+            !string.IsNullOrWhiteSpace(plan.InventoryText) &&
+            !string.Equals(plan.InventoryText.Trim(), RaceWeekendTyrePlan.DefaultInventoryText, StringComparison.Ordinal))
         {
-            InventoryText = inventoryText,
-            MaxRecommendedWearPercent = Math.Clamp(plan.MaxRecommendedWearPercent, 0, 100)
-        };
+            return RaceWeekendTyrePlan.FromLegacyInventoryText(
+                plan.InventoryText,
+                plan.MaxRecommendedWearPercent);
+        }
+
+        return plan.Normalize();
     }
 
     private static UdpRawLogOptions ReadUdpRawLogOptions(JsonElement rootElement)

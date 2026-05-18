@@ -15,6 +15,7 @@ public sealed class RaceEventSpeechSubscriber : IDisposable
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
     private readonly Func<SessionMode> _captureSessionMode;
+    private readonly Func<bool> _captureIsRaceFinished;
     private readonly Func<TtsOptions> _captureTtsOptions;
     private readonly Action<string>? _logWarning;
     private IDisposable? _subscription;
@@ -29,19 +30,22 @@ public sealed class RaceEventSpeechSubscriber : IDisposable
     /// <param name="captureSessionMode">Captures the current high-level session mode.</param>
     /// <param name="captureTtsOptions">Captures the current TTS options snapshot.</param>
     /// <param name="logWarning">Optional warning logger used when event speech handling fails.</param>
+    /// <param name="captureIsRaceFinished">Captures whether real-time event speech should stop after final classification.</param>
     public RaceEventSpeechSubscriber(
         IEventBus<RaceEvent> raceEventBus,
         TtsMessageFactory ttsMessageFactory,
         TtsQueue ttsQueue,
         Func<SessionMode> captureSessionMode,
         Func<TtsOptions> captureTtsOptions,
-        Action<string>? logWarning = null)
+        Action<string>? logWarning = null,
+        Func<bool>? captureIsRaceFinished = null)
     {
         ArgumentNullException.ThrowIfNull(raceEventBus);
 
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _captureSessionMode = captureSessionMode ?? throw new ArgumentNullException(nameof(captureSessionMode));
+        _captureIsRaceFinished = captureIsRaceFinished ?? (() => false);
         _captureTtsOptions = captureTtsOptions ?? throw new ArgumentNullException(nameof(captureTtsOptions));
         _logWarning = logWarning;
         _subscription = raceEventBus.Subscribe(HandleRaceEvent);
@@ -72,7 +76,8 @@ public sealed class RaceEventSpeechSubscriber : IDisposable
             var message = _ttsMessageFactory.CreateForRaceEvent(
                 raceEvent,
                 _captureTtsOptions(),
-                _captureSessionMode());
+                _captureSessionMode(),
+                _captureIsRaceFinished());
 
             if (message is not null)
             {

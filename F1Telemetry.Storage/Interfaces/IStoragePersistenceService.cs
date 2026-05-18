@@ -1,6 +1,7 @@
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Storage.Models;
 using F1Telemetry.Udp.Packets;
 
 namespace F1Telemetry.Storage.Interfaces;
@@ -43,6 +44,13 @@ public interface IStoragePersistenceService : IAsyncDisposable
     /// Queues an AI analysis result for persistence.
     /// </summary>
     void EnqueueAiReport(int lapNumber, AIAnalysisResult analysisResult);
+
+    /// <summary>
+    /// Queues a race-engineer report for persistence.
+    /// </summary>
+    void EnqueueRaceEngineerReport(StoredRaceEngineerReport report)
+    {
+    }
 
     /// <summary>
     /// Completes the active session record when one exists.

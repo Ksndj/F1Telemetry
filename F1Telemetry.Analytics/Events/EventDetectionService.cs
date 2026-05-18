@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using F1Telemetry.Analytics.Interfaces;
 using F1Telemetry.Core.Formatting;
@@ -16,6 +17,7 @@ public sealed class EventDetectionService : IEventDetectionService
     private readonly Queue<RaceEvent> _pendingEvents = new();
     private readonly Dictionary<string, DateTimeOffset> _lastRaisedAtByDedupKey = new(StringComparer.Ordinal);
     private readonly HashSet<string> _highTyreWearTyreKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _tyreWearAdviceKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> _activeTyreTemperatureAlertKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> _dataQualityWarningKeys = new(StringComparer.Ordinal);
     private readonly Dictionary<int, sbyte> _lastMarshalZoneFlags = new();
@@ -24,6 +26,7 @@ public sealed class EventDetectionService : IEventDetectionService
     private bool _attackWindowArmed = true;
     private bool _defenseWindowArmed = true;
     private bool _lowErsArmed = true;
+    private bool _raceFinished;
     private SessionState? _previousState;
 
     /// <summary>
@@ -42,6 +45,21 @@ public sealed class EventDetectionService : IEventDetectionService
 
         lock (_gate)
         {
+            if (sessionState.HasFinalClassification)
+            {
+                _raceFinished = true;
+                RemovePendingRealtimeSpeechEvents();
+                _previousState = sessionState;
+                return;
+            }
+
+            if (_raceFinished)
+            {
+                RemovePendingRealtimeSpeechEvents();
+                _previousState = sessionState;
+                return;
+            }
+
             var previousState = _previousState;
             DetectSafetyCarStatus(sessionState);
             DetectMarshalZoneFlags(sessionState);
@@ -54,6 +72,7 @@ public sealed class EventDetectionService : IEventDetectionService
                     DetectRaceGapWindows(sessionState);
                     DetectLowErs(sessionState);
                     DetectMissingRaceTrendEvidence(sessionState);
+                    DetectLapTimeComparison(previousState, sessionState);
                 }
 
                 DetectLightweightAdvice(sessionState);
@@ -97,6 +116,7 @@ public sealed class EventDetectionService : IEventDetectionService
             _pendingEvents.Clear();
             _lastRaisedAtByDedupKey.Clear();
             _highTyreWearTyreKeys.Clear();
+            _tyreWearAdviceKeys.Clear();
             _activeTyreTemperatureAlertKeys.Clear();
             _dataQualityWarningKeys.Clear();
             _lastMarshalZoneFlags.Clear();
@@ -105,8 +125,52 @@ public sealed class EventDetectionService : IEventDetectionService
             _attackWindowArmed = true;
             _defenseWindowArmed = true;
             _lowErsArmed = true;
+            _raceFinished = false;
             _previousState = null;
         }
+    }
+
+    /// <inheritdoc />
+    public void UpdateRaceAdviceThresholds(float maxRecommendedWearPercent)
+    {
+        lock (_gate)
+        {
+            _options.RacePitWindowTyreWearThreshold = Math.Clamp(maxRecommendedWearPercent, 0f, 100f);
+        }
+    }
+
+    private void RemovePendingRealtimeSpeechEvents()
+    {
+        if (_pendingEvents.Count == 0)
+        {
+            return;
+        }
+
+        var retained = _pendingEvents
+            .Where(raceEvent => !IsRealtimeSpeechEvent(raceEvent.EventType))
+            .ToArray();
+        _pendingEvents.Clear();
+        foreach (var raceEvent in retained)
+        {
+            _pendingEvents.Enqueue(raceEvent);
+        }
+    }
+
+    private static bool IsRealtimeSpeechEvent(EventType eventType)
+    {
+        return eventType is EventType.LowFuel
+            or EventType.HighTyreWear
+            or EventType.TyreWearLateStint
+            or EventType.HighTyreTemperature
+            or EventType.LowTyreTemperature
+            or EventType.AttackWindow
+            or EventType.DefenseWindow
+            or EventType.LowErs
+            or EventType.FrontOldTyreRisk
+            or EventType.RearNewTyrePressure
+            or EventType.TrafficRisk
+            or EventType.RacePitWindow
+            or EventType.LapTimeComparison;
     }
 
     private void DetectPitEvents(SessionState previousState, SessionState currentState)
@@ -863,16 +927,51 @@ public sealed class EventDetectionService : IEventDetectionService
     private void DetectRacePitWindow(SessionState currentState)
     {
         var player = currentState.PlayerCar;
-        if (player is null)
+        if (player is null || player.TyreWear is null)
         {
             return;
         }
 
-        var tyreAgeTriggered = player.TyresAgeLaps.HasValue
-            && player.TyresAgeLaps.Value >= _options.RacePitWindowTyreAgeLapsThreshold;
-        var tyreWearTriggered = player.TyreWear.HasValue
-            && player.TyreWear.Value >= _options.RacePitWindowTyreWearThreshold;
-        if (!tyreAgeTriggered && !tyreWearTriggered)
+        var threshold = Math.Clamp(_options.RacePitWindowTyreWearThreshold, 0f, 100f);
+        var wear = player.TyreWear.Value;
+        var tyreKey = BuildTyreDedupKey(player);
+        var lapNumber = (int?)player.CurrentLapNumber;
+        if (wear < threshold - 8f)
+        {
+            return;
+        }
+
+        if (wear < threshold)
+        {
+            var lateKey = $"advice:tyre-wear-late:{tyreKey}:lap{lapNumber?.ToString() ?? "-"}";
+            if (!_tyreWearAdviceKeys.Add(lateKey))
+            {
+                return;
+            }
+
+            EmitEvent(
+                eventType: EventType.TyreWearLateStint,
+                severity: EventSeverity.Information,
+                timestamp: currentState.UpdatedAt,
+                lapNumber: lapNumber,
+                vehicleIdx: player.CarIndex,
+                driverName: player.DriverName,
+                message: $"{FormatTyreState(player.TyresAgeLaps, player.TyreWear)}，轮胎逐渐进入后段，继续观察磨损和圈速。",
+                dedupKey: lateKey,
+                payload: new
+                {
+                    player.CarIndex,
+                    player.CurrentLapNumber,
+                    player.TyresAgeLaps,
+                    player.TyreWear,
+                    TyreWearThreshold = threshold
+                },
+                cooldownSeconds: _options.AdviceCooldownSeconds);
+            return;
+        }
+
+        var windowKey = $"advice:race-pit-window:{tyreKey}:lap{lapNumber?.ToString() ?? "-"}";
+        if (!_tyreWearAdviceKeys.Add(windowKey))
         {
             return;
         }
@@ -881,21 +980,18 @@ public sealed class EventDetectionService : IEventDetectionService
             eventType: EventType.RacePitWindow,
             severity: EventSeverity.Information,
             timestamp: currentState.UpdatedAt,
-            lapNumber: (int?)player.CurrentLapNumber,
+            lapNumber: lapNumber,
             vehicleIdx: player.CarIndex,
             driverName: player.DriverName,
             message: $"{FormatTyreState(player.TyresAgeLaps, player.TyreWear)}，已接近进站窗口，准备或考虑进站时机。",
-            dedupKey: "advice:race-pit-window",
+            dedupKey: windowKey,
             payload: new
             {
                 player.CarIndex,
                 player.CurrentLapNumber,
                 player.TyresAgeLaps,
                 player.TyreWear,
-                TyreAgeThresholdLaps = _options.RacePitWindowTyreAgeLapsThreshold,
-                TyreWearThreshold = _options.RacePitWindowTyreWearThreshold,
-                TyreAgeTriggered = tyreAgeTriggered,
-                TyreWearTriggered = tyreWearTriggered
+                TyreWearThreshold = threshold
             },
             cooldownSeconds: _options.AdviceCooldownSeconds);
     }
@@ -1044,6 +1140,97 @@ public sealed class EventDetectionService : IEventDetectionService
         }
     }
 
+    private void DetectLapTimeComparison(SessionState previousState, SessionState currentState)
+    {
+        var previousPlayer = previousState.PlayerCar;
+        var player = currentState.PlayerCar;
+        if (previousPlayer?.CurrentLapNumber is null ||
+            player?.CurrentLapNumber is null ||
+            player.CurrentLapNumber <= previousPlayer.CurrentLapNumber)
+        {
+            return;
+        }
+
+        var frontComparison = AdjacentLapComparisonBuilder.BuildFrontComparison(
+            player,
+            FindDirectFrontCar(currentState, player));
+        var rearComparison = AdjacentLapComparisonBuilder.BuildRearComparison(
+            player,
+            FindDirectRearCar(currentState, player));
+        var selected = SelectLapComparison(frontComparison, rearComparison);
+        if (selected is null || Math.Abs(selected.DeltaInMs) < 300)
+        {
+            return;
+        }
+
+        var dedupKey = $"lap-comparison:{selected.CompletedLapNumber}";
+        EmitEvent(
+            eventType: EventType.LapTimeComparison,
+            severity: selected.Relation == "rear" && selected.DeltaInMs > 0
+                ? EventSeverity.Warning
+                : EventSeverity.Information,
+            timestamp: currentState.UpdatedAt,
+            lapNumber: selected.CompletedLapNumber,
+            vehicleIdx: selected.OpponentCarIndex,
+            driverName: null,
+            message: BuildLapComparisonMessage(selected),
+            dedupKey: dedupKey,
+            payload: new
+            {
+                selected.CompletedLapNumber,
+                selected.Relation,
+                selected.OpponentCarIndex,
+                selected.PlayerLapTimeInMs,
+                selected.OpponentLapTimeInMs,
+                selected.DeltaInMs
+            },
+            cooldownSeconds: _options.AdviceCooldownSeconds);
+    }
+
+    private static AdjacentLapComparison? SelectLapComparison(
+        AdjacentLapComparison? frontComparison,
+        AdjacentLapComparison? rearComparison)
+    {
+        if (rearComparison is not null && rearComparison.DeltaInMs >= 300)
+        {
+            return rearComparison;
+        }
+
+        if (frontComparison is not null && frontComparison.DeltaInMs <= -300)
+        {
+            return frontComparison;
+        }
+
+        if (rearComparison is not null && rearComparison.DeltaInMs <= -300)
+        {
+            return rearComparison;
+        }
+
+        if (frontComparison is not null && frontComparison.DeltaInMs >= 300)
+        {
+            return frontComparison;
+        }
+
+        return null;
+    }
+
+    private static string BuildLapComparisonMessage(AdjacentLapComparison comparison)
+    {
+        var secondsText = FormatDeltaSeconds(Math.Abs(comparison.DeltaInMs));
+        return comparison.Relation switch
+        {
+            "rear" when comparison.DeltaInMs > 0 => $"上一圈比后车慢 {secondsText} 秒，注意防守。",
+            "rear" => $"上一圈比后车快 {secondsText} 秒，防守压力下降。",
+            "front" when comparison.DeltaInMs < 0 => $"上一圈比前车快 {secondsText} 秒，继续压近。",
+            _ => $"上一圈比前车慢 {secondsText} 秒，保持节奏。"
+        };
+    }
+
+    private static string FormatDeltaSeconds(int deltaMs)
+    {
+        return (deltaMs / 1000d).ToString("0.0", CultureInfo.InvariantCulture);
+    }
+
     private void DetectLowErs(SessionState currentState)
     {
         var player = currentState.PlayerCar;
@@ -1081,7 +1268,7 @@ public sealed class EventDetectionService : IEventDetectionService
             lapNumber: (int?)player.CurrentLapNumber,
             vehicleIdx: player.CarIndex,
             driverName: player.DriverName,
-            message: $"ERS 剩余 {ersStoreEnergy:0} 焦耳，注意省电。",
+            message: $"ERS 剩 {EnergyFormatter.FormatMegaJoules(ersStoreEnergy)}，直道先省电。",
             dedupKey: "low-ers",
             payload: new
             {

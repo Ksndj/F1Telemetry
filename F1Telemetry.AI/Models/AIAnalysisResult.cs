@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace F1Telemetry.AI.Models;
 
 /// <summary>
-/// Represents the fixed JSON analysis result returned by the AI service.
+/// Represents the JSON post-race analysis result returned by the AI service.
 /// </summary>
 public sealed record AIAnalysisResult
 {
@@ -26,7 +26,43 @@ public sealed record AIAnalysisResult
     public string Summary { get; init; } = "-";
 
     /// <summary>
-    /// Gets the tyre advice.
+    /// Gets the main race problems identified by the AI.
+    /// </summary>
+    [JsonPropertyName("keyProblems")]
+    public IReadOnlyList<string> KeyProblems { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets the strategy review text.
+    /// </summary>
+    [JsonPropertyName("strategyReview")]
+    public string StrategyReview { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the tyre and stint review text.
+    /// </summary>
+    [JsonPropertyName("tyreReview")]
+    public string TyreReview { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the ERS and fuel review text.
+    /// </summary>
+    [JsonPropertyName("ersFuelReview")]
+    public string ErsFuelReview { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the front and rear opponent review text.
+    /// </summary>
+    [JsonPropertyName("opponentReview")]
+    public string OpponentReview { get; init; } = "-";
+
+    /// <summary>
+    /// Gets concrete next-race improvement suggestions.
+    /// </summary>
+    [JsonPropertyName("improvements")]
+    public IReadOnlyList<string> Improvements { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets the legacy tyre advice.
     /// </summary>
     [JsonPropertyName("tyreAdvice")]
     public string TyreAdvice { get; init; } = "-";
@@ -44,7 +80,13 @@ public sealed record AIAnalysisResult
     public string TrafficAdvice { get; init; } = "-";
 
     /// <summary>
-    /// Gets the short text-to-speech message.
+    /// Gets the short text-to-speech message from the v3.0.2 detailed contract.
+    /// </summary>
+    [JsonPropertyName("tts")]
+    public string Tts { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the legacy short text-to-speech message.
     /// </summary>
     [JsonPropertyName("ttsText")]
     public string TtsText { get; init; } = "-";

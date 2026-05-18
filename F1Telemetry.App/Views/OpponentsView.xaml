@@ -20,7 +20,7 @@
                            Text="对手列表" />
                 <TextBlock Margin="0,6,0,0"
                            Foreground="#9AB0C9"
-                           Text="车手、位置、轮胎、胎龄、Pit 状态、与我差距。"
+                           Text="车手、位置、轮胎、胎龄、Pit 状态、与我差距、上一圈对比。"
                            TextWrapping="Wrap" />
 
                 <Border Margin="0,18,0,0"
@@ -32,6 +32,18 @@
                         <TextBlock Margin="0,6,0,0"
                                    Foreground="White"
                                    Text="{Binding PlayerGapText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+                <Border Margin="0,12,0,0"
+                        Padding="16"
+                        CornerRadius="16"
+                        Background="#132743">
+                    <StackPanel>
+                        <TextBlock Foreground="#7FA5D8" Text="上一圈对比" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="White"
+                                   Text="{Binding OverviewLapComparisonText}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
@@ -52,6 +64,8 @@
                                         <ColumnDefinition Width="64" />
                                         <ColumnDefinition Width="72" />
                                         <ColumnDefinition Width="86" />
+                                        <ColumnDefinition Width="88" />
+                                        <ColumnDefinition Width="132" />
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Foreground="White" Text="{Binding DisplayName}" />
@@ -60,6 +74,8 @@
                                     <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding TyreAgeText}" />
                                     <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
                                     <TextBlock Grid.Column="5" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
+                                    <TextBlock Grid.Column="6" Foreground="#7FA5D8" Text="{Binding LastLapText}" />
+                                    <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="{Binding LapComparisonText}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

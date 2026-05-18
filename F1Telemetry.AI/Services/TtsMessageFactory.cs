@@ -39,17 +39,24 @@ public sealed class TtsMessageFactory
     /// <param name="raceEvent">The detected race event.</param>
     /// <param name="options">The current TTS options.</param>
     /// <param name="sessionMode">The current high-level session mode.</param>
+    /// <param name="isRaceFinished">Whether real-time strategy speech should be suppressed after final classification.</param>
     /// <returns>The mapped TTS message when the event should be spoken; otherwise <see langword="null"/>.</returns>
     public TtsMessage? CreateForRaceEvent(
         RaceEvent raceEvent,
         TtsOptions options,
-        SessionMode sessionMode = SessionMode.Unknown)
+        SessionMode sessionMode = SessionMode.Unknown,
+        bool isRaceFinished = false)
     {
         ArgumentNullException.ThrowIfNull(raceEvent);
         ArgumentNullException.ThrowIfNull(options);
 
         if (raceEvent.EventType == EventType.DataQualityWarning ||
             string.IsNullOrWhiteSpace(raceEvent.Message))
+        {
+            return null;
+        }
+
+        if (isRaceFinished && ShouldSuppressForFinishedRace(raceEvent.EventType))
         {
             return null;
         }
@@ -93,7 +100,10 @@ public sealed class TtsMessageFactory
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(options);
 
-        var speechText = FormatAiSpeechText(result.TtsText);
+        var rawSpeechText = string.IsNullOrWhiteSpace(result.TtsText) || result.TtsText.Trim() == "-"
+            ? result.Tts
+            : result.TtsText;
+        var speechText = FormatAiSpeechText(rawSpeechText);
         if (!result.IsSuccess || string.IsNullOrWhiteSpace(speechText) || speechText == "-")
         {
             return null;
@@ -174,6 +184,8 @@ public sealed class TtsMessageFactory
                 $"flag:lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.HighTyreWear =>
                 $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}",
+            EventType.TyreWearLateStint or EventType.LapTimeComparison =>
+                $"lap{FormatOptionalInt(raceEvent.LapNumber)}",
             EventType.HighTyreTemperature or EventType.LowTyreTemperature =>
                 string.IsNullOrWhiteSpace(raceEvent.DedupKey) || raceEvent.DedupKey.Trim() == "-"
                     ? $"car{FormatOptionalInt(raceEvent.VehicleIdx)}:lap{FormatOptionalInt(raceEvent.LapNumber)}"
@@ -196,6 +208,7 @@ public sealed class TtsMessageFactory
             EventType.PlayerLapInvalidated => "lap_invalid",
             EventType.LowFuel => "low_fuel",
             EventType.HighTyreWear => "high_tyre_wear",
+            EventType.TyreWearLateStint => "tyre_wear_late_stint",
             EventType.HighTyreTemperature => "high_tyre_temperature",
             EventType.LowTyreTemperature => "low_tyre_temperature",
             EventType.SafetyCar => "safety_car",
@@ -215,6 +228,7 @@ public sealed class TtsMessageFactory
             EventType.QualifyingCleanAirWindow => "qualifying_clean_air_window",
             EventType.RacePitWindow => "race_pit_window",
             EventType.SafetyCarRestart => "safety_car_restart",
+            EventType.LapTimeComparison => "lap_time_comparison",
             EventType.RedFlagTyreChange => "red_flag_tyre_change",
             _ => "event"
         };
@@ -242,13 +256,15 @@ public sealed class TtsMessageFactory
                 or EventType.TrafficRisk
                 or EventType.RacePitWindow =>
                 TtsPriority.High,
+            EventType.LapTimeComparison =>
+                severity == EventSeverity.Warning ? TtsPriority.High : TtsPriority.Normal,
             EventType.QualifyingCleanAirWindow =>
                 TtsPriority.Normal,
             EventType.EngineFailure =>
                 TtsPriority.High,
             EventType.CarDamage or EventType.DrsFault or EventType.ErsFault =>
                 TtsPriority.Normal,
-            EventType.FrontCarPitted or EventType.RearCarPitted or EventType.LowErs =>
+            EventType.FrontCarPitted or EventType.RearCarPitted or EventType.LowErs or EventType.TyreWearLateStint =>
                 TtsPriority.Normal,
             _ => severity == EventSeverity.Warning ? TtsPriority.High : TtsPriority.Normal
         };
@@ -268,6 +284,7 @@ public sealed class TtsMessageFactory
     {
         return eventType is EventType.LowFuel
             or EventType.HighTyreWear
+            or EventType.TyreWearLateStint
             or EventType.HighTyreTemperature
             or EventType.LowTyreTemperature
             or EventType.LowErs
@@ -278,6 +295,7 @@ public sealed class TtsMessageFactory
             or EventType.TrafficRisk
             or EventType.QualifyingCleanAirWindow
             or EventType.RacePitWindow
+            or EventType.LapTimeComparison
             or EventType.SafetyCarRestart
             or EventType.RedFlagTyreChange
             or EventType.CarDamage
@@ -291,6 +309,23 @@ public sealed class TtsMessageFactory
         return raceEvent.EventType is EventType.CarDamage or EventType.DrsFault or EventType.ErsFault or EventType.EngineFailure
             ? $"event:{mappedType}:{BuildEventIdentifier(raceEvent)}"
             : $"event:{mappedType}";
+    }
+
+    private static bool ShouldSuppressForFinishedRace(EventType eventType)
+    {
+        return eventType is EventType.LowFuel
+            or EventType.HighTyreWear
+            or EventType.TyreWearLateStint
+            or EventType.HighTyreTemperature
+            or EventType.LowTyreTemperature
+            or EventType.AttackWindow
+            or EventType.DefenseWindow
+            or EventType.LowErs
+            or EventType.FrontOldTyreRisk
+            or EventType.RearNewTyrePressure
+            or EventType.TrafficRisk
+            or EventType.RacePitWindow
+            or EventType.LapTimeComparison;
     }
 
     private bool IsCoolingDownOrMarkCreated(string cooldownKey, TimeSpan cooldown, DateTimeOffset now)

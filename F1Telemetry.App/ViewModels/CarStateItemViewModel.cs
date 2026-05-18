@@ -1,3 +1,5 @@
+using System.Globalization;
+using F1Telemetry.Analytics.Events;
 using F1Telemetry.App.Formatting;
 using F1Telemetry.Core.Models;
 
@@ -44,6 +46,16 @@ public sealed class CarStateItemViewModel
     public string GapToPlayerText { get; init; } = "-";
 
     /// <summary>
+    /// Gets the opponent's previous lap time.
+    /// </summary>
+    public string LastLapText { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the previous-lap comparison against the player when data is validated.
+    /// </summary>
+    public string LapComparisonText { get; init; } = "-";
+
+    /// <summary>
     /// Creates a UI projection from the specified car snapshot.
     /// </summary>
     /// <param name="snapshot">The source snapshot.</param>
@@ -62,7 +74,9 @@ public sealed class CarStateItemViewModel
             TyreText = FormatTyre(snapshot),
             TyreAgeText = snapshot.TyresAgeLaps is null ? "-" : $"{snapshot.TyresAgeLaps} 圈",
             PitStatusText = PitStatusFormatter.Format(snapshot.PitStatus, snapshot.NumPitStops),
-            GapToPlayerText = FormatGapToPlayer(snapshot, playerCar)
+            GapToPlayerText = FormatGapToPlayer(snapshot, playerCar),
+            LastLapText = FormatLapTime(snapshot.LastLapTimeInMs),
+            LapComparisonText = FormatLapComparison(snapshot, playerCar)
         };
     }
 
@@ -77,5 +91,43 @@ public sealed class CarStateItemViewModel
     private static string FormatGapToPlayer(CarSnapshot snapshot, CarSnapshot? playerCar)
     {
         return OpponentStatusFormatter.FormatGapToPlayer(snapshot, playerCar);
+    }
+
+    private static string FormatLapComparison(CarSnapshot snapshot, CarSnapshot? playerCar)
+    {
+        if (playerCar?.Position is null || snapshot.Position is null)
+        {
+            return "-";
+        }
+
+        AdjacentLapComparison? comparison = snapshot.Position == playerCar.Position - 1
+            ? AdjacentLapComparisonBuilder.BuildFrontComparison(playerCar, snapshot)
+            : snapshot.Position == playerCar.Position + 1
+                ? AdjacentLapComparisonBuilder.BuildRearComparison(playerCar, snapshot)
+                : null;
+        if (comparison is null)
+        {
+            return snapshot.Position == playerCar.Position - 1 || snapshot.Position == playerCar.Position + 1
+                ? "等待同圈数据"
+                : "-";
+        }
+
+        var relationText = comparison.Relation == "front" ? "前车" : "后车";
+        var fasterText = comparison.PlayerWasFaster ? "快" : "慢";
+        var seconds = Math.Abs(comparison.DeltaInMs) / 1000d;
+        return $"比{relationText}{fasterText} {seconds.ToString("0.000", CultureInfo.InvariantCulture)}s";
+    }
+
+    private static string FormatLapTime(uint? milliseconds)
+    {
+        if (milliseconds is null or 0)
+        {
+            return "-";
+        }
+
+        var time = TimeSpan.FromMilliseconds(milliseconds.Value);
+        return time.TotalMinutes >= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"{(int)time.TotalMinutes}:{time.Seconds:00}.{time.Milliseconds:000}")
+            : string.Create(CultureInfo.InvariantCulture, $"{time.Seconds}.{time.Milliseconds:000}s");
     }
 }

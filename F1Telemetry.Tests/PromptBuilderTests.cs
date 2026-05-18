@@ -28,10 +28,13 @@ public sealed class PromptBuilderTests
         foreach (var key in new[]
         {
             "summary",
-            "tyreAdvice",
-            "fuelAdvice",
-            "trafficAdvice",
-            "ttsText"
+            "keyProblems",
+            "strategyReview",
+            "tyreReview",
+            "ersFuelReview",
+            "opponentReview",
+            "improvements",
+            "tts"
         })
         {
             Assert.Contains(key, prompt.SystemMessage, StringComparison.Ordinal);
@@ -102,7 +105,8 @@ public sealed class PromptBuilderTests
         Assert.Contains("短结论", combinedPrompt, StringComparison.Ordinal);
         Assert.Contains("禁止长段分析", combinedPrompt, StringComparison.Ordinal);
         Assert.Contains("TTS", combinedPrompt, StringComparison.Ordinal);
-        Assert.Contains("ttsText", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("tts", combinedPrompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("ttsText", combinedPrompt, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -185,9 +189,24 @@ public sealed class PromptBuilderTests
         Assert.Contains("Damage summary:", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("前翼左侧 30%（中度）；DRS 故障", prompt.UserMessage, StringComparison.Ordinal);
         Assert.Contains("35", combinedPrompt, StringComparison.Ordinal);
-        Assert.Contains("ttsText", combinedPrompt, StringComparison.Ordinal);
+        Assert.Contains("tts", combinedPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("packet", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("udp", prompt.UserMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Verifies ERS prompt text uses MJ formatting instead of raw joule integers.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_FormatsErsAsMegajoules()
+    {
+        var builder = new PromptBuilder();
+        var prompt = builder.BuildMessages(CreateContext());
+
+        Assert.Contains("Current ERS store energy:", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("MJ", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("2250000", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("焦耳", prompt.UserMessage, StringComparison.Ordinal);
     }
 
     private static AIAnalysisContext CreateContext(

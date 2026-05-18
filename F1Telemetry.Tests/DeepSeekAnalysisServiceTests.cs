@@ -64,6 +64,42 @@ public sealed class DeepSeekAnalysisServiceTests
     }
 
     /// <summary>
+    /// Verifies structured post-race reports keep detailed fields separate from short TTS.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_DetailedPostRaceJson_NormalizesReportAndShortTts()
+    {
+        const string completionJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "content": "{\"summary\":\"节奏后段掉速\",\"keyProblems\":[\"胎磨后段扩大\",\"ERS 使用偏激进\"],\"strategyReview\":\"窗口选择偏晚\",\"tyreReview\":\"轮胎后段掉速明显\",\"ersFuelReview\":\"ERS 剩余 998136 焦耳，需要更早省电\",\"opponentReview\":\"后车最后阶段压力增大\",\"improvements\":[\"提前两圈观察胎磨\",\"直道保留 ERS\",\"防守前先稳住出弯\"],\"tts\":\"比赛结束，策略和节奏需要复盘。\"}"
+      }
+    }
+  ]
+}
+""";
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(completionJson, Encoding.UTF8, "application/json")
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = "configured" });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("节奏后段掉速", result.Summary);
+        Assert.Equal(2, result.KeyProblems.Count);
+        Assert.Equal(3, result.Improvements.Count);
+        Assert.Contains("1.0 MJ", result.ErsFuelReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("998136", result.ErsFuelReview, StringComparison.Ordinal);
+        Assert.DoesNotContain("焦耳", result.ErsFuelReview, StringComparison.Ordinal);
+        Assert.True(result.TtsText.Length <= 35);
+        Assert.Equal(result.Tts, result.TtsText);
+    }
+
+    /// <summary>
     /// Verifies English-heavy AI speech is replaced before it reaches TTS.
     /// </summary>
     [Fact]
