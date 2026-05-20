@@ -26,9 +26,13 @@ namespace F1Telemetry.App.ViewModels;
 public sealed class CornerAnalysisViewModel : ViewModelBase
 {
     private const int MinimumReferenceLapSamples = 3;
+    private const int MinimumVisualChartSamples = 3;
     private const int MinimumReasonableLapTimeMs = 30_000;
     private const int MaximumReasonableLapTimeMs = 600_000;
     private const float SignificantFuelDifferenceLitres = 5f;
+    private const double VisualChartWidth = 220d;
+    private const double VisualChartHeight = 72d;
+    private const int PositionIndicatorSegments = 10;
     private readonly ILapSampleRepository _lapSampleRepository;
     private readonly IEventRepository? _eventRepository;
     private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
@@ -57,6 +61,10 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private string _dataQualityReasonText = "-";
     private string _referenceStatusText = "-";
     private string _engineerAdviceStatusText = "等待 AI 弯角分析。";
+    private string _engineerAdviceNoticeText = "等待 AI 弯角分析。";
+    private string _engineerPrimaryProblemText = "等待 AI 弯角分析。";
+    private string _engineerDrivingActionText = "刷新弯角分析后生成驾驶动作。";
+    private string _engineerNextLapFocusText = "刷新弯角分析后生成下圈重点。";
     private string _aiAnnotationText = "刷新弯角分析后生成 AI 工程师建议。";
     private CornerReferenceInfo _referenceInfo = CornerReferenceInfo.None();
     private CornerEngineerAdviceState _engineerAdviceState = CornerEngineerAdviceState.Ready;
@@ -421,6 +429,42 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Gets the engineer-advice status notice shown above the structured cards.
+    /// </summary>
+    public string EngineerAdviceNoticeText
+    {
+        get => _engineerAdviceNoticeText;
+        private set => SetProperty(ref _engineerAdviceNoticeText, value);
+    }
+
+    /// <summary>
+    /// Gets the primary problem from the latest engineer advice.
+    /// </summary>
+    public string EngineerPrimaryProblemText
+    {
+        get => _engineerPrimaryProblemText;
+        private set => SetProperty(ref _engineerPrimaryProblemText, value);
+    }
+
+    /// <summary>
+    /// Gets the concrete driving action from the latest engineer advice.
+    /// </summary>
+    public string EngineerDrivingActionText
+    {
+        get => _engineerDrivingActionText;
+        private set => SetProperty(ref _engineerDrivingActionText, value);
+    }
+
+    /// <summary>
+    /// Gets the next-lap focus from the latest engineer advice.
+    /// </summary>
+    public string EngineerNextLapFocusText
+    {
+        get => _engineerNextLapFocusText;
+        private set => SetProperty(ref _engineerNextLapFocusText, value);
+    }
+
+    /// <summary>
     /// Gets the detailed AI analysis note shown below the corner view.
     /// </summary>
     public string AiAnnotationText
@@ -447,6 +491,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         ResetDashboardSummaries();
         ErrorMessage = string.Empty;
         EngineerAdviceStatusText = "等待 AI 弯角分析。";
+        ResetEngineerAdviceCards();
         AiAnnotationText = "刷新弯角分析后生成 AI 工程师建议。";
         SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
         try
@@ -504,12 +549,24 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             foreach (var summary in result.Corners)
             {
                 var referenceMetrics = BuildReferenceCornerMetrics(summary.Segment, referenceSamples);
+                var visualEvidence = BuildVisualEvidence(summary.Segment, map, lapSamples, referenceSamples);
                 var row = CornerSummaryRowViewModel.FromSummary(
                     summary,
                     referenceMetrics?.EntrySpeedKph,
                     referenceMetrics?.MinimumSpeedKph,
                     referenceMetrics?.ExitSpeedKph,
-                    referenceMetrics?.MaxBrake);
+                    referenceMetrics?.MaxBrake,
+                    visualEvidence.Speed.CurrentPathData,
+                    visualEvidence.Speed.ReferencePathData,
+                    visualEvidence.Speed.StatusText,
+                    visualEvidence.Brake.CurrentPathData,
+                    visualEvidence.Brake.ReferencePathData,
+                    visualEvidence.Brake.StatusText,
+                    visualEvidence.Throttle.CurrentPathData,
+                    visualEvidence.Throttle.ReferencePathData,
+                    visualEvidence.Throttle.StatusText,
+                    visualEvidence.Position.IndicatorText,
+                    visualEvidence.Position.StatusText);
                 CornerRows.Add(row);
             }
 
@@ -567,6 +624,62 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
     }
 
+    private void ResetEngineerAdviceCards()
+    {
+        EngineerAdviceNoticeText = "等待 AI 弯角分析。";
+        EngineerPrimaryProblemText = "等待 AI 弯角分析。";
+        EngineerDrivingActionText = "刷新弯角分析后生成驾驶动作。";
+        EngineerNextLapFocusText = "刷新弯角分析后生成下圈重点。";
+    }
+
+    private void SetEngineerAdviceLoadingCards(bool hasLimitedData)
+    {
+        EngineerAdviceNoticeText = hasLimitedData
+            ? "参考圈或采样不足，建议仅供参考"
+            : "AI 正在分析弯角证据。";
+        EngineerPrimaryProblemText = "AI 分析中...";
+        EngineerDrivingActionText = "正在整理驾驶动作。";
+        EngineerNextLapFocusText = "正在生成下圈重点。";
+    }
+
+    private void SetEngineerAdviceInsufficientCards()
+    {
+        EngineerAdviceNoticeText = "参考圈或采样不足，建议仅供参考";
+        EngineerPrimaryProblemText = "当前数据不足，无法确认主要问题。";
+        EngineerDrivingActionText = "先补齐参考圈或 LapSample 后再复盘。";
+        EngineerNextLapFocusText = "下一圈先稳定完成有效圈。";
+    }
+
+    private void SetEngineerAdviceFailureCards(string failureText)
+    {
+        EngineerAdviceNoticeText = failureText;
+        EngineerPrimaryProblemText = "AI 生成失败。";
+        EngineerDrivingActionText = failureText;
+        EngineerNextLapFocusText = "修复配置或网络后可重新生成。";
+    }
+
+    private void SetEngineerAdviceGeneratedCards(
+        AIAnalysisResult aiResult,
+        IReadOnlyList<string> suggestions,
+        bool hasLimitedData)
+    {
+        EngineerAdviceNoticeText = hasLimitedData
+            ? "参考圈或采样不足，建议仅供参考"
+            : "已生成结构化工程师建议。";
+        EngineerPrimaryProblemText = FirstMeaningful(
+            aiResult.KeyProblems.Concat([aiResult.Summary, AiAnnotationText]))
+            ?? "主要问题未明确，先按时间差最大的弯角复盘。";
+        EngineerDrivingActionText = FirstMeaningful(
+            suggestions
+                .Concat([aiResult.StrategyReview, aiResult.TyreReview, aiResult.Summary]))
+            ?? "入弯先稳定刹车，再逐步打开油门。";
+        EngineerNextLapFocusText = FirstMeaningful(
+            suggestions
+                .Skip(1)
+                .Concat([aiResult.OpponentReview, aiResult.ErsFuelReview, aiResult.Summary]))
+            ?? "下一圈优先复核最弱弯角的刹车点和出弯油门。";
+    }
+
     private async Task GenerateEngineerAdviceAsync(
         HistorySessionItemViewModel? session,
         LapSummaryItemViewModel? lap,
@@ -582,6 +695,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
             EngineerAdviceStatusText = "当前数据不足，建议仅供参考。";
+            SetEngineerAdviceInsufficientCards();
             return;
         }
 
@@ -589,12 +703,14 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
             EngineerAdviceStatusText = "生成失败：未接入 AI 服务。";
+            SetEngineerAdviceFailureCards("生成失败：未接入 AI 服务。");
             return;
         }
 
         IsEngineerAdviceLoading = true;
         SetEngineerAdviceState(CornerEngineerAdviceState.Loading);
         var hasLimitedData = HasLimitedCornerData();
+        SetEngineerAdviceLoadingCards(hasLimitedData);
         EngineerAdviceStatusText = hasLimitedData
             ? "AI分析中，当前数据不足，建议仅供参考。"
             : "AI分析中，请稍候。";
@@ -607,6 +723,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             {
                 SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
                 EngineerAdviceStatusText = "生成失败：AI未启用。";
+                SetEngineerAdviceFailureCards("生成失败：AI未启用。");
                 return;
             }
 
@@ -615,7 +732,9 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             if (!aiResult.IsSuccess)
             {
                 SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
-                EngineerAdviceStatusText = $"生成失败：{ResolveFailureMessage(aiResult.ErrorMessage)}";
+                var failureText = $"生成失败：{ResolveFailureMessage(aiResult.ErrorMessage)}";
+                EngineerAdviceStatusText = failureText;
+                SetEngineerAdviceFailureCards(failureText);
                 return;
             }
 
@@ -633,6 +752,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             }
 
             AiAnnotationText = BuildAiAnnotationText(aiResult);
+            SetEngineerAdviceGeneratedCards(aiResult, suggestions, hasLimitedData);
             SetEngineerAdviceState(CornerEngineerAdviceState.Generated);
             EngineerAdviceStatusText = suggestions.Length == 0
                 ? "已生成，但没有可显示的工程师建议。"
@@ -642,16 +762,19 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
             EngineerAdviceStatusText = "生成失败：AI请求超时，请重试。";
+            SetEngineerAdviceFailureCards("生成失败：AI请求超时，请重试。");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
             EngineerAdviceStatusText = "生成失败：AI建议生成已取消。";
+            SetEngineerAdviceFailureCards("生成失败：AI建议生成已取消。");
         }
         catch (Exception ex)
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
             EngineerAdviceStatusText = $"生成失败：{ex.Message}";
+            SetEngineerAdviceFailureCards($"生成失败：{ex.Message}");
         }
         finally
         {
@@ -792,6 +915,13 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         return "AI已完成弯角分析，建议见工程师建议。";
     }
 
+    private static string? FirstMeaningful(IEnumerable<string> candidates)
+    {
+        return candidates
+            .Select(value => value?.Trim())
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value) && value != "-");
+    }
+
     private static string ResolveEngineerAdviceSpeechText(AIAnalysisResult result)
     {
         if (!string.IsNullOrWhiteSpace(result.Tts) && result.Tts.Trim() != "-")
@@ -905,6 +1035,132 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private static string FormatSignedSeconds(int timeInMs)
     {
         return $"{timeInMs / 1000d:+0.000;-0.000;0.000}s";
+    }
+
+    private static CornerVisualEvidence BuildVisualEvidence(
+        TrackSegment segment,
+        TrackSegmentMap map,
+        IReadOnlyList<LapSample> currentSamples,
+        IReadOnlyList<LapSample>? referenceSamples)
+    {
+        var currentSegmentSamples = SelectSegmentSamples(segment, currentSamples);
+        var referenceSegmentSamples = referenceSamples is null
+            ? Array.Empty<LapSample>()
+            : SelectSegmentSamples(segment, referenceSamples);
+
+        return new CornerVisualEvidence(
+            BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.SpeedKph),
+            BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.Brake),
+            BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.Throttle),
+            BuildPositionEvidence(segment, map));
+    }
+
+    private static IReadOnlyList<LapSample> SelectSegmentSamples(
+        TrackSegment segment,
+        IReadOnlyList<LapSample> samples)
+    {
+        return samples
+            .Where(sample => sample.LapDistance is not null && segment.ContainsDistance(sample.LapDistance.Value))
+            .OrderBy(sample => sample.LapDistance)
+            .ToArray();
+    }
+
+    private static CornerMetricChartEvidence BuildMetricChartEvidence(
+        IReadOnlyList<LapSample> currentSamples,
+        IReadOnlyList<LapSample> referenceSamples,
+        bool hasReferenceLap,
+        Func<LapSample, double?> metricSelector)
+    {
+        if (!hasReferenceLap)
+        {
+            return CornerMetricChartEvidence.MissingReference();
+        }
+
+        var currentValues = SelectMetricValues(currentSamples, metricSelector);
+        var referenceValues = SelectMetricValues(referenceSamples, metricSelector);
+        if (currentValues.Count < MinimumVisualChartSamples || referenceValues.Count < MinimumVisualChartSamples)
+        {
+            return CornerMetricChartEvidence.InsufficientSamples();
+        }
+
+        var min = Math.Min(currentValues.Min(), referenceValues.Min());
+        var max = Math.Max(currentValues.Max(), referenceValues.Max());
+        return new CornerMetricChartEvidence(
+            BuildChartPathData(currentValues, min, max),
+            BuildChartPathData(referenceValues, min, max),
+            "当前圈 vs 参考圈");
+    }
+
+    private static IReadOnlyList<double> SelectMetricValues(
+        IReadOnlyList<LapSample> samples,
+        Func<LapSample, double?> metricSelector)
+    {
+        return samples
+            .Select(metricSelector)
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+    }
+
+    private static string BuildChartPathData(
+        IReadOnlyList<double> values,
+        double min,
+        double max)
+    {
+        var builder = new StringBuilder();
+        var range = Math.Abs(max - min) < 0.001d ? 1d : max - min;
+        for (var index = 0; index < values.Count; index++)
+        {
+            var x = values.Count == 1
+                ? VisualChartWidth / 2d
+                : index * VisualChartWidth / (values.Count - 1);
+            var y = VisualChartHeight - ((values[index] - min) / range * VisualChartHeight);
+            builder.Append(index == 0 ? "M " : " L ");
+            builder.Append(x.ToString("0.##", CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(y.ToString("0.##", CultureInfo.InvariantCulture));
+        }
+
+        return builder.ToString();
+    }
+
+    private static CornerPositionEvidence BuildPositionEvidence(TrackSegment segment, TrackSegmentMap map)
+    {
+        if (map.LapLengthMeters is not > 0)
+        {
+            return CornerPositionEvidence.Missing();
+        }
+
+        var midpoint = CalculateSegmentMidpoint(segment, map.LapLengthMeters.Value);
+        var percent = Math.Clamp(midpoint / map.LapLengthMeters.Value * 100d, 0d, 100d);
+        var markerIndex = Math.Clamp((int)Math.Round(percent / 100d * PositionIndicatorSegments), 0, PositionIndicatorSegments);
+        var beforeMarker = new string('━', markerIndex);
+        var afterMarker = new string('━', PositionIndicatorSegments - markerIndex);
+        var cornerText = segment.CornerNumber is null
+            ? segment.Name
+            : $"T{segment.CornerNumber.Value.ToString(CultureInfo.InvariantCulture)} {segment.Name}";
+        var status = map.Status == TrackSegmentMapStatus.Estimated ||
+                     map.Warnings.Contains(DataQualityWarning.EstimatedTrackMap) ||
+                     segment.Warnings.Contains(DataQualityWarning.EstimatedTrackMap)
+            ? "估算位置"
+            : "赛道位置";
+
+        return new CornerPositionEvidence(
+            $"起点 {beforeMarker}●{afterMarker}  {cornerText}",
+            $"{status} · {percent:0}%");
+    }
+
+    private static float CalculateSegmentMidpoint(TrackSegment segment, float lapLengthMeters)
+    {
+        if (segment.StartDistanceMeters <= segment.EndDistanceMeters)
+        {
+            return (segment.StartDistanceMeters + segment.EndDistanceMeters) / 2f;
+        }
+
+        var wrappedMidpoint = (segment.StartDistanceMeters + segment.EndDistanceMeters + lapLengthMeters) / 2f;
+        return wrappedMidpoint >= lapLengthMeters
+            ? wrappedMidpoint - lapLengthMeters
+            : wrappedMidpoint;
     }
 
     private static ReferenceCornerMetrics? BuildReferenceCornerMetrics(
@@ -1296,6 +1552,38 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         double? MinimumSpeedKph,
         double? ExitSpeedKph,
         double? MaxBrake);
+
+    private sealed record CornerVisualEvidence(
+        CornerMetricChartEvidence Speed,
+        CornerMetricChartEvidence Brake,
+        CornerMetricChartEvidence Throttle,
+        CornerPositionEvidence Position);
+
+    private sealed record CornerMetricChartEvidence(
+        string? CurrentPathData,
+        string? ReferencePathData,
+        string StatusText)
+    {
+        public static CornerMetricChartEvidence MissingReference()
+        {
+            return new CornerMetricChartEvidence(null, null, "缺少参考圈，暂无法对比");
+        }
+
+        public static CornerMetricChartEvidence InsufficientSamples()
+        {
+            return new CornerMetricChartEvidence(null, null, "采样不足，暂无法绘制");
+        }
+    }
+
+    private sealed record CornerPositionEvidence(
+        string IndicatorText,
+        string StatusText)
+    {
+        public static CornerPositionEvidence Missing()
+        {
+            return new CornerPositionEvidence("暂无赛道位置数据", "暂无赛道位置数据");
+        }
+    }
 
     private enum CornerEngineerAdviceState
     {

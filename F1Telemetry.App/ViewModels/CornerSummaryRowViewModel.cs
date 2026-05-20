@@ -160,6 +160,61 @@ public sealed class CornerSummaryRowViewModel
     public string BrakeComparisonText { get; init; } = "缺少参考数据";
 
     /// <summary>
+    /// Gets the current-lap speed chart path for the selected corner.
+    /// </summary>
+    public string? SpeedCurrentPathData { get; init; }
+
+    /// <summary>
+    /// Gets the reference-lap speed chart path for the selected corner.
+    /// </summary>
+    public string? SpeedReferencePathData { get; init; }
+
+    /// <summary>
+    /// Gets the speed chart status text.
+    /// </summary>
+    public string SpeedChartStatusText { get; init; } = "采样不足，暂无法绘制";
+
+    /// <summary>
+    /// Gets the current-lap brake chart path for the selected corner.
+    /// </summary>
+    public string? BrakeCurrentPathData { get; init; }
+
+    /// <summary>
+    /// Gets the reference-lap brake chart path for the selected corner.
+    /// </summary>
+    public string? BrakeReferencePathData { get; init; }
+
+    /// <summary>
+    /// Gets the brake chart status text.
+    /// </summary>
+    public string BrakeChartStatusText { get; init; } = "采样不足，暂无法绘制";
+
+    /// <summary>
+    /// Gets the current-lap throttle chart path for the selected corner.
+    /// </summary>
+    public string? ThrottleCurrentPathData { get; init; }
+
+    /// <summary>
+    /// Gets the reference-lap throttle chart path for the selected corner.
+    /// </summary>
+    public string? ThrottleReferencePathData { get; init; }
+
+    /// <summary>
+    /// Gets the throttle chart status text.
+    /// </summary>
+    public string ThrottleChartStatusText { get; init; } = "采样不足，暂无法绘制";
+
+    /// <summary>
+    /// Gets the lightweight corner-position indicator text.
+    /// </summary>
+    public string PositionIndicatorText { get; init; } = "暂无赛道位置数据";
+
+    /// <summary>
+    /// Gets the corner-position data status text.
+    /// </summary>
+    public string PositionStatusText { get; init; } = "暂无赛道位置数据";
+
+    /// <summary>
     /// Creates a row from a corner summary.
     /// </summary>
     /// <param name="summary">The corner summary to project.</param>
@@ -167,12 +222,34 @@ public sealed class CornerSummaryRowViewModel
     /// <param name="referenceMinimumSpeedKph">The reference minimum speed, when available.</param>
     /// <param name="referenceExitSpeedKph">The reference exit speed, when available.</param>
     /// <param name="referenceMaxBrake">The reference maximum brake input, when available.</param>
+    /// <param name="speedCurrentPathData">Current-lap speed chart path data.</param>
+    /// <param name="speedReferencePathData">Reference-lap speed chart path data.</param>
+    /// <param name="speedChartStatusText">Speed chart status text.</param>
+    /// <param name="brakeCurrentPathData">Current-lap brake chart path data.</param>
+    /// <param name="brakeReferencePathData">Reference-lap brake chart path data.</param>
+    /// <param name="brakeChartStatusText">Brake chart status text.</param>
+    /// <param name="throttleCurrentPathData">Current-lap throttle chart path data.</param>
+    /// <param name="throttleReferencePathData">Reference-lap throttle chart path data.</param>
+    /// <param name="throttleChartStatusText">Throttle chart status text.</param>
+    /// <param name="positionIndicatorText">Lightweight corner-position indicator text.</param>
+    /// <param name="positionStatusText">Corner-position data status text.</param>
     public static CornerSummaryRowViewModel FromSummary(
         CornerSummary summary,
         double? referenceEntrySpeedKph = null,
         double? referenceMinimumSpeedKph = null,
         double? referenceExitSpeedKph = null,
-        double? referenceMaxBrake = null)
+        double? referenceMaxBrake = null,
+        string? speedCurrentPathData = null,
+        string? speedReferencePathData = null,
+        string speedChartStatusText = "采样不足，暂无法绘制",
+        string? brakeCurrentPathData = null,
+        string? brakeReferencePathData = null,
+        string brakeChartStatusText = "采样不足，暂无法绘制",
+        string? throttleCurrentPathData = null,
+        string? throttleReferencePathData = null,
+        string throttleChartStatusText = "采样不足，暂无法绘制",
+        string positionIndicatorText = "暂无赛道位置数据",
+        string positionStatusText = "暂无赛道位置数据")
     {
         ArgumentNullException.ThrowIfNull(summary);
         var warningText = summary.Warnings.Count == 0 ? "-" : string.Join(" / ", summary.Warnings);
@@ -210,7 +287,18 @@ public sealed class CornerSummaryRowViewModel
             EntrySpeedComparisonText = FormatSpeedComparison(summary.EntrySpeedKph, referenceEntrySpeedKph),
             MinimumSpeedComparisonText = FormatSpeedComparison(summary.MinSpeedKph, referenceMinimumSpeedKph),
             ExitSpeedComparisonText = FormatSpeedComparison(summary.ExitSpeedKph, referenceExitSpeedKph),
-            BrakeComparisonText = FormatPercentComparison(summary.MaxBrake is null ? null : summary.MaxBrake.Value * 100d, referenceMaxBrakePercent)
+            BrakeComparisonText = FormatPercentComparison(summary.MaxBrake is null ? null : summary.MaxBrake.Value * 100d, referenceMaxBrakePercent),
+            SpeedCurrentPathData = speedCurrentPathData,
+            SpeedReferencePathData = speedReferencePathData,
+            SpeedChartStatusText = speedChartStatusText,
+            BrakeCurrentPathData = brakeCurrentPathData,
+            BrakeReferencePathData = brakeReferencePathData,
+            BrakeChartStatusText = brakeChartStatusText,
+            ThrottleCurrentPathData = throttleCurrentPathData,
+            ThrottleReferencePathData = throttleReferencePathData,
+            ThrottleChartStatusText = throttleChartStatusText,
+            PositionIndicatorText = positionIndicatorText,
+            PositionStatusText = positionStatusText
         };
     }
 
