@@ -93,7 +93,13 @@ public partial class App : Application
                 lapSampleRepository,
                 raceEngineerReportRepository),
             sessionComparison: sessionComparison,
-            cornerAnalysis: new CornerAnalysisViewModel(historyBrowser, lapSampleRepository));
+            cornerAnalysis: new CornerAnalysisViewModel(
+                historyBrowser,
+                lapSampleRepository,
+                aiAnalysisService: aiAnalysisService,
+                settingsStore: appSettingsStore,
+                ttsMessageFactory: ttsMessageFactory,
+                ttsQueue: ttsQueue));
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

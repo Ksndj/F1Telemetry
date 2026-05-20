@@ -1,6 +1,13 @@
+using F1Telemetry.AI.Interfaces;
+using F1Telemetry.AI.Models;
+using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.ViewModels;
+using F1Telemetry.Core.Interfaces;
+using F1Telemetry.Core.Models;
 using F1Telemetry.Storage.Interfaces;
 using F1Telemetry.Storage.Models;
+using F1Telemetry.TTS.Models;
+using F1Telemetry.TTS.Services;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -187,6 +194,75 @@ public sealed class CornerAnalysisViewModelTests
         Assert.NotEmpty(viewModel.ErrorMessage);
     }
 
+    /// <summary>
+    /// Verifies AI-generated engineer advice is shown in the UI and TTS is paced per session lap.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithAiEngineerAdvice_ShowsSuggestionsAndLimitsTts()
+    {
+        var historyBrowser = CreateHistoryBrowserWithSupportedLap("session-ai");
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                CreateSample("session-ai", 7, 0, 270, 10_000, 210, 0.8, 0.0),
+                CreateSample("session-ai", 7, 1, 330, 10_600, 160, 0.2, 0.6),
+                CreateSample("session-ai", 7, 2, 410, 11_500, 110, 0.1, 0.9),
+                CreateSample("session-ai", 7, 3, 500, 12_700, 190, 0.9, 0.0)
+            ]
+        };
+        var aiService = new RecordingAiAnalysisService
+        {
+            Result = new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = "7 号弯损失最集中，需要优化入弯速度。",
+                Improvements =
+                [
+                    "7 号弯入弯提前轻刹，避免最低速度过高导致推头。",
+                    "出弯油门分两段打开，先稳住车尾再全油。",
+                    "下一圈优先复核 7 号弯和 11 号弯的刹车点。"
+                ],
+                Tts = "7号弯先稳入弯，再提早出弯。"
+            }
+        };
+        var settingsStore = new FixedSettingsStore(
+            new AppSettingsDocument
+            {
+                Ai = new AISettings
+                {
+                    AiEnabled = true,
+                    ApiKey = "test-key"
+                },
+                Tts = new TtsOptions
+                {
+                    TtsEnabled = true,
+                    CooldownSeconds = 8
+                }
+            });
+        var ttsService = new RecordingTtsService();
+        using var ttsQueue = new TtsQueue(ttsService, new TtsOptions { TtsEnabled = true });
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            aiAnalysisService: aiService,
+            settingsStore: settingsStore,
+            ttsMessageFactory: new F1Telemetry.AI.Services.TtsMessageFactory(),
+            ttsQueue: ttsQueue);
+
+        await viewModel.RefreshAsync();
+        await ttsService.WaitForSpeechCountAsync(1);
+        await viewModel.GenerateEngineerAdviceAsync();
+        await Task.Delay(100);
+
+        Assert.Equal(2, aiService.RequestCount);
+        Assert.Equal(3, viewModel.EngineerSuggestions.Count);
+        Assert.Contains("7 号弯", viewModel.EngineerSuggestions[0], StringComparison.Ordinal);
+        Assert.Contains("TTS冷却中", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Single(ttsService.SpokenTexts);
+        Assert.Equal("7号弯先稳入弯，再提早出弯。", ttsService.SpokenTexts[0]);
+    }
+
     private static HistorySessionBrowserViewModel CreateHistoryBrowserWithSupportedLap(string sessionId)
     {
         return new HistorySessionBrowserViewModel(
@@ -302,6 +378,94 @@ public sealed class CornerAnalysisViewModelTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
+        }
+    }
+
+    private sealed class RecordingAiAnalysisService : IAIAnalysisService
+    {
+        public AIAnalysisResult Result { get; init; } = new();
+
+        public int RequestCount { get; private set; }
+
+        public Task<AIAnalysisResult> AnalyzeAsync(
+            AIAnalysisContext context,
+            AISettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            RequestCount++;
+            Assert.Contains("Corner analysis", context.TelemetryAnalysisSummary, StringComparison.Ordinal);
+            return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class FixedSettingsStore : IAppSettingsStore
+    {
+        private readonly AppSettingsDocument _document;
+
+        public FixedSettingsStore(AppSettingsDocument document)
+        {
+            _document = document;
+        }
+
+        public Task<AppSettingsDocument> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_document);
+        }
+
+        public Task SaveAiSettingsAsync(AISettings settings, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SaveTtsSettingsAsync(TtsOptions options, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SaveRaceWeekendTyrePlanAsync(RaceWeekendTyrePlan plan, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class RecordingTtsService : ITtsService
+    {
+        private readonly List<string> _spokenTexts = new();
+
+        public IReadOnlyList<string> SpokenTexts
+        {
+            get
+            {
+                lock (_spokenTexts)
+                {
+                    return _spokenTexts.ToArray();
+                }
+            }
+        }
+
+        public void Configure(string? voiceName, int volume, int rate)
+        {
+        }
+
+        public Task SpeakAsync(string text, CancellationToken cancellationToken = default)
+        {
+            lock (_spokenTexts)
+            {
+                _spokenTexts.Add(text);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public async Task WaitForSpeechCountAsync(int expectedCount)
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                if (SpokenTexts.Count >= expectedCount)
+                {
+                    return;
+                }
+
+                await Task.Delay(25);
+            }
+
+            Assert.True(SpokenTexts.Count >= expectedCount, $"Expected at least {expectedCount} spoken TTS messages.");
         }
     }
 

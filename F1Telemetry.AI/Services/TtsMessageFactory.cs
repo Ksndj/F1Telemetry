@@ -16,6 +16,7 @@ public sealed class TtsMessageFactory
 {
     private const int MaxAiTtsTextLength = 48;
     private const int MinimumAiCooldownSeconds = 20;
+    private const int MinimumEngineerAdviceCooldownSeconds = 60;
     private const int MinimumRaceRiskCooldownSeconds = 30;
     private readonly object _sync = new();
     private readonly Dictionary<string, DateTimeOffset> _lastCreatedAtByCooldownKey = new(StringComparer.Ordinal);
@@ -128,6 +129,43 @@ public sealed class TtsMessageFactory
             Type = "lap",
             Text = speechText,
             DedupKey = BuildDedupKey("ai", "lap", lastLap.LapNumber.ToString(CultureInfo.InvariantCulture)),
+            Priority = TtsPriority.Low,
+            Cooldown = cooldown
+        };
+    }
+
+    /// <summary>
+    /// Creates a low-priority TTS message for AI-generated engineer advice with its own pacing key.
+    /// </summary>
+    /// <param name="scopeKey">Stable scope for cooldown and deduplication, such as a session-lap key.</param>
+    /// <param name="speechText">The AI-generated short advice to speak.</param>
+    /// <param name="options">The current TTS options.</param>
+    /// <returns>The mapped TTS message when it should be spoken; otherwise <see langword="null"/>.</returns>
+    public TtsMessage? CreateForEngineerAdvice(string scopeKey, string? speechText, TtsOptions options)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(scopeKey);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var normalizedSpeechText = FormatAiSpeechText(speechText);
+        if (string.IsNullOrWhiteSpace(normalizedSpeechText) || normalizedSpeechText == "-")
+        {
+            return null;
+        }
+
+        var normalizedScopeKey = scopeKey.Trim();
+        var cooldown = TimeSpan.FromSeconds(Math.Max(Math.Max(1, options.CooldownSeconds), MinimumEngineerAdviceCooldownSeconds));
+        var cooldownKey = $"ai:engineer_advice:{normalizedScopeKey}";
+        if (IsCoolingDownOrMarkCreated(cooldownKey, cooldown, DateTimeOffset.UtcNow))
+        {
+            return null;
+        }
+
+        return new TtsMessage
+        {
+            Source = "AI",
+            Type = "engineer_advice",
+            Text = normalizedSpeechText,
+            DedupKey = BuildDedupKey("ai", "engineer_advice", normalizedScopeKey),
             Priority = TtsPriority.Low,
             Cooldown = cooldown
         };

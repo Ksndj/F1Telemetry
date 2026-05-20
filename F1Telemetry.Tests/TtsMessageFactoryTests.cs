@@ -109,6 +109,29 @@ public sealed class TtsMessageFactoryTests
     }
 
     /// <summary>
+    /// Verifies AI engineer advice has a separate cooldown from lap-level AI summaries.
+    /// </summary>
+    [Fact]
+    public void CreateForEngineerAdvice_UsesDedicatedCooldownScope()
+    {
+        var factory = new TtsMessageFactory();
+        var options = new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 };
+
+        var first = factory.CreateForEngineerAdvice("session-a:lap35", "重点优化 7 号弯入弯速度。", options);
+        var duplicate = factory.CreateForEngineerAdvice("session-a:lap35", "重点优化 7 号弯入弯速度。", options);
+        var nextLap = factory.CreateForEngineerAdvice("session-a:lap36", "下一圈稳定刹车点。", options);
+
+        Assert.NotNull(first);
+        Assert.Null(duplicate);
+        Assert.NotNull(nextLap);
+        Assert.Equal("AI", first!.Source);
+        Assert.Equal("engineer_advice", first.Type);
+        Assert.Equal("ai:engineer_advice:session-a:lap35", first.DedupKey);
+        Assert.Equal(TimeSpan.FromSeconds(60), first.Cooldown);
+        Assert.Equal(TtsPriority.Low, first.Priority);
+    }
+
+    /// <summary>
     /// Verifies that data-quality warnings stay in logs and never become spoken TTS.
     /// </summary>
     [Fact]
