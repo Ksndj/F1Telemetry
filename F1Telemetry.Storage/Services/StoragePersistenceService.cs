@@ -20,6 +20,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     private readonly ILapSampleRepository? _lapSampleRepository;
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
+    private readonly IRaceEngineerReportRepository? _raceEngineerReportRepository;
     private readonly Func<CancellationToken, Task>? _initializeAsync;
     private readonly IDatabaseService? _ownedDatabaseService;
     private readonly object _queueLock = new();
@@ -44,7 +45,8 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         Func<CancellationToken, Task>? initializeAsync = null,
         IDatabaseService? ownedDatabaseService = null,
         int maxBufferedCommands = DefaultMaxBufferedCommands,
-        int maxCriticalCommands = DefaultMaxCriticalCommands)
+        int maxCriticalCommands = DefaultMaxCriticalCommands,
+        IRaceEngineerReportRepository? raceEngineerReportRepository = null)
         : this(
             sessionRepository,
             lapRepository,
@@ -54,7 +56,8 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             initializeAsync,
             ownedDatabaseService,
             maxBufferedCommands,
-            maxCriticalCommands)
+            maxCriticalCommands,
+            raceEngineerReportRepository)
     {
     }
 
@@ -70,7 +73,8 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         Func<CancellationToken, Task>? initializeAsync = null,
         IDatabaseService? ownedDatabaseService = null,
         int maxBufferedCommands = DefaultMaxBufferedCommands,
-        int maxCriticalCommands = DefaultMaxCriticalCommands)
+        int maxCriticalCommands = DefaultMaxCriticalCommands,
+        IRaceEngineerReportRepository? raceEngineerReportRepository = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBufferedCommands);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCriticalCommands);
@@ -80,6 +84,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         _lapSampleRepository = lapSampleRepository;
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
+        _raceEngineerReportRepository = raceEngineerReportRepository;
         _initializeAsync = initializeAsync;
         _ownedDatabaseService = ownedDatabaseService;
         _maxBufferedCommands = maxBufferedCommands;
@@ -142,6 +147,13 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     {
         ArgumentNullException.ThrowIfNull(analysisResult);
         EnqueueCommand(new PersistAiReportCommand(lapNumber, analysisResult, DateTimeOffset.UtcNow));
+    }
+
+    /// <inheritdoc />
+    public void EnqueueRaceEngineerReport(StoredRaceEngineerReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        EnqueueCommand(new PersistRaceEngineerReportCommand(report));
     }
 
     /// <inheritdoc />
@@ -370,6 +382,18 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                             _workerCts.Token);
                         break;
 
+                    case PersistRaceEngineerReportCommand persistRaceEngineerReport:
+                        if (activeSessionId is null || _raceEngineerReportRepository is null)
+                        {
+                            EmitLog("未发现活动会话，已跳过赛后工程师报告持久化。");
+                            break;
+                        }
+
+                        await _raceEngineerReportRepository.AddAsync(
+                            persistRaceEngineerReport.Report with { SessionId = activeSessionId },
+                            _workerCts.Token);
+                        break;
+
                     case CompleteActiveSessionCommand completeSession:
                         await CompleteActiveSessionInternalAsync(activeSessionId, completeSession.EndedAt);
                         activeSessionId = null;
@@ -529,6 +553,8 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         int LapNumber,
         AIAnalysisResult AnalysisResult,
         DateTimeOffset CreatedAt) : StorageCommand(false);
+
+    private sealed record PersistRaceEngineerReportCommand(StoredRaceEngineerReport Report) : StorageCommand(false);
 
     private sealed record CompleteActiveSessionCommand(
         DateTimeOffset EndedAt,

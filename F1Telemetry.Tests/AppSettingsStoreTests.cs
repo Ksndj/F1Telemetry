@@ -317,12 +317,84 @@ public sealed class AppSettingsStoreTests
         Assert.Equal("configured", persisted.Ai.ApiKey);
         Assert.True(persisted.Tts.TtsEnabled);
         Assert.Equal(20778, persisted.Udp.ListenPort);
+        Assert.Equal(1, persisted.RaceWeekendTyrePlan.SoftCount);
+        Assert.Equal(2, persisted.RaceWeekendTyrePlan.MediumCount);
+        Assert.Equal(1, persisted.RaceWeekendTyrePlan.HardCount);
+        Assert.Equal(1, persisted.RaceWeekendTyrePlan.IntermediateCount);
+        Assert.Equal(1, persisted.RaceWeekendTyrePlan.WetCount);
         Assert.Equal("Soft=1; Medium=2; Hard=1; Intermediate=1; Wet=1", persisted.RaceWeekendTyrePlan.InventoryText);
         Assert.Equal(58, persisted.RaceWeekendTyrePlan.MaxRecommendedWearPercent);
+        Assert.Equal(1, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("softCount").GetInt32());
+        Assert.Equal(2, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("mediumCount").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("hardCount").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("intermediateCount").GetInt32());
+        Assert.Equal(1, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("wetCount").GetInt32());
         Assert.Equal(
             "Soft=1; Medium=2; Hard=1; Intermediate=1; Wet=1",
             json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("inventoryText").GetString());
         Assert.Equal(58, json.RootElement.GetProperty("raceWeekendTyrePlan").GetProperty("maxRecommendedWearPercent").GetInt32());
+    }
+
+    /// <summary>
+    /// Verifies legacy tyre inventory text is migrated into structured counts on load.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_LegacyTyreInventoryText_MigratesToStructuredCounts()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "raceWeekendTyrePlan": {
+                "inventoryText": "Soft=1; Medium=2; Hard=3; Intermediate=4; Wet=5",
+                "maxRecommendedWearPercent": 62
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(1, settings.RaceWeekendTyrePlan.SoftCount);
+        Assert.Equal(2, settings.RaceWeekendTyrePlan.MediumCount);
+        Assert.Equal(3, settings.RaceWeekendTyrePlan.HardCount);
+        Assert.Equal(4, settings.RaceWeekendTyrePlan.IntermediateCount);
+        Assert.Equal(5, settings.RaceWeekendTyrePlan.WetCount);
+        Assert.Equal(62, settings.RaceWeekendTyrePlan.MaxRecommendedWearPercent);
+    }
+
+    /// <summary>
+    /// Verifies structured tyre inventory survives a save/load round trip.
+    /// </summary>
+    [Fact]
+    public async Task SaveRaceWeekendTyrePlanAsync_StructuredCounts_RoundTrips()
+    {
+        var root = CreateRootPath();
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveRaceWeekendTyrePlanAsync(
+            new RaceWeekendTyrePlan
+            {
+                SoftCount = 4,
+                MediumCount = 3,
+                HardCount = 2,
+                IntermediateCount = 1,
+                WetCount = 0,
+                MaxRecommendedWearPercent = 63
+            });
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal(4, settings.RaceWeekendTyrePlan.SoftCount);
+        Assert.Equal(3, settings.RaceWeekendTyrePlan.MediumCount);
+        Assert.Equal(2, settings.RaceWeekendTyrePlan.HardCount);
+        Assert.Equal(1, settings.RaceWeekendTyrePlan.IntermediateCount);
+        Assert.Equal(0, settings.RaceWeekendTyrePlan.WetCount);
+        Assert.Equal(63, settings.RaceWeekendTyrePlan.MaxRecommendedWearPercent);
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -82,6 +83,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _toggleSidebarCommand;
     private readonly RelayCommand _openUdpRawLogDirectoryCommand;
     private readonly RelayCommand _generatePostRaceAiSummaryCommand;
+    private readonly RelayCommand _readTyreSetsInventoryCommand;
+    private readonly RelayCommand _clearTyreInventoryCommand;
+    private readonly RelayCommand _saveTyreInventoryCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private PostRaceAiCompletionModeOptionViewModel? _selectedPostRaceAiCompletionMode;
     private bool _isSidebarExpanded = true;
@@ -119,6 +123,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _overviewTyrePressureText = "等待数据";
     private string _overviewDamageText = "等待 CarDamage 包";
     private string _overviewKeyOpponentText = "-";
+    private string _overviewLapComparisonText = "-";
     private string _overviewSessionFocusText = SessionModeFormatter.FormatFocus(SessionMode.Unknown);
     private string _overviewRecentAiSuggestionText = "-";
     private string _overviewRecentTtsStatusText = "-";
@@ -133,9 +138,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _aiApiKey = string.Empty;
     private string _aiSettingsSaveStatusText = "等待保存";
     private int _aiRequestTimeoutSeconds = 10;
-    private string _raceWeekendTyrePlanText = RaceWeekendTyrePlan.DefaultInventoryText;
     private int _raceWeekendTyreMaxWearPercent = RaceWeekendTyrePlan.DefaultMaxRecommendedWearPercent;
     private string _raceWeekendTyrePlanStatusText = "等待保存";
+    private string _raceWeekendTyreSetsStatusText = "等待 TyreSets 包";
     private int _raceWeekendTyrePlanSaveVersion;
     private bool _udpRawLogEnabled;
     private string _udpRawLogDirectoryText = string.Empty;
@@ -243,7 +248,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _ttsQueue,
             () => ResolveSessionMode(_sessionStateStore.CaptureState()),
             BuildTtsOptions,
-            LogRaceEventSubscriberWarning);
+            LogRaceEventSubscriberWarning,
+            () => _sessionStateStore.CaptureState().HasFinalClassification);
         _raceEventInsightBuffer = new RaceEventInsightBuffer(_raceEventBus);
         _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
@@ -263,6 +269,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         LogEntries = new ObservableCollection<LogEntryViewModel>();
         OverviewEventSummaries = new ObservableCollection<LogEntryViewModel>();
         AvailableVoices = new ObservableCollection<string>();
+        RaceWeekendTyreInventoryItems = CreateRaceWeekendTyreInventoryItems();
         PostRaceAiCompletionModes = new ObservableCollection<PostRaceAiCompletionModeOptionViewModel>(
         [
             new()
@@ -310,6 +317,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
         _toggleSidebarCommand = new RelayCommand(ToggleSidebar);
         _openUdpRawLogDirectoryCommand = new RelayCommand(OpenUdpRawLogDirectory);
+        _readTyreSetsInventoryCommand = new RelayCommand(ReadInventoryFromTyreSets);
+        _clearTyreInventoryCommand = new RelayCommand(ClearTyreInventory);
+        _saveTyreInventoryCommand = new RelayCommand(ForcePersistRaceWeekendTyrePlan);
         _generatePostRaceAiSummaryCommand = new RelayCommand(
             () =>
             {
@@ -604,19 +614,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
-    /// Gets or sets the manually entered race-weekend tyre inventory.
+    /// Gets the structured editable tyre inventory rows.
     /// </summary>
-    public string RaceWeekendTyrePlanText
-    {
-        get => _raceWeekendTyrePlanText;
-        set
-        {
-            if (SetProperty(ref _raceWeekendTyrePlanText, value))
-            {
-                QueuePersistRaceWeekendTyrePlan();
-            }
-        }
-    }
+    public ObservableCollection<RaceWeekendTyreInventoryItemViewModel> RaceWeekendTyreInventoryItems { get; }
 
     /// <summary>
     /// Gets or sets the maximum tyre wear percentage allowed for replacement recommendations.
@@ -629,6 +629,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             var normalizedValue = Math.Clamp(value, 0, 100);
             if (SetProperty(ref _raceWeekendTyreMaxWearPercent, normalizedValue))
             {
+                _eventDetectionService.UpdateRaceAdviceThresholds(normalizedValue);
                 QueuePersistRaceWeekendTyrePlan();
             }
         }
@@ -642,6 +643,30 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         get => _raceWeekendTyrePlanStatusText;
         private set => SetProperty(ref _raceWeekendTyrePlanStatusText, value);
     }
+
+    /// <summary>
+    /// Gets the status of the last TyreSets inventory import attempt.
+    /// </summary>
+    public string RaceWeekendTyreSetsStatusText
+    {
+        get => _raceWeekendTyreSetsStatusText;
+        private set => SetProperty(ref _raceWeekendTyreSetsStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the command that imports tyre counts from the latest TyreSets packet.
+    /// </summary>
+    public ICommand ReadTyreSetsInventoryCommand => _readTyreSetsInventoryCommand;
+
+    /// <summary>
+    /// Gets the command that clears all tyre inventory counts.
+    /// </summary>
+    public ICommand ClearTyreInventoryCommand => _clearTyreInventoryCommand;
+
+    /// <summary>
+    /// Gets the command that explicitly saves the current tyre inventory.
+    /// </summary>
+    public ICommand SaveTyreInventoryCommand => _saveTyreInventoryCommand;
 
     /// <summary>
     /// Gets or sets a value indicating whether raw UDP JSONL logging is enabled.
@@ -1318,6 +1343,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _overviewKeyOpponentText;
         private set => SetProperty(ref _overviewKeyOpponentText, value);
+    }
+
+    /// <summary>
+    /// Gets the compact previous-lap comparison against adjacent cars.
+    /// </summary>
+    public string OverviewLapComparisonText
+    {
+        get => _overviewLapComparisonText;
+        private set => SetProperty(ref _overviewLapComparisonText, value);
     }
 
     /// <summary>
@@ -2246,6 +2280,41 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OverviewKeyOpponentText = OpponentCars.Count == 0
             ? "-"
             : $"{OpponentCars[0].DisplayName} - {OpponentCars[0].PositionText} - {OpponentCars[0].GapToPlayerText}";
+        OverviewLapComparisonText = BuildOverviewLapComparisonText(playerCar);
+    }
+
+    private string BuildOverviewLapComparisonText(CarSnapshot? playerCar)
+    {
+        if (playerCar is null || playerCar.Position is null)
+        {
+            return "-";
+        }
+
+        var front = _sessionStateStore.CaptureState().Cars.FirstOrDefault(car => car.Position == playerCar.Position - 1);
+        var rear = _sessionStateStore.CaptureState().Cars.FirstOrDefault(car => car.Position == playerCar.Position + 1);
+        var frontComparison = AdjacentLapComparisonBuilder.BuildFrontComparison(playerCar, front);
+        var rearComparison = AdjacentLapComparisonBuilder.BuildRearComparison(playerCar, rear);
+        var parts = new[]
+            {
+                FormatOverviewComparison("前车", frontComparison),
+                FormatOverviewComparison("后车", rearComparison)
+            }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToArray();
+
+        return parts.Length == 0 ? "等待同圈数据" : string.Join(" / ", parts);
+    }
+
+    private static string? FormatOverviewComparison(string label, AdjacentLapComparison? comparison)
+    {
+        if (comparison is null)
+        {
+            return null;
+        }
+
+        var deltaSeconds = Math.Abs(comparison.DeltaInMs) / 1000d;
+        var sign = comparison.DeltaInMs < 0 ? "-" : "+";
+        return $"{label} {sign}{deltaSeconds:0.000}s";
     }
 
     private void RefreshLapHistory()
@@ -2458,7 +2527,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             AiModel = settings.Ai.Model;
             AiApiKey = settings.Ai.ApiKey;
             _aiRequestTimeoutSeconds = settings.Ai.RequestTimeoutSeconds <= 0 ? 10 : settings.Ai.RequestTimeoutSeconds;
-            RaceWeekendTyrePlanText = settings.RaceWeekendTyrePlan.InventoryText;
+            ApplyRaceWeekendTyrePlan(settings.RaceWeekendTyrePlan);
             RaceWeekendTyreMaxWearPercent = settings.RaceWeekendTyrePlan.MaxRecommendedWearPercent;
             _udpRawLogQueueCapacity = Math.Clamp(settings.UdpRawLog.QueueCapacity, 0, 100_000);
             _udpRawLogWriter.UpdateOptions(BuildUdpRawLogOptions(settings.UdpRawLog.Enabled, settings.UdpRawLog.DirectoryPath, settings.UdpRawLog.QueueCapacity));
@@ -2493,6 +2562,114 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             _isApplyingSettings = false;
         }
+    }
+
+    private ObservableCollection<RaceWeekendTyreInventoryItemViewModel> CreateRaceWeekendTyreInventoryItems()
+    {
+        return new ObservableCollection<RaceWeekendTyreInventoryItemViewModel>
+        {
+            new("Soft", "红胎", "Soft", "#E84855", QueuePersistRaceWeekendTyrePlan),
+            new("Medium", "黄胎", "Medium", "#F4C430", QueuePersistRaceWeekendTyrePlan),
+            new("Hard", "白胎", "Hard", "#E8EEF6", QueuePersistRaceWeekendTyrePlan),
+            new("Intermediate", "半雨胎", "Intermediate", "#36B37E", QueuePersistRaceWeekendTyrePlan),
+            new("Wet", "全雨胎", "Wet", "#4C9BFF", QueuePersistRaceWeekendTyrePlan)
+        };
+    }
+
+    private void ApplyRaceWeekendTyrePlan(RaceWeekendTyrePlan plan)
+    {
+        var normalized = plan.Normalize();
+        SetInventoryCount("Soft", normalized.SoftCount, silent: true);
+        SetInventoryCount("Medium", normalized.MediumCount, silent: true);
+        SetInventoryCount("Hard", normalized.HardCount, silent: true);
+        SetInventoryCount("Intermediate", normalized.IntermediateCount, silent: true);
+        SetInventoryCount("Wet", normalized.WetCount, silent: true);
+    }
+
+    private void ReadInventoryFromTyreSets()
+    {
+        var inventory = _sessionStateStore.CaptureState().PlayerTyreInventory;
+        if (inventory is null || inventory.Sets.Count == 0)
+        {
+            RaceWeekendTyreSetsStatusText = "暂无 TyreSets 数据";
+            return;
+        }
+
+        var counts = CountAvailableTyreSets(inventory);
+        SetInventoryCount("Soft", counts.Soft, silent: true);
+        SetInventoryCount("Medium", counts.Medium, silent: true);
+        SetInventoryCount("Hard", counts.Hard, silent: true);
+        SetInventoryCount("Intermediate", counts.Intermediate, silent: true);
+        SetInventoryCount("Wet", counts.Wet, silent: true);
+        RaceWeekendTyreSetsStatusText = $"已从 TyreSets 读取 · {inventory.Sets.Count} 套";
+        ForcePersistRaceWeekendTyrePlan();
+    }
+
+    private void ClearTyreInventory()
+    {
+        SetInventoryCount("Soft", 0, silent: true);
+        SetInventoryCount("Medium", 0, silent: true);
+        SetInventoryCount("Hard", 0, silent: true);
+        SetInventoryCount("Intermediate", 0, silent: true);
+        SetInventoryCount("Wet", 0, silent: true);
+        RaceWeekendTyreSetsStatusText = "已清零";
+        ForcePersistRaceWeekendTyrePlan();
+    }
+
+    private void ForcePersistRaceWeekendTyrePlan()
+    {
+        QueuePersistRaceWeekendTyrePlan();
+    }
+
+    private void SetInventoryCount(string compound, int count, bool silent = false)
+    {
+        var item = RaceWeekendTyreInventoryItems.FirstOrDefault(
+            row => string.Equals(row.Compound, compound, StringComparison.OrdinalIgnoreCase));
+        if (item is null)
+        {
+            return;
+        }
+
+        if (silent)
+        {
+            item.SetCountSilently(count);
+        }
+        else
+        {
+            item.Count = count;
+        }
+    }
+
+    private static TyreInventoryCounts CountAvailableTyreSets(TyreInventorySnapshot inventory)
+    {
+        var soft = 0;
+        var medium = 0;
+        var hard = 0;
+        var intermediate = 0;
+        var wet = 0;
+        foreach (var set in inventory.Sets.Where(set => set.Available))
+        {
+            switch (set.VisualTyreCompound)
+            {
+                case 16:
+                    soft++;
+                    break;
+                case 17:
+                    medium++;
+                    break;
+                case 18:
+                    hard++;
+                    break;
+                case 7:
+                    intermediate++;
+                    break;
+                case 8:
+                    wet++;
+                    break;
+            }
+        }
+
+        return new TyreInventoryCounts(soft, medium, hard, intermediate, wet);
     }
 
     private void QueuePersistAiSettings()
@@ -2780,11 +2957,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
 
             _storagePersistenceService.EnqueueAiReport(lastLap.LapNumber, result);
+            if (result.IsSuccess)
+            {
+                _storagePersistenceService.EnqueueRaceEngineerReport(BuildStoredRaceEngineerReport(lastLap, result));
+            }
 
             if (result.IsSuccess)
             {
                 PostRaceAiStatusText = $"赛后 AI 总结已生成：{result.Summary}";
                 EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
+                EnqueueAiAnalysisLog("AI", BuildPostRaceAiDetailLogText(result));
                 EnqueueEventLog("AI", "赛后 AI 总结已生成。");
                 TryEnqueueAiSpeech(lastLap, result);
             }
@@ -2957,6 +3139,52 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         _ttsQueue.TryEnqueue(ttsMessage);
+    }
+
+    private static StoredRaceEngineerReport BuildStoredRaceEngineerReport(LapSummary lastLap, AIAnalysisResult result)
+    {
+        var detailJson = JsonSerializer.Serialize(new
+        {
+            summary = result.Summary,
+            keyProblems = result.KeyProblems,
+            strategyReview = result.StrategyReview,
+            tyreReview = result.TyreReview,
+            ersFuelReview = result.ErsFuelReview,
+            opponentReview = result.OpponentReview,
+            improvements = result.Improvements
+        });
+
+        return new StoredRaceEngineerReport
+        {
+            LapNumber = lastLap.LapNumber,
+            ReportType = "post-race-ai",
+            Summary = string.IsNullOrWhiteSpace(result.Summary) ? "-" : result.Summary,
+            SpokenText = string.IsNullOrWhiteSpace(result.TtsText) ? "-" : result.TtsText,
+            DetailJson = detailJson,
+            IsSuccess = result.IsSuccess,
+            ErrorMessage = string.IsNullOrWhiteSpace(result.ErrorMessage) ? "-" : result.ErrorMessage,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static string BuildPostRaceAiDetailLogText(AIAnalysisResult result)
+    {
+        var problems = result.KeyProblems.Count == 0
+            ? "主要问题：-"
+            : $"主要问题：{string.Join("；", result.KeyProblems)}";
+        var improvements = result.Improvements.Count == 0
+            ? "下次改进：-"
+            : $"下次改进：{string.Join("；", result.Improvements)}";
+
+        return string.Join(
+            Environment.NewLine,
+            $"比赛结论：{result.Summary}",
+            problems,
+            $"策略判断：{result.StrategyReview}",
+            $"轮胎判断：{result.TyreReview}",
+            $"ERS/燃油：{result.ErsFuelReview}",
+            $"攻防判断：{result.OpponentReview}",
+            improvements);
     }
 
     private LapSummary? CaptureAiSummaryLap(SessionState sessionState)
@@ -3313,11 +3541,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         return new RaceWeekendTyrePlan
         {
-            InventoryText = string.IsNullOrWhiteSpace(RaceWeekendTyrePlanText)
-                ? RaceWeekendTyrePlan.DefaultInventoryText
-                : RaceWeekendTyrePlanText.Trim(),
+            SoftCount = GetInventoryCount("Soft"),
+            MediumCount = GetInventoryCount("Medium"),
+            HardCount = GetInventoryCount("Hard"),
+            IntermediateCount = GetInventoryCount("Intermediate"),
+            WetCount = GetInventoryCount("Wet"),
             MaxRecommendedWearPercent = Math.Clamp(RaceWeekendTyreMaxWearPercent, 0, 100)
-        };
+        }.Normalize();
+    }
+
+    private int GetInventoryCount(string compound)
+    {
+        return RaceWeekendTyreInventoryItems
+            .FirstOrDefault(row => string.Equals(row.Compound, compound, StringComparison.OrdinalIgnoreCase))
+            ?.Count ?? 0;
     }
 
     private UdpRawLogOptions BuildUdpRawLogOptions()
@@ -3514,14 +3751,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string BuildErsText(CarSnapshot playerCar)
     {
-        if (playerCar.ErsStoreEnergy is null)
-        {
-            return "-";
-        }
-
-        var energyMj = playerCar.ErsStoreEnergy.Value / 1_000_000f;
-        var energyPercent = Math.Clamp(playerCar.ErsStoreEnergy.Value / 4_000_000f, 0f, 1f);
-        return $"{energyMj:0.00} MJ · {energyPercent:P0}";
+        return EnergyFormatter.FormatErs(playerCar.ErsStoreEnergy);
     }
 
     private static string BuildTyreText(CarSnapshot playerCar)

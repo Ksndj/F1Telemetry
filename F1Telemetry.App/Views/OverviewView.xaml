@@ -220,6 +220,12 @@
                                 <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewKeyOpponentText}" />
                             </StackPanel>
                         </Border>
+                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="上一圈对比" />
+                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewLapComparisonText}" />
+                            </StackPanel>
+                        </Border>
                         <ItemsControl Margin="0,12,0,0"
                                       ItemsSource="{Binding OpponentCars}">
                             <ItemsControl.ItemTemplate>
@@ -231,11 +237,13 @@
                                                 <ColumnDefinition Width="72" />
                                                 <ColumnDefinition Width="110" />
                                                 <ColumnDefinition Width="96" />
+                                                <ColumnDefinition Width="90" />
                                             </Grid.ColumnDefinitions>
                                             <TextBlock Foreground="White" Text="{Binding DisplayName}" />
                                             <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding PositionText}" />
                                             <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
                                             <TextBlock Grid.Column="3" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
+                                            <TextBlock Grid.Column="4" Foreground="#7FA5D8" Text="{Binding LapComparisonText}" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

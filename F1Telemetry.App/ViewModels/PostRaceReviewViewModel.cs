@@ -26,6 +26,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     private readonly ILapRepository _lapRepository;
     private readonly IEventRepository _eventRepository;
     private readonly IAIReportRepository _aiReportRepository;
+    private readonly IRaceEngineerReportRepository _raceEngineerReportRepository;
     private readonly ILapSampleRepository _lapSampleRepository;
     private readonly StoredLapPostRaceChartBuilder _chartBuilder;
     private readonly PostRaceReviewReportBuilder _reportBuilder;
@@ -45,6 +46,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     private IReadOnlyList<StoredLap> _lastLoadedLaps = Array.Empty<StoredLap>();
     private IReadOnlyList<StoredEvent> _lastLoadedEvents = Array.Empty<StoredEvent>();
     private IReadOnlyList<StoredAiReport> _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+    private IReadOnlyList<StoredRaceEngineerReport> _lastLoadedRaceEngineerReports = Array.Empty<StoredRaceEngineerReport>();
     private IReadOnlyList<StoredLapTyreWearTrendPoint> _lastLoadedTyreWearTrend = Array.Empty<StoredLapTyreWearTrendPoint>();
     private IReadOnlyList<PostRaceReviewMetricRowViewModel> _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
     private IReadOnlyList<PostRaceReviewStintRowViewModel> _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
@@ -58,18 +60,21 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
     /// <param name="aiReportRepository">The stored AI report repository.</param>
     /// <param name="reportExportService">The optional report export service.</param>
     /// <param name="lapSampleRepository">The optional lap sample repository used for tyre wear trends.</param>
+    /// <param name="raceEngineerReportRepository">The optional detailed race-engineer report repository.</param>
     public PostRaceReviewViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapRepository lapRepository,
         IEventRepository eventRepository,
         IAIReportRepository aiReportRepository,
         IPostRaceReviewReportExportService? reportExportService = null,
-        ILapSampleRepository? lapSampleRepository = null)
+        ILapSampleRepository? lapSampleRepository = null,
+        IRaceEngineerReportRepository? raceEngineerReportRepository = null)
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
         _eventRepository = eventRepository ?? throw new ArgumentNullException(nameof(eventRepository));
         _aiReportRepository = aiReportRepository ?? throw new ArgumentNullException(nameof(aiReportRepository));
+        _raceEngineerReportRepository = raceEngineerReportRepository ?? new NoOpRaceEngineerReportRepository();
         _lapSampleRepository = lapSampleRepository ?? new NoOpLapSampleRepository();
         _chartBuilder = new StoredLapPostRaceChartBuilder();
         _reportBuilder = new PostRaceReviewReportBuilder();
@@ -337,9 +342,10 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             var lapsTask = _lapRepository.GetRecentAsync(sessionId, MaxStoredLaps, cancellationToken);
             var eventsTask = _eventRepository.GetRecentAsync(sessionId, MaxStoredEvents, cancellationToken);
             var aiReportsTask = _aiReportRepository.GetRecentAsync(sessionId, MaxStoredAiReports, cancellationToken);
+            var raceEngineerReportsTask = _raceEngineerReportRepository.GetRecentAsync(sessionId, MaxStoredAiReports, cancellationToken);
             var tyreWearTrendTask = _lapSampleRepository.GetTyreWearTrendAsync(sessionId, MaxStoredLaps, cancellationToken);
 
-            await Task.WhenAll(lapsTask, eventsTask, aiReportsTask, tyreWearTrendTask);
+            await Task.WhenAll(lapsTask, eventsTask, aiReportsTask, raceEngineerReportsTask, tyreWearTrendTask);
 
             if (!IsCurrentLoad(loadVersion) || !ReferenceEquals(SelectedSession, selectedSession))
             {
@@ -349,9 +355,10 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             var laps = OrderLaps(lapsTask.Result);
             var events = OrderEvents(eventsTask.Result);
             var aiReports = OrderAiReports(aiReportsTask.Result);
+            var raceEngineerReports = OrderRaceEngineerReports(raceEngineerReportsTask.Result);
             var tyreWearTrend = OrderTyreWearTrend(tyreWearTrendTask.Result);
 
-            ApplyReviewData(selectedSession, laps, events, aiReports, tyreWearTrend);
+            ApplyReviewData(selectedSession, laps, events, aiReports, raceEngineerReports, tyreWearTrend);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -468,6 +475,15 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             .ToArray();
     }
 
+    private static IReadOnlyList<StoredRaceEngineerReport> OrderRaceEngineerReports(IReadOnlyList<StoredRaceEngineerReport> reports)
+    {
+        return reports
+            .OrderBy(report => report.LapNumber ?? int.MaxValue)
+            .ThenBy(report => report.CreatedAt)
+            .ThenBy(report => report.Id)
+            .ToArray();
+    }
+
     private static IReadOnlyList<StoredLapTyreWearTrendPoint> OrderTyreWearTrend(
         IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
     {
@@ -483,9 +499,10 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         IReadOnlyList<StoredLap> laps,
         IReadOnlyList<StoredEvent> events,
         IReadOnlyList<StoredAiReport> aiReports,
+        IReadOnlyList<StoredRaceEngineerReport> raceEngineerReports,
         IReadOnlyList<StoredLapTyreWearTrendPoint> tyreWearTrend)
     {
-        var summaryRows = BuildSummaryMetricRows(selectedSession, laps, events, aiReports);
+        var summaryRows = BuildSummaryMetricRows(selectedSession, laps, events, aiReports, raceEngineerReports);
         var stintRows = PostRaceReviewStintRowViewModel.BuildFromLaps(laps);
         var strategyTimeline = BuildStrategyTimeline(laps, events);
 
@@ -509,6 +526,11 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             AiReportRows.Add(row);
         }
 
+        foreach (var row in raceEngineerReports.Select(PostRaceReviewAiReportRowViewModel.FromStoredRaceEngineerReport))
+        {
+            AiReportRows.Add(row);
+        }
+
         EventTimelinePages.SetItems(EventTimelineRows, resetPage: true);
         AiReportPages.SetItems(AiReportRows, resetPage: true);
 
@@ -521,6 +543,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         _lastLoadedLaps = laps.ToArray();
         _lastLoadedEvents = events.ToArray();
         _lastLoadedAiReports = aiReports.ToArray();
+        _lastLoadedRaceEngineerReports = raceEngineerReports.ToArray();
         _lastLoadedTyreWearTrend = tyreWearTrend.ToArray();
         _lastLoadedSummaryMetrics = summaryRows.ToArray();
         _lastLoadedStints = stintRows.ToArray();
@@ -532,7 +555,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         TyreWearTrendPanel.UpdateFrom(_chartBuilder.BuildTyreWearTrendPanel(tyreWearTrend));
         TyreWearStatusText = BuildTyreWearStatusText(tyreWearTrend);
 
-        var dataCount = laps.Count + events.Count + aiReports.Count + tyreWearTrend.Count;
+        var dataCount = laps.Count + events.Count + aiReports.Count + raceEngineerReports.Count + tyreWearTrend.Count;
         if (dataCount == 0)
         {
             StatusText = "该会话暂无赛后复盘数据。";
@@ -546,7 +569,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             "已加载赛后复盘：{0} 圈、{1} 事件、{2} 份 AI 报告。",
             laps.Count,
             events.Count + strategyTimeline.Count,
-            aiReports.Count);
+            aiReports.Count + raceEngineerReports.Count);
     }
 
     private static IReadOnlyList<StrategyTimelineEntry> BuildStrategyTimeline(
@@ -586,7 +609,8 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         HistorySessionItemViewModel selectedSession,
         IReadOnlyList<StoredLap> laps,
         IReadOnlyList<StoredEvent> events,
-        IReadOnlyList<StoredAiReport> aiReports)
+        IReadOnlyList<StoredAiReport> aiReports,
+        IReadOnlyList<StoredRaceEngineerReport> raceEngineerReports)
     {
         var validLapTimes = laps
             .Where(lap => lap.LapTimeInMs is not null && lap.LapTimeInMs.Value >= 0)
@@ -640,7 +664,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             new PostRaceReviewMetricRowViewModel
             {
                 Label = "事件 / AI",
-                Value = $"{events.Count} / {aiReports.Count}",
+                Value = $"{events.Count} / {aiReports.Count + raceEngineerReports.Count}",
                 Detail = "事件数 / AI 报告数"
             }
         ];
@@ -669,6 +693,7 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
         _lastLoadedLaps = Array.Empty<StoredLap>();
             _lastLoadedEvents = Array.Empty<StoredEvent>();
             _lastLoadedAiReports = Array.Empty<StoredAiReport>();
+            _lastLoadedRaceEngineerReports = Array.Empty<StoredRaceEngineerReport>();
             _lastLoadedTyreWearTrend = Array.Empty<StoredLapTyreWearTrendPoint>();
             _lastLoadedSummaryMetrics = Array.Empty<PostRaceReviewMetricRowViewModel>();
         _lastLoadedStints = Array.Empty<PostRaceReviewStintRowViewModel>();
@@ -841,6 +866,31 @@ public sealed class PostRaceReviewViewModel : ViewModelBase, IDisposable
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
+        }
+    }
+
+    private sealed class NoOpRaceEngineerReportRepository : IRaceEngineerReportRepository
+    {
+        public Task AddAsync(StoredRaceEngineerReport report, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredRaceEngineerReport>> GetRecentAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredRaceEngineerReport>>(Array.Empty<StoredRaceEngineerReport>());
+        }
+
+        public Task<IReadOnlyList<StoredRaceEngineerReport>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredRaceEngineerReport>>(Array.Empty<StoredRaceEngineerReport>());
         }
     }
 }

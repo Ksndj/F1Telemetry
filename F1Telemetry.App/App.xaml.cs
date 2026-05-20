@@ -50,6 +50,7 @@ public partial class App : Application
         var lapSampleRepository = new LapSampleRepository(databaseService);
         var eventRepository = new EventRepository(databaseService);
         var aiReportRepository = new AIReportRepository(databaseService);
+        var raceEngineerReportRepository = new RaceEngineerReportRepository(databaseService);
         var deletionConfirmationService = new MessageBoxHistorySessionDeletionConfirmationService();
         var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository, deletionConfirmationService);
         var sessionComparison = new SessionComparisonViewModel(sessionRepository, lapRepository, deletionConfirmationService);
@@ -60,7 +61,8 @@ public partial class App : Application
             aiReportRepository,
             lapSampleRepository,
             databaseService.InitializeAsync,
-            databaseService);
+            databaseService,
+            raceEngineerReportRepository: raceEngineerReportRepository);
         var stateAggregator = new StateAggregator(new SessionStateStore(new CarStateStore()), lapAnalyzer, eventDetectionService);
         packetDispatcher.PacketParsed += (_, parsedPacket) =>
         {
@@ -88,9 +90,17 @@ public partial class App : Application
                 eventRepository,
                 aiReportRepository,
                 new SaveFilePostRaceReviewReportExportService(),
-                lapSampleRepository),
+                lapSampleRepository,
+                raceEngineerReportRepository),
             sessionComparison: sessionComparison,
-            cornerAnalysis: new CornerAnalysisViewModel(historyBrowser, lapSampleRepository));
+            cornerAnalysis: new CornerAnalysisViewModel(
+                historyBrowser,
+                lapSampleRepository,
+                eventRepository: eventRepository,
+                aiAnalysisService: aiAnalysisService,
+                settingsStore: appSettingsStore,
+                ttsMessageFactory: ttsMessageFactory,
+                ttsQueue: ttsQueue));
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

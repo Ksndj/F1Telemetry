@@ -169,6 +169,10 @@
                                Foreground="#D7E4F3"
                                Text="{Binding SummaryText}"
                                TextWrapping="Wrap" />
+                    <TextBlock Margin="0,8,0,0"
+                               Foreground="#9AB0C9"
+                               Text="{Binding DetailReportText}"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
         </DataTemplate>

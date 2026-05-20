@@ -109,6 +109,29 @@ public sealed class TtsMessageFactoryTests
     }
 
     /// <summary>
+    /// Verifies AI engineer advice has a separate cooldown from lap-level AI summaries.
+    /// </summary>
+    [Fact]
+    public void CreateForEngineerAdvice_UsesDedicatedCooldownScope()
+    {
+        var factory = new TtsMessageFactory();
+        var options = new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 };
+
+        var first = factory.CreateForEngineerAdvice("session-a:lap35", "重点优化 7 号弯入弯速度。", options);
+        var duplicate = factory.CreateForEngineerAdvice("session-a:lap35", "重点优化 7 号弯入弯速度。", options);
+        var nextLap = factory.CreateForEngineerAdvice("session-a:lap36", "下一圈稳定刹车点。", options);
+
+        Assert.NotNull(first);
+        Assert.Null(duplicate);
+        Assert.NotNull(nextLap);
+        Assert.Equal("AI", first!.Source);
+        Assert.Equal("engineer_advice", first.Type);
+        Assert.Equal("ai:engineer_advice:session-a:lap35", first.DedupKey);
+        Assert.Equal(TimeSpan.FromSeconds(60), first.Cooldown);
+        Assert.Equal(TtsPriority.Low, first.Priority);
+    }
+
+    /// <summary>
     /// Verifies that data-quality warnings stay in logs and never become spoken TTS.
     /// </summary>
     [Fact]
@@ -176,6 +199,8 @@ public sealed class TtsMessageFactoryTests
     [InlineData(EventType.TrafficRisk, "traffic_risk", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.QualifyingCleanAirWindow, "qualifying_clean_air_window", TtsPriority.Normal, SessionMode.Qualifying)]
     [InlineData(EventType.RacePitWindow, "race_pit_window", TtsPriority.High, SessionMode.Race)]
+    [InlineData(EventType.TyreWearLateStint, "tyre_wear_late_stint", TtsPriority.Normal, SessionMode.Race)]
+    [InlineData(EventType.LapTimeComparison, "lap_time_comparison", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.SafetyCarRestart, "safety_car_restart", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.RedFlagTyreChange, "red_flag_tyre_change", TtsPriority.High, SessionMode.Race)]
     [InlineData(EventType.HighTyreTemperature, "high_tyre_temperature", TtsPriority.High, SessionMode.Race)]
@@ -418,5 +443,56 @@ public sealed class TtsMessageFactoryTests
 
         Assert.NotNull(message);
         Assert.Equal("traffic_risk", message!.Type);
+    }
+
+    /// <summary>
+    /// Verifies final-classification mode suppresses real-time strategy speech only.
+    /// </summary>
+    [Theory]
+    [InlineData(EventType.RacePitWindow)]
+    [InlineData(EventType.LowErs)]
+    [InlineData(EventType.AttackWindow)]
+    [InlineData(EventType.DefenseWindow)]
+    [InlineData(EventType.LapTimeComparison)]
+    public void CreateForRaceEvent_AfterRaceFinished_SuppressesRealtimeSpeech(EventType eventType)
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForRaceEvent(
+            new RaceEvent
+            {
+                EventType = eventType,
+                LapNumber = 12,
+                Severity = EventSeverity.Warning,
+                Message = "实时策略提醒"
+            },
+            new TtsOptions { TtsEnabled = true },
+            SessionMode.Race,
+            isRaceFinished: true);
+
+        Assert.Null(message);
+    }
+
+    /// <summary>
+    /// Verifies AI post-race speech still maps to a short TTS message after real-time filtering exists.
+    /// </summary>
+    [Fact]
+    public void CreateForAiResult_PostRaceSummary_RemainsSpeakable()
+    {
+        var factory = new TtsMessageFactory();
+
+        var message = factory.CreateForAiResult(
+            new LapSummary { LapNumber = 29 },
+            new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Tts = "比赛结束，稍后看报告。",
+                TtsText = "比赛结束，稍后看报告。"
+            },
+            new TtsOptions { TtsEnabled = true, CooldownSeconds = 8 });
+
+        Assert.NotNull(message);
+        Assert.Equal("比赛结束，稍后看报告。", message!.Text);
+        Assert.Equal("AI", message.Source);
     }
 }

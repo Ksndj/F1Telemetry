@@ -234,6 +234,33 @@ public sealed class DashboardUdpPortSettingsTests
         });
     }
 
+    /// <summary>
+    /// Verifies reading tyre inventory without TyreSets data reports a visible no-data status.
+    /// </summary>
+    [Fact]
+    public void ReadTyreSetsInventoryCommand_WhenNoTyreSetsData_ShowsNoDataStatus()
+    {
+        RunOnStaThread(() =>
+        {
+            var settingsStore = new FakeAppSettingsStore(20777);
+            var harness = CreateDashboardViewModel(settingsStore);
+
+            try
+            {
+                PumpDispatcherUntil(() => settingsStore.LoadCallCount > 0, TimeSpan.FromSeconds(2));
+
+                harness.ViewModel.ReadTyreSetsInventoryCommand.Execute(null);
+
+                Assert.Equal("暂无 TyreSets 数据", harness.ViewModel.RaceWeekendTyreSetsStatusText);
+                Assert.All(harness.ViewModel.RaceWeekendTyreInventoryItems, item => Assert.Equal(0, item.Count));
+            }
+            finally
+            {
+                harness.ViewModel.Dispose();
+            }
+        });
+    }
+
     private static DashboardViewModelHarness CreateDashboardViewModel(
         FakeAppSettingsStore appSettingsStore,
         FakeUdpRawLogWriter? udpRawLogWriter = null,
