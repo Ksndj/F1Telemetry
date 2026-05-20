@@ -25,6 +25,11 @@ public sealed class LapSummaryItemViewModel
     public string LapText { get; init; } = "-";
 
     /// <summary>
+    /// Gets the raw completed lap time in milliseconds.
+    /// </summary>
+    public int? LapTimeInMs { get; init; }
+
+    /// <summary>
     /// Gets the formatted lap time.
     /// </summary>
     public string LapTimeText { get; init; } = "-";
@@ -105,9 +110,29 @@ public sealed class LapSummaryItemViewModel
     public string ValidityText { get; init; } = "-";
 
     /// <summary>
+    /// Gets a value indicating whether the lap is valid.
+    /// </summary>
+    public bool IsValid { get; init; }
+
+    /// <summary>
     /// Gets the formatted tyre transition summary.
     /// </summary>
     public string TyreWindowText { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the raw starting tyre label.
+    /// </summary>
+    public string StartTyre { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the raw ending tyre label.
+    /// </summary>
+    public string EndTyre { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the compact tyre compound label used for comparison.
+    /// </summary>
+    public string CompoundText => FormatStoredTyreWindow(StartTyre, EndTyre);
 
     /// <summary>
     /// Gets the formatted pit transition summary.
@@ -135,6 +160,7 @@ public sealed class LapSummaryItemViewModel
         {
             LapNumber = summary.LapNumber,
             LapText = $"Lap {summary.LapNumber}",
+            LapTimeInMs = summary.LapTimeInMs is null ? null : checked((int)summary.LapTimeInMs.Value),
             LapTimeText = FormatLapTime(summary.LapTimeInMs),
             SectorsText = FormatSectorsText(sector1Text, sector2Text, sector3Text),
             Sector1Text = sector1Text,
@@ -145,6 +171,9 @@ public sealed class LapSummaryItemViewModel
             ErsUsedText = summary.ErsUsed is null ? "-" : $"{summary.ErsUsed.Value / 1_000_000f:0.00} MJ",
             TyreWearDeltaText = summary.TyreWearDelta is null ? "-" : $"{summary.TyreWearDelta:0.0}%",
             ValidityText = summary.IsValid ? "有效" : "无效",
+            IsValid = summary.IsValid,
+            StartTyre = summary.StartTyre,
+            EndTyre = summary.EndTyre,
             TyreWindowText = $"{TyreCompoundFormatter.FormatRawCompoundText(summary.StartTyre)} -> {TyreCompoundFormatter.FormatRawCompoundText(summary.EndTyre)}",
             PitWindowText = $"{FormatPitState(summary.StartedInPit)} -> {FormatPitState(summary.EndedInPit)}"
         };
@@ -173,6 +202,7 @@ public sealed class LapSummaryItemViewModel
         {
             LapNumber = lap.LapNumber,
             LapText = $"Lap {lap.LapNumber}",
+            LapTimeInMs = lap.LapTimeInMs,
             LapTimeText = FormatLapTime(lap.LapTimeInMs),
             SectorsText = FormatSectorsText(sector1Text, sector2Text, sector3Text),
             Sector1Text = sector1Text,
@@ -186,6 +216,9 @@ public sealed class LapSummaryItemViewModel
             ErsUsedText = lap.ErsUsed is null ? "-" : $"{lap.ErsUsed.Value / 1_000_000f:0.00} MJ",
             TyreWearDeltaText = "-",
             ValidityText = lap.IsValid ? "有效" : "无效",
+            IsValid = lap.IsValid,
+            StartTyre = lap.StartTyre,
+            EndTyre = lap.EndTyre,
             TyreWindowText = FormatStoredTyreWindow(lap.StartTyre, lap.EndTyre),
             PitWindowText = "-"
         };

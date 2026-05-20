@@ -8,6 +8,7 @@ using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Corners;
+using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Tracks;
 using F1Telemetry.Core.Abstractions;
@@ -24,7 +25,12 @@ namespace F1Telemetry.App.ViewModels;
 /// </summary>
 public sealed class CornerAnalysisViewModel : ViewModelBase
 {
+    private const int MinimumReferenceLapSamples = 3;
+    private const int MinimumReasonableLapTimeMs = 30_000;
+    private const int MaximumReasonableLapTimeMs = 600_000;
+    private const float SignificantFuelDifferenceLitres = 5f;
     private readonly ILapSampleRepository _lapSampleRepository;
+    private readonly IEventRepository? _eventRepository;
     private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
     private readonly CornerMetricsExtractor _cornerMetricsExtractor;
     private readonly IAIAnalysisService? _aiAnalysisService;
@@ -34,6 +40,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private readonly RelayCommand _refreshCommand;
     private readonly RelayCommand _generateEngineerAdviceCommand;
     private LapSummaryItemViewModel? _selectedLap;
+    private LapSummaryItemViewModel? _selectedReferenceLap;
     private CornerSummaryRowViewModel? _selectedCorner;
     private int? _selectedLapNumber;
     private bool _isLoading;
@@ -48,12 +55,14 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private string _referenceStatusText = "-";
     private string _engineerAdviceStatusText = "等待 AI 弯角分析。";
     private string _aiAnnotationText = "刷新弯角分析后生成 AI 工程师建议。";
+    private CornerReferenceInfo _referenceInfo = CornerReferenceInfo.None();
 
     /// <summary>
     /// Initializes a new corner analysis ViewModel.
     /// </summary>
     /// <param name="historyBrowser">The shared history browser.</param>
     /// <param name="lapSampleRepository">The stored lap sample repository.</param>
+    /// <param name="eventRepository">Optional event repository used to avoid flag-affected reference laps.</param>
     /// <param name="trackSegmentMapProvider">Optional segment map provider.</param>
     /// <param name="cornerMetricsExtractor">Optional metrics extractor.</param>
     /// <param name="aiAnalysisService">Optional AI analysis service for engineer advice.</param>
@@ -63,6 +72,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     public CornerAnalysisViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapSampleRepository lapSampleRepository,
+        IEventRepository? eventRepository = null,
         ITrackSegmentMapProvider? trackSegmentMapProvider = null,
         CornerMetricsExtractor? cornerMetricsExtractor = null,
         IAIAnalysisService? aiAnalysisService = null,
@@ -72,6 +82,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapSampleRepository = lapSampleRepository ?? throw new ArgumentNullException(nameof(lapSampleRepository));
+        _eventRepository = eventRepository;
         _trackSegmentMapProvider = trackSegmentMapProvider ?? new StaticTrackSegmentMapProvider();
         _cornerMetricsExtractor = cornerMetricsExtractor ?? new CornerMetricsExtractor();
         _aiAnalysisService = aiAnalysisService;
@@ -135,6 +146,21 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             {
                 _selectedLapNumber = value?.LapNumber;
                 OnPropertyChanged(nameof(SelectionText));
+                _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the manually selected reference lap for corner comparison.
+    /// </summary>
+    public LapSummaryItemViewModel? SelectedReferenceLap
+    {
+        get => _selectedReferenceLap;
+        set
+        {
+            if (SetProperty(ref _selectedReferenceLap, value))
+            {
                 _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
             }
         }
@@ -273,6 +299,19 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Gets the reference lap used by the latest corner analysis.
+    /// </summary>
+    public CornerReferenceInfo ReferenceInfo
+    {
+        get => _referenceInfo;
+        private set
+        {
+            SetProperty(ref _referenceInfo, value);
+            ReferenceStatusText = value.LapText;
+        }
+    }
+
+    /// <summary>
     /// Gets the AI engineer advice loading and TTS status.
     /// </summary>
     public string EngineerAdviceStatusText
@@ -351,14 +390,23 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 return;
             }
 
-            var result = _cornerMetricsExtractor.Extract(map, storedSamples.Select(ToLapSample).ToArray());
+            var referenceSelection = await ResolveReferenceLapAsync(
+                session.SessionId,
+                lapNumber.Value,
+                storedSamples,
+                cancellationToken);
+            var lapSamples = storedSamples.Select(ToLapSample).ToArray();
+            var referenceSamples = referenceSelection.Samples.Count == 0
+                ? null
+                : referenceSelection.Samples.Select(ToLapSample).ToArray();
+            var result = _cornerMetricsExtractor.Extract(map, lapSamples, referenceSamples);
             foreach (var row in result.Corners.Select(CornerSummaryRowViewModel.FromSummary))
             {
                 CornerRows.Add(row);
             }
 
             EmptyStateText = CornerRows.Count == 0 ? "没有可显示的弯角摘要。" : string.Empty;
-            UpdateDashboardSummaries(result, session, lapNumber.Value);
+            UpdateDashboardSummaries(result, session, lapNumber.Value, referenceSelection.Info);
             StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
             if (CornerRows.Count > 0)
             {
@@ -540,6 +588,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         builder.AppendLine("Corner analysis for AI engineer advice. Do not invent missing values.");
         builder.AppendLine($"Track/session/lap: {SelectionText}");
         builder.AppendLine($"Result confidence: {result?.Confidence.ToString() ?? ReferenceStatusText}");
+        builder.AppendLine($"Reference lap: {ReferenceInfo.LapText}, source {ReferenceInfo.SourceText}, quality {ReferenceInfo.QualityText}, note {ReferenceInfo.WarningText}");
         builder.AppendLine($"Total positive time loss: {TotalTimeLossText}");
         builder.AppendLine($"Weakest corner: {WeakestCornerText}");
         builder.AppendLine("Rows:");
@@ -609,10 +658,14 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         TotalTimeLossText = "-";
         WeakestCornerText = "-";
         BestConfidenceCornerText = "-";
-        ReferenceStatusText = "-";
+        ReferenceInfo = CornerReferenceInfo.None("缺少可用参考圈");
     }
 
-    private void UpdateDashboardSummaries(CornerMetricsResult result, HistorySessionItemViewModel session, int lapNumber)
+    private void UpdateDashboardSummaries(
+        CornerMetricsResult result,
+        HistorySessionItemViewModel session,
+        int lapNumber,
+        CornerReferenceInfo referenceInfo)
     {
         var rows = CornerRows.ToArray();
         var totalLoss = rows.Sum(row => row.PositiveTimeLossInMs);
@@ -629,7 +682,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         TotalTimeLossText = totalLoss > 0 ? $"+{totalLoss / 1000d:0.000}s" : "-";
         WeakestCornerText = weakestCorner is null ? "-" : $"{weakestCorner.CornerText} · {FormatLossSeconds(weakestCorner.TimeLossInMs)}";
         BestConfidenceCornerText = bestConfidenceCorner is null ? "-" : $"{bestConfidenceCorner.CornerText} · {bestConfidenceCorner.ConfidenceText}";
-        ReferenceStatusText = result.Confidence.ToString();
+        ReferenceInfo = referenceInfo;
         SelectedCorner = weakestCorner ?? rows.FirstOrDefault();
 
         if (rows.Length > 0)
@@ -654,6 +707,345 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         return timeLossInMs is null ? "缺少参考" : $"{timeLossInMs.Value / 1000d:+0.000;-0.000;0.000}s";
     }
 
+    private async Task<ReferenceLapSelection> ResolveReferenceLapAsync(
+        string sessionId,
+        int currentLapNumber,
+        IReadOnlyList<StoredLapSample> currentSamples,
+        CancellationToken cancellationToken)
+    {
+        var currentLap = HistoryBrowser.HistoryLaps.FirstOrDefault(lap => lap.LapNumber == currentLapNumber);
+        if (currentLap is null)
+        {
+            return ReferenceLapSelection.None("缺少可用参考圈");
+        }
+
+        var allLaps = HistoryBrowser.HistoryLaps.ToArray();
+        var blockedLaps = await LoadFlagAffectedLapsAsync(sessionId, cancellationToken);
+        var sampleCache = new Dictionary<int, IReadOnlyList<StoredLapSample>>
+        {
+            [currentLapNumber] = currentSamples
+        };
+
+        if (SelectedReferenceLap is not null)
+        {
+            var manualSelection = await TryCreateReferenceSelectionAsync(
+                sessionId,
+                currentLap,
+                SelectedReferenceLap,
+                ReferenceLapSource.Manual,
+                currentSamples,
+                blockedLaps,
+                sampleCache,
+                cancellationToken);
+            if (manualSelection is not null)
+            {
+                return manualSelection;
+            }
+        }
+
+        var autoCandidates = allLaps
+            .Where(lap => lap.LapNumber != currentLapNumber)
+            .ToArray();
+
+        var sameStintSelection = await TrySelectFirstReferenceAsync(
+            sessionId,
+            currentLap,
+            autoCandidates
+                .Where(lap => IsSameInferredStint(lap, currentLap, allLaps))
+                .OrderBy(lap => lap.LapTimeInMs),
+            ReferenceLapSource.SameStintBest,
+            currentSamples,
+            blockedLaps,
+            sampleCache,
+            cancellationToken);
+        if (sameStintSelection is not null)
+        {
+            return sameStintSelection;
+        }
+
+        var sameCompoundSelection = await TrySelectFirstReferenceAsync(
+            sessionId,
+            currentLap,
+            autoCandidates
+                .Where(lap => HasSameCompound(lap, currentLap))
+                .OrderBy(lap => lap.LapTimeInMs),
+            ReferenceLapSource.SameCompoundBest,
+            currentSamples,
+            blockedLaps,
+            sampleCache,
+            cancellationToken);
+        if (sameCompoundSelection is not null)
+        {
+            return sameCompoundSelection;
+        }
+
+        var sessionBestSelection = await TrySelectFirstReferenceAsync(
+            sessionId,
+            currentLap,
+            autoCandidates.OrderBy(lap => lap.LapTimeInMs),
+            ReferenceLapSource.SessionBest,
+            currentSamples,
+            blockedLaps,
+            sampleCache,
+            cancellationToken);
+        if (sessionBestSelection is not null)
+        {
+            return sessionBestSelection;
+        }
+
+        var previousLap = allLaps.FirstOrDefault(lap => lap.LapNumber == currentLapNumber - 1);
+        if (previousLap is not null)
+        {
+            var previousSelection = await TryCreateReferenceSelectionAsync(
+                sessionId,
+                currentLap,
+                previousLap,
+                ReferenceLapSource.PreviousLap,
+                currentSamples,
+                blockedLaps,
+                sampleCache,
+                cancellationToken);
+            if (previousSelection is not null)
+            {
+                return previousSelection;
+            }
+        }
+
+        return ReferenceLapSelection.None("缺少可用参考圈");
+    }
+
+    private async Task<ReferenceLapSelection?> TrySelectFirstReferenceAsync(
+        string sessionId,
+        LapSummaryItemViewModel currentLap,
+        IEnumerable<LapSummaryItemViewModel> candidates,
+        ReferenceLapSource source,
+        IReadOnlyList<StoredLapSample> currentSamples,
+        ISet<int> blockedLaps,
+        IDictionary<int, IReadOnlyList<StoredLapSample>> sampleCache,
+        CancellationToken cancellationToken)
+    {
+        foreach (var candidate in candidates)
+        {
+            var selection = await TryCreateReferenceSelectionAsync(
+                sessionId,
+                currentLap,
+                candidate,
+                source,
+                currentSamples,
+                blockedLaps,
+                sampleCache,
+                cancellationToken);
+            if (selection is not null)
+            {
+                return selection;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<ReferenceLapSelection?> TryCreateReferenceSelectionAsync(
+        string sessionId,
+        LapSummaryItemViewModel currentLap,
+        LapSummaryItemViewModel candidate,
+        ReferenceLapSource source,
+        IReadOnlyList<StoredLapSample> currentSamples,
+        ISet<int> blockedLaps,
+        IDictionary<int, IReadOnlyList<StoredLapSample>> sampleCache,
+        CancellationToken cancellationToken)
+    {
+        if (!IsBasicReferenceCandidate(candidate, blockedLaps))
+        {
+            return null;
+        }
+
+        var samples = await LoadReferenceSamplesAsync(sessionId, candidate.LapNumber, sampleCache, cancellationToken);
+        if (!HasUsableReferenceSamples(samples) || ContainsPitSamples(samples))
+        {
+            return null;
+        }
+
+        return new ReferenceLapSelection(
+            BuildReferenceInfo(currentLap, candidate, source, currentSamples, samples),
+            samples);
+    }
+
+    private async Task<IReadOnlyList<StoredLapSample>> LoadReferenceSamplesAsync(
+        string sessionId,
+        int lapNumber,
+        IDictionary<int, IReadOnlyList<StoredLapSample>> sampleCache,
+        CancellationToken cancellationToken)
+    {
+        if (sampleCache.TryGetValue(lapNumber, out var cachedSamples))
+        {
+            return cachedSamples;
+        }
+
+        var samples = await _lapSampleRepository.GetForLapAsync(sessionId, lapNumber, cancellationToken);
+        sampleCache[lapNumber] = samples;
+        return samples;
+    }
+
+    private async Task<HashSet<int>> LoadFlagAffectedLapsAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        if (_eventRepository is null)
+        {
+            return [];
+        }
+
+        var events = await _eventRepository.GetRecentAsync(sessionId, 500, cancellationToken);
+        return events
+            .Where(storedEvent => storedEvent.LapNumber is not null && IsReferenceBlockingEvent(storedEvent.EventType))
+            .Select(storedEvent => storedEvent.LapNumber!.Value)
+            .ToHashSet();
+    }
+
+    private static bool IsReferenceBlockingEvent(EventType eventType)
+    {
+        return eventType is EventType.SafetyCar
+            or EventType.VirtualSafetyCar
+            or EventType.YellowFlag
+            or EventType.RedFlag
+            or EventType.SafetyCarRestart
+            or EventType.RedFlagTyreChange;
+    }
+
+    private static bool IsBasicReferenceCandidate(LapSummaryItemViewModel lap, ISet<int> blockedLaps)
+    {
+        return lap.IsValid
+            && lap.LapTimeInMs is >= MinimumReasonableLapTimeMs and <= MaximumReasonableLapTimeMs
+            && !blockedLaps.Contains(lap.LapNumber)
+            && !HasTyreTransition(lap);
+    }
+
+    private static bool HasUsableReferenceSamples(IReadOnlyList<StoredLapSample> samples)
+    {
+        return samples.Count(sample =>
+            sample.LapDistance is not null &&
+            sample.CurrentLapTimeInMs is not null &&
+            sample.SpeedKph is not null) >= MinimumReferenceLapSamples;
+    }
+
+    private static bool ContainsPitSamples(IReadOnlyList<StoredLapSample> samples)
+    {
+        return samples.Any(sample => sample.PitStatus is > 0);
+    }
+
+    private static bool IsSameInferredStint(
+        LapSummaryItemViewModel candidate,
+        LapSummaryItemViewModel current,
+        IReadOnlyList<LapSummaryItemViewModel> allLaps)
+    {
+        if (!HasSameCompound(candidate, current))
+        {
+            return false;
+        }
+
+        var minLap = Math.Min(candidate.LapNumber, current.LapNumber);
+        var maxLap = Math.Max(candidate.LapNumber, current.LapNumber);
+        return allLaps
+            .Where(lap => lap.LapNumber >= minLap && lap.LapNumber <= maxLap)
+            .All(lap => HasSameCompound(lap, current) && !HasTyreTransition(lap));
+    }
+
+    private static bool HasSameCompound(LapSummaryItemViewModel left, LapSummaryItemViewModel right)
+    {
+        var leftCompound = NormalizeCompound(left.StartTyre);
+        var rightCompound = NormalizeCompound(right.StartTyre);
+        return leftCompound.Length > 0 &&
+               string.Equals(leftCompound, rightCompound, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasTyreTransition(LapSummaryItemViewModel lap)
+    {
+        var start = NormalizeCompound(lap.StartTyre);
+        var end = NormalizeCompound(lap.EndTyre);
+        return start.Length > 0 &&
+               end.Length > 0 &&
+               !string.Equals(start, end, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeCompound(string? compound)
+    {
+        if (string.IsNullOrWhiteSpace(compound) || compound.Trim() == "-")
+        {
+            return string.Empty;
+        }
+
+        return compound.Trim();
+    }
+
+    private static CornerReferenceInfo BuildReferenceInfo(
+        LapSummaryItemViewModel currentLap,
+        LapSummaryItemViewModel referenceLap,
+        ReferenceLapSource source,
+        IReadOnlyList<StoredLapSample> currentSamples,
+        IReadOnlyList<StoredLapSample> referenceSamples)
+    {
+        var warnings = new List<string>();
+        var sameCompound = HasSameCompound(currentLap, referenceLap);
+        if (!sameCompound)
+        {
+            warnings.Add("参考圈轮胎不同");
+        }
+        else if (source is ReferenceLapSource.SameCompoundBest or ReferenceLapSource.SessionBest or ReferenceLapSource.PreviousLap)
+        {
+            warnings.Add("参考圈可能不是同 Stint");
+        }
+
+        var currentFuel = FirstFuelLitres(currentSamples);
+        var referenceFuel = FirstFuelLitres(referenceSamples);
+        if (currentFuel is not null &&
+            referenceFuel is not null &&
+            Math.Abs(currentFuel.Value - referenceFuel.Value) > SignificantFuelDifferenceLitres)
+        {
+            warnings.Add("参考圈燃油差异较大");
+        }
+
+        var confidence = source switch
+        {
+            ReferenceLapSource.SameStintBest => ConfidenceLevel.High,
+            ReferenceLapSource.Manual when sameCompound && warnings.Count == 0 => ConfidenceLevel.High,
+            ReferenceLapSource.Manual or ReferenceLapSource.SameCompoundBest => ConfidenceLevel.Medium,
+            ReferenceLapSource.SessionBest or ReferenceLapSource.PreviousLap => ConfidenceLevel.Medium,
+            _ => ConfidenceLevel.Unknown
+        };
+
+        if (!sameCompound || warnings.Count > 1)
+        {
+            confidence = ConfidenceLevel.Low;
+        }
+
+        return new CornerReferenceInfo
+        {
+            LapNumber = referenceLap.LapNumber,
+            Source = source,
+            LapTimeMs = referenceLap.LapTimeInMs,
+            Compound = referenceLap.CompoundText,
+            Confidence = confidence,
+            WarningText = warnings.Count == 0
+                ? "参考圈条件接近"
+                : $"{string.Join("；", warnings)}，结果仅供参考"
+        };
+    }
+
+    private static float? FirstFuelLitres(IReadOnlyList<StoredLapSample> samples)
+    {
+        return samples
+            .Select(sample => sample.FuelRemainingLitres)
+            .FirstOrDefault(fuel => fuel is not null);
+    }
+
+    private sealed record ReferenceLapSelection(
+        CornerReferenceInfo Info,
+        IReadOnlyList<StoredLapSample> Samples)
+    {
+        public static ReferenceLapSelection None(string warningText)
+        {
+            return new ReferenceLapSelection(CornerReferenceInfo.None(warningText), Array.Empty<StoredLapSample>());
+        }
+    }
+
     private void OnHistoryLapsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (HistoryBrowser.HistoryLaps.Count == 0)
@@ -663,6 +1055,16 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 _selectedLap = null;
                 OnPropertyChanged(nameof(SelectedLap));
             }
+
+            if (_selectedReferenceLap is not null)
+            {
+                _selectedReferenceLap = null;
+                OnPropertyChanged(nameof(SelectedReferenceLap));
+            }
+        }
+        else if (SelectedReferenceLap is not null && !HistoryBrowser.HistoryLaps.Contains(SelectedReferenceLap))
+        {
+            SelectedReferenceLap = null;
         }
 
         OnPropertyChanged(nameof(SelectionText));
@@ -673,6 +1075,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         if (e.PropertyName == nameof(HistorySessionBrowserViewModel.SelectedSession))
         {
             SelectedLap = null;
+            SelectedReferenceLap = null;
             OnPropertyChanged(nameof(SelectionText));
         }
 

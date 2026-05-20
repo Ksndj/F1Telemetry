@@ -155,8 +155,10 @@
                                    Text="{Binding CornerAnalysis.StatusText}" />
                         <Grid Margin="0,16,0,0">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="2.2*" />
-                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="150" />
+                                <ColumnDefinition Width="12" />
                                 <ColumnDefinition Width="150" />
                                 <ColumnDefinition Width="14" />
                                 <ColumnDefinition Width="*" />
@@ -170,7 +172,13 @@
                                       DisplayMemberPath="LapText"
                                       ItemsSource="{Binding CornerAnalysis.HistoryBrowser.HistoryLaps}"
                                       SelectedItem="{Binding CornerAnalysis.SelectedLap, Mode=TwoWay}" />
-                            <TextBlock Grid.Column="4"
+                            <ComboBox Grid.Column="4"
+                                      Style="{StaticResource CornerComboBoxStyle}"
+                                      DisplayMemberPath="LapText"
+                                      ToolTip="参考圈"
+                                      ItemsSource="{Binding CornerAnalysis.HistoryBrowser.HistoryLaps}"
+                                      SelectedItem="{Binding CornerAnalysis.SelectedReferenceLap, Mode=TwoWay}" />
+                            <TextBlock Grid.Column="6"
                                        VerticalAlignment="Center"
                                        Style="{StaticResource MutedTextStyle}"
                                        Text="{Binding CornerAnalysis.SelectionText}" />
@@ -258,12 +266,22 @@
                         Background="#2A2410"
                         BorderBrush="#826B25">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="参考图状态" />
+                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="参考圈" />
                         <TextBlock Margin="0,8,0,0"
                                    FontSize="22"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
                                    Text="{Binding CornerAnalysis.ReferenceStatusText}" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="#F6C453"
+                                   Text="{Binding CornerAnalysis.ReferenceInfo.SourceText, StringFormat=来源：{0}}" />
+                        <TextBlock Margin="0,3,0,0"
+                                   Foreground="#AFC2DA"
+                                   Text="{Binding CornerAnalysis.ReferenceInfo.QualityText, StringFormat=数据质量：{0}}" />
+                        <TextBlock Margin="0,3,0,0"
+                                   Foreground="#FBBF24"
+                                   Text="{Binding CornerAnalysis.ReferenceInfo.WarningText}"
+                                   TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                 </Border>
             </Grid>

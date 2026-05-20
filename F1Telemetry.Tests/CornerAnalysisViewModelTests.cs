@@ -1,5 +1,6 @@
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
+using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Interfaces;
@@ -110,7 +111,7 @@ public sealed class CornerAnalysisViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.Equal("session-selected", sampleRepository.RequestedSessionId);
-        Assert.Equal(3, sampleRepository.RequestedLapNumber);
+        Assert.Equal(3, sampleRepository.RequestedLapNumbers.First());
         Assert.Contains("Lap 3", viewModel.StatusText, StringComparison.Ordinal);
         Assert.NotEmpty(viewModel.CornerRows);
     }
@@ -263,6 +264,147 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Equal("7号弯先稳入弯，再提早出弯。", ttsService.SpokenTexts[0]);
     }
 
+    /// <summary>
+    /// Verifies the automatic reference selector prefers the fastest valid same-stint lap.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithSameStintFastestLap_UsesSameStintReference()
+    {
+        var historyBrowser = CreateHistoryBrowser(
+            "session-same-stint",
+            [
+                CreateStoredLap("session-same-stint", 2, 88_000, "Soft"),
+                CreateStoredLap("session-same-stint", 4, 90_000, "Medium"),
+                CreateStoredLap("session-same-stint", 5, 93_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateCornerSamples("session-same-stint", 2, 9_000),
+                ..CreateCornerSamples("session-same-stint", 4, 9_200),
+                ..CreateCornerSamples("session-same-stint", 5, 10_000)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(ReferenceLapSource.SameStintBest, viewModel.ReferenceInfo.Source);
+        Assert.Equal(4, viewModel.ReferenceInfo.LapNumber);
+        Assert.Equal("Lap 4", viewModel.ReferenceStatusText);
+        Assert.DoesNotContain(viewModel.CornerRows, row => row.WarningDisplayText.Contains("MissingRefLap", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies the automatic reference selector falls back to the session-best lap when no same-stint lap is usable.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithoutSameStintReference_UsesSessionBestReference()
+    {
+        var historyBrowser = CreateHistoryBrowser(
+            "session-best",
+            [
+                CreateStoredLap("session-best", 2, 88_000, "Soft"),
+                CreateStoredLap("session-best", 5, 93_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateCornerSamples("session-best", 2, 9_000),
+                ..CreateCornerSamples("session-best", 5, 10_000)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(ReferenceLapSource.SessionBest, viewModel.ReferenceInfo.Source);
+        Assert.Equal(2, viewModel.ReferenceInfo.LapNumber);
+        Assert.Contains("轮胎不同", viewModel.ReferenceInfo.WarningText, StringComparison.Ordinal);
+        Assert.Equal("Low", viewModel.ReferenceInfo.QualityText);
+    }
+
+    /// <summary>
+    /// Verifies invalid, pit, and flag-affected laps are not used as automatic references.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_SkipsInvalidPitAndFlagAffectedReferenceLaps()
+    {
+        var sessionId = "session-filter";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 94_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 88_000, "Medium"),
+                CreateStoredLap(sessionId, 3, 89_000, "Medium"),
+                CreateStoredLap(sessionId, 4, 87_000, "Medium", isValid: false),
+                CreateStoredLap(sessionId, 5, 95_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateCornerSamples(sessionId, 1, 9_800),
+                ..CreateCornerSamples(sessionId, 2, 9_000),
+                ..CreateCornerSamples(sessionId, 3, 9_100, pitStatus: 1),
+                ..CreateCornerSamples(sessionId, 4, 8_900),
+                ..CreateCornerSamples(sessionId, 5, 10_000)
+            ]
+        };
+        var eventRepository = new RecordingEventRepository
+        {
+            Events =
+            [
+                new StoredEvent
+                {
+                    SessionId = sessionId,
+                    EventType = EventType.SafetyCar,
+                    Severity = EventSeverity.Information,
+                    LapNumber = 2,
+                    CreatedAt = DateTimeOffset.Parse("2026-05-17T10:02:00Z")
+                }
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository, eventRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(1, viewModel.ReferenceInfo.LapNumber);
+        Assert.Equal(ReferenceLapSource.SameStintBest, viewModel.ReferenceInfo.Source);
+    }
+
+    /// <summary>
+    /// Verifies the page shows a clear missing-reference state without raw enum text.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithoutUsableReference_ShowsClearMissingReferenceState()
+    {
+        var sessionId = "session-no-ref";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 7, 91_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateCornerSamples(sessionId, 7, 10_000)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(ReferenceLapSource.None, viewModel.ReferenceInfo.Source);
+        Assert.Equal("缺少可用参考圈", viewModel.ReferenceStatusText);
+        Assert.Contains("缺少可用参考圈", viewModel.ReferenceInfo.WarningText, StringComparison.Ordinal);
+        Assert.DoesNotContain(viewModel.CornerRows, row => row.WarningDisplayText.Contains("MissingRefLap", StringComparison.Ordinal));
+        Assert.Contains(viewModel.CornerRows, row => row.WarningDisplayText.Contains("缺少参考圈", StringComparison.Ordinal));
+    }
+
     private static HistorySessionBrowserViewModel CreateHistoryBrowserWithSupportedLap(string sessionId)
     {
         return new HistorySessionBrowserViewModel(
@@ -287,6 +429,77 @@ public sealed class CornerAnalysisViewModelTests
                     new StoredLap { SessionId = sessionId, LapNumber = 7, IsValid = true, StartTyre = "Medium", EndTyre = "Medium", CreatedAt = DateTimeOffset.Parse("2026-05-17T10:07:00Z") }
                 ]
             });
+    }
+
+    private static HistorySessionBrowserViewModel CreateHistoryBrowser(string sessionId, IReadOnlyList<StoredLap> laps)
+    {
+        return new HistorySessionBrowserViewModel(
+            new RecordingSessionRepository
+            {
+                Sessions =
+                [
+                    new StoredSession
+                    {
+                        Id = sessionId,
+                        SessionUid = $"uid-{sessionId}",
+                        TrackId = 0,
+                        SessionType = 15,
+                        StartedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z")
+                    }
+                ]
+            },
+            new RecordingLapRepository { Laps = laps });
+    }
+
+    private static StoredLap CreateStoredLap(
+        string sessionId,
+        int lapNumber,
+        int lapTimeMs,
+        string compound,
+        bool isValid = true)
+    {
+        return new StoredLap
+        {
+            SessionId = sessionId,
+            LapNumber = lapNumber,
+            LapTimeInMs = lapTimeMs,
+            IsValid = isValid,
+            StartTyre = compound,
+            EndTyre = compound,
+            CreatedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddMinutes(lapNumber)
+        };
+    }
+
+    private static StoredLapSample[] CreateCornerSamples(
+        string sessionId,
+        int lapNumber,
+        int baseTimeMs,
+        int? pitStatus = null,
+        float? fuelLitres = 80f)
+    {
+        return
+        [
+            CreateSample(sessionId, lapNumber, 0, 270, baseTimeMs, 210, 0.8, 0.0) with
+            {
+                PitStatus = pitStatus,
+                FuelRemainingLitres = fuelLitres
+            },
+            CreateSample(sessionId, lapNumber, 1, 330, baseTimeMs + 600, 160, 0.2, 0.6) with
+            {
+                PitStatus = pitStatus,
+                FuelRemainingLitres = fuelLitres
+            },
+            CreateSample(sessionId, lapNumber, 2, 410, baseTimeMs + 1_500, 110, 0.1, 0.9) with
+            {
+                PitStatus = pitStatus,
+                FuelRemainingLitres = fuelLitres
+            },
+            CreateSample(sessionId, lapNumber, 3, 500, baseTimeMs + 2_700, 190, 0.9, 0.0) with
+            {
+                PitStatus = pitStatus,
+                FuelRemainingLitres = fuelLitres
+            }
+        ];
     }
 
     private static StoredLapSample CreateSample(
@@ -348,6 +561,23 @@ public sealed class CornerAnalysisViewModelTests
         }
     }
 
+    private sealed class RecordingEventRepository : IEventRepository
+    {
+        public IReadOnlyList<StoredEvent> Events { get; init; } = Array.Empty<StoredEvent>();
+
+        public Task AddAsync(string sessionId, RaceEvent raceEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<StoredEvent>> GetRecentAsync(string sessionId, int count, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredEvent>>(
+                Events
+                    .Where(storedEvent => storedEvent.SessionId == sessionId)
+                    .OrderByDescending(storedEvent => storedEvent.CreatedAt)
+                    .Take(count)
+                    .ToArray());
+        }
+    }
+
     private sealed class RecordingLapSampleRepository : ILapSampleRepository
     {
         public IReadOnlyList<StoredLapSample> Samples { get; init; } = Array.Empty<StoredLapSample>();
@@ -355,6 +585,8 @@ public sealed class CornerAnalysisViewModelTests
         public string? RequestedSessionId { get; private set; }
 
         public int? RequestedLapNumber { get; private set; }
+
+        public List<int> RequestedLapNumbers { get; } = [];
 
         public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
@@ -364,6 +596,7 @@ public sealed class CornerAnalysisViewModelTests
         {
             RequestedSessionId = sessionId;
             RequestedLapNumber = lapNumber;
+            RequestedLapNumbers.Add(lapNumber);
 
             return Task.FromResult<IReadOnlyList<StoredLapSample>>(
                 Samples

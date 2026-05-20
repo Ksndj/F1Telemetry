@@ -175,17 +175,17 @@ public sealed class CornerSummaryRowViewModel
     {
         return warning switch
         {
-            DataQualityWarning.MissingReferenceLap => "MissingRefLap",
-            DataQualityWarning.EstimatedTrackMap => "Est.TrackMap",
-            DataQualityWarning.LowSampleDensity => "LowDensity",
-            DataQualityWarning.MissingSamples => "NoSamples",
-            DataQualityWarning.MissingLapDistance => "NoDistance",
-            DataQualityWarning.MissingTimingSamples => "NoTiming",
-            DataQualityWarning.MissingSpeedSamples => "NoSpeed",
-            DataQualityWarning.MissingThrottleSamples => "NoThrottle",
-            DataQualityWarning.MissingBrakeSamples => "NoBrake",
-            DataQualityWarning.MissingSteeringSamples => "NoSteering",
-            DataQualityWarning.UnsupportedTrack => "Unsupported",
+            DataQualityWarning.MissingReferenceLap => "缺少参考圈",
+            DataQualityWarning.EstimatedTrackMap => "估算赛道图",
+            DataQualityWarning.LowSampleDensity => "采样偏少",
+            DataQualityWarning.MissingSamples => "缺少采样",
+            DataQualityWarning.MissingLapDistance => "缺少距离",
+            DataQualityWarning.MissingTimingSamples => "缺少计时",
+            DataQualityWarning.MissingSpeedSamples => "缺少速度",
+            DataQualityWarning.MissingThrottleSamples => "缺少油门",
+            DataQualityWarning.MissingBrakeSamples => "缺少刹车",
+            DataQualityWarning.MissingSteeringSamples => "缺少转向",
+            DataQualityWarning.UnsupportedTrack => "暂不支持",
             _ => warning.ToString()
         };
     }

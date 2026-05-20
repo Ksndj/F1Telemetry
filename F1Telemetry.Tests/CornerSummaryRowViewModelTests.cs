@@ -39,8 +39,9 @@ public sealed class CornerSummaryRowViewModelTests
             timeLossInMs: null,
             warnings: [DataQualityWarning.MissingReferenceLap, DataQualityWarning.EstimatedTrackMap]));
 
-        Assert.Contains("MissingRefLap", row.WarningDisplayText, StringComparison.Ordinal);
-        Assert.Contains("Est.TrackMap", row.WarningDisplayText, StringComparison.Ordinal);
+        Assert.Contains("缺少参考圈", row.WarningDisplayText, StringComparison.Ordinal);
+        Assert.Contains("估算赛道图", row.WarningDisplayText, StringComparison.Ordinal);
+        Assert.DoesNotContain("MissingRefLap", row.WarningDisplayText, StringComparison.Ordinal);
         Assert.Contains(nameof(DataQualityWarning.MissingReferenceLap), row.WarningText, StringComparison.Ordinal);
         Assert.Equal("#FBBF24", row.WarningBrush);
         Assert.Equal("#FBBF24", row.TimeLossBrush);
