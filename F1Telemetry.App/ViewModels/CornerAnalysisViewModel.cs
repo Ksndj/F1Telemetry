@@ -50,12 +50,16 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
     private string _analysisTimeText = "-";
     private string _totalTimeLossText = "-";
+    private string _netTimeDeltaText = "-";
     private string _weakestCornerText = "-";
     private string _bestConfidenceCornerText = "-";
+    private string _dataQualityText = "-";
+    private string _dataQualityReasonText = "-";
     private string _referenceStatusText = "-";
     private string _engineerAdviceStatusText = "等待 AI 弯角分析。";
     private string _aiAnnotationText = "刷新弯角分析后生成 AI 工程师建议。";
     private CornerReferenceInfo _referenceInfo = CornerReferenceInfo.None();
+    private CornerEngineerAdviceState _engineerAdviceState = CornerEngineerAdviceState.Ready;
 
     /// <summary>
     /// Initializes a new corner analysis ViewModel.
@@ -94,10 +98,20 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoading && !IsEngineerAdviceLoading);
         _generateEngineerAdviceCommand = new RelayCommand(
             () => _ = GenerateEngineerAdviceAsync(CancellationToken.None),
-            () => !IsLoading && !IsEngineerAdviceLoading && CornerRows.Count > 0);
+            () => CanGenerateEngineerAdvice);
         CornerRows.CollectionChanged += (_, _) =>
         {
             OnPropertyChanged(nameof(HasCornerRows));
+            OnPropertyChanged(nameof(CanGenerateEngineerAdvice));
+            if (CornerRows.Count == 0 && !IsEngineerAdviceLoading)
+            {
+                SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
+            }
+            else if (CornerRows.Count > 0 && !IsEngineerAdviceLoading && _engineerAdviceState == CornerEngineerAdviceState.InsufficientData)
+            {
+                SetEngineerAdviceState(CornerEngineerAdviceState.Ready);
+            }
+
             _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
         };
         HistoryBrowser.HistoryLaps.CollectionChanged += OnHistoryLapsChanged;
@@ -146,6 +160,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             {
                 _selectedLapNumber = value?.LapNumber;
                 OnPropertyChanged(nameof(SelectionText));
+                OnPropertyChanged(nameof(HasReferenceLapChoices));
+                OnPropertyChanged(nameof(ReferencePickerText));
                 _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
             }
         }
@@ -161,6 +177,20 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             if (SetProperty(ref _selectedReferenceLap, value))
             {
+                if (value is not null)
+                {
+                    ReferenceInfo = new CornerReferenceInfo
+                    {
+                        LapNumber = value.LapNumber,
+                        Source = ReferenceLapSource.Manual,
+                        LapTimeMs = value.LapTimeInMs,
+                        Compound = value.CompoundText,
+                        Confidence = ConfidenceLevel.Medium,
+                        WarningText = "手动参考圈，刷新分析后更新对比。"
+                    };
+                }
+
+                OnPropertyChanged(nameof(ReferencePickerText));
                 _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
             }
         }
@@ -200,6 +230,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             {
                 _refreshCommand.RaiseCanExecuteChanged();
                 _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(CanGenerateEngineerAdvice));
             }
         }
     }
@@ -217,6 +248,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 _refreshCommand.RaiseCanExecuteChanged();
                 _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
                 OnPropertyChanged(nameof(EngineerAdviceButtonText));
+                OnPropertyChanged(nameof(CanGenerateEngineerAdvice));
             }
         }
     }
@@ -224,7 +256,19 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     /// <summary>
     /// Gets the engineer-advice button text.
     /// </summary>
-    public string EngineerAdviceButtonText => IsEngineerAdviceLoading ? "AI分析中" : "AI建议";
+    public string EngineerAdviceButtonText => _engineerAdviceState switch
+    {
+        CornerEngineerAdviceState.Loading => "AI分析中...",
+        CornerEngineerAdviceState.Generated => "已生成",
+        CornerEngineerAdviceState.InsufficientData => "数据不足",
+        CornerEngineerAdviceState.Failed => "生成失败",
+        _ => "AI建议"
+    };
+
+    /// <summary>
+    /// Gets a value indicating whether AI advice can be requested now.
+    /// </summary>
+    public bool CanGenerateEngineerAdvice => !IsLoading && !IsEngineerAdviceLoading && CornerRows.Count > 0;
 
     /// <summary>
     /// Gets the page status text.
@@ -272,6 +316,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Gets the net signed corner time delta summary.
+    /// </summary>
+    public string NetTimeDeltaText
+    {
+        get => _netTimeDeltaText;
+        private set => SetProperty(ref _netTimeDeltaText, value);
+    }
+
+    /// <summary>
     /// Gets the weakest corner summary.
     /// </summary>
     public string WeakestCornerText
@@ -287,6 +340,24 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     {
         get => _bestConfidenceCornerText;
         private set => SetProperty(ref _bestConfidenceCornerText, value);
+    }
+
+    /// <summary>
+    /// Gets the overall data-quality label.
+    /// </summary>
+    public string DataQualityText
+    {
+        get => _dataQualityText;
+        private set => SetProperty(ref _dataQualityText, value);
+    }
+
+    /// <summary>
+    /// Gets the overall data-quality reason.
+    /// </summary>
+    public string DataQualityReasonText
+    {
+        get => _dataQualityReasonText;
+        private set => SetProperty(ref _dataQualityReasonText, value);
     }
 
     /// <summary>
@@ -308,6 +379,35 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             SetProperty(ref _referenceInfo, value);
             ReferenceStatusText = value.LapText;
+            OnPropertyChanged(nameof(ReferencePickerText));
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the reference picker has any candidate laps.
+    /// </summary>
+    public bool HasReferenceLapChoices => HistoryBrowser.HistoryLaps.Any(lap => SelectedLap is null || lap.LapNumber != SelectedLap.LapNumber);
+
+    /// <summary>
+    /// Gets the text shown in the reference picker when automatic selection is active.
+    /// </summary>
+    public string ReferencePickerText
+    {
+        get
+        {
+            if (!HasReferenceLapChoices)
+            {
+                return "暂无可用参考圈";
+            }
+
+            if (SelectedReferenceLap is not null)
+            {
+                return $"手动参考圈：{SelectedReferenceLap.LapText}";
+            }
+
+            return ReferenceInfo.HasReference
+                ? $"自动参考圈：{ReferenceInfo.LapText}"
+                : "暂无可用参考圈";
         }
     }
 
@@ -348,6 +448,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         ErrorMessage = string.Empty;
         EngineerAdviceStatusText = "等待 AI 弯角分析。";
         AiAnnotationText = "刷新弯角分析后生成 AI 工程师建议。";
+        SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
         try
         {
             if (HistoryBrowser.SelectedSession is null)
@@ -400,8 +501,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 ? null
                 : referenceSelection.Samples.Select(ToLapSample).ToArray();
             var result = _cornerMetricsExtractor.Extract(map, lapSamples, referenceSamples);
-            foreach (var row in result.Corners.Select(CornerSummaryRowViewModel.FromSummary))
+            foreach (var summary in result.Corners)
             {
+                var referenceMetrics = BuildReferenceCornerMetrics(summary.Segment, referenceSamples);
+                var row = CornerSummaryRowViewModel.FromSummary(
+                    summary,
+                    referenceMetrics?.EntrySpeedKph,
+                    referenceMetrics?.MinimumSpeedKph,
+                    referenceMetrics?.ExitSpeedKph,
+                    referenceMetrics?.MaxBrake);
                 CornerRows.Add(row);
             }
 
@@ -410,6 +518,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
             if (CornerRows.Count > 0)
             {
+                SetEngineerAdviceState(CornerEngineerAdviceState.Ready);
                 await GenerateEngineerAdviceAsync(session, SelectedLap, result, cancellationToken);
             }
         }
@@ -445,6 +554,19 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             cancellationToken);
     }
 
+    private void SetEngineerAdviceState(CornerEngineerAdviceState state)
+    {
+        if (_engineerAdviceState == state)
+        {
+            return;
+        }
+
+        _engineerAdviceState = state;
+        OnPropertyChanged(nameof(EngineerAdviceButtonText));
+        OnPropertyChanged(nameof(CanGenerateEngineerAdvice));
+        _generateEngineerAdviceCommand.RaiseCanExecuteChanged();
+    }
+
     private async Task GenerateEngineerAdviceAsync(
         HistorySessionItemViewModel? session,
         LapSummaryItemViewModel? lap,
@@ -458,32 +580,42 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
         if (session is null || lap is null || CornerRows.Count == 0)
         {
-            EngineerAdviceStatusText = "没有可用于 AI 建议的弯角数据。";
+            SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
+            EngineerAdviceStatusText = "当前数据不足，建议仅供参考。";
             return;
         }
 
         if (_aiAnalysisService is null || _settingsStore is null)
         {
-            EngineerAdviceStatusText = "AI建议不可用：未接入 AI 服务。";
+            SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+            EngineerAdviceStatusText = "生成失败：未接入 AI 服务。";
             return;
         }
 
         IsEngineerAdviceLoading = true;
-        EngineerAdviceStatusText = "AI正在分析弯角数据...";
+        SetEngineerAdviceState(CornerEngineerAdviceState.Loading);
+        var hasLimitedData = HasLimitedCornerData();
+        EngineerAdviceStatusText = hasLimitedData
+            ? "AI分析中，当前数据不足，建议仅供参考。"
+            : "AI分析中，请稍候。";
         try
         {
-            var settings = await _settingsStore.LoadAsync(cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(20));
+            var settings = await _settingsStore.LoadAsync(timeoutCts.Token);
             if (!settings.Ai.AiEnabled)
             {
-                EngineerAdviceStatusText = "AI未启用，工程师建议暂不生成。";
+                SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+                EngineerAdviceStatusText = "生成失败：AI未启用。";
                 return;
             }
 
             var context = BuildEngineerAdviceContext(session, lap, result);
-            var aiResult = await _aiAnalysisService.AnalyzeAsync(context, settings.Ai, cancellationToken);
+            var aiResult = await _aiAnalysisService.AnalyzeAsync(context, settings.Ai, timeoutCts.Token);
             if (!aiResult.IsSuccess)
             {
-                EngineerAdviceStatusText = $"AI建议生成失败：{aiResult.ErrorMessage}";
+                SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+                EngineerAdviceStatusText = $"生成失败：{ResolveFailureMessage(aiResult.ErrorMessage)}";
                 return;
             }
 
@@ -501,17 +633,25 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             }
 
             AiAnnotationText = BuildAiAnnotationText(aiResult);
+            SetEngineerAdviceState(CornerEngineerAdviceState.Generated);
             EngineerAdviceStatusText = suggestions.Length == 0
-                ? "AI已返回分析，但没有可显示的工程师建议。"
-                : BuildEngineerAdviceTtsStatus(session, lap, aiResult, settings.Tts);
+                ? "已生成，但没有可显示的工程师建议。"
+                : BuildEngineerAdviceTtsStatus(session, lap, aiResult, settings.Tts, hasLimitedData);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+            EngineerAdviceStatusText = "生成失败：AI请求超时，请重试。";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            EngineerAdviceStatusText = "AI建议生成已取消。";
+            SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+            EngineerAdviceStatusText = "生成失败：AI建议生成已取消。";
         }
         catch (Exception ex)
         {
-            EngineerAdviceStatusText = $"AI建议生成失败：{ex.Message}";
+            SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+            EngineerAdviceStatusText = $"生成失败：{ex.Message}";
         }
         finally
         {
@@ -523,16 +663,18 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         HistorySessionItemViewModel session,
         LapSummaryItemViewModel lap,
         AIAnalysisResult aiResult,
-        F1Telemetry.TTS.Models.TtsOptions ttsOptions)
+        F1Telemetry.TTS.Models.TtsOptions ttsOptions,
+        bool hasLimitedData)
     {
+        var prefix = hasLimitedData ? "已生成，当前数据不足，建议仅供参考。" : "已生成。";
         if (!ttsOptions.TtsEnabled)
         {
-            return "AI建议已生成，TTS未启用。";
+            return $"{prefix}TTS未启用。";
         }
 
         if (_ttsMessageFactory is null || _ttsQueue is null)
         {
-            return "AI建议已生成，未接入 TTS 队列。";
+            return $"{prefix}未接入 TTS 队列。";
         }
 
         var speechText = ResolveEngineerAdviceSpeechText(aiResult);
@@ -542,13 +684,25 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             ttsOptions);
         if (message is null)
         {
-            return "AI建议已生成，TTS冷却中未重复播报。";
+            return $"{prefix}TTS冷却中未重复播报。";
         }
 
         _ttsQueue.UpdateOptions(ttsOptions);
         return _ttsQueue.TryEnqueue(message)
-            ? "AI建议已生成，TTS已加入播报队列。"
-            : "AI建议已生成，TTS队列暂未接受播报。";
+            ? $"{prefix}TTS已加入播报队列。"
+            : $"{prefix}TTS队列暂未接受播报。";
+    }
+
+    private bool HasLimitedCornerData()
+    {
+        return CornerRows.Any(row =>
+            row.ConfidenceText is nameof(ConfidenceLevel.Low) or nameof(ConfidenceLevel.Unknown) ||
+            !string.Equals(row.CompactWarningText, "OK", StringComparison.Ordinal));
+    }
+
+    private static string ResolveFailureMessage(string? message)
+    {
+        return string.IsNullOrWhiteSpace(message) ? "AI服务未返回有效结果。" : message.Trim();
     }
 
     private AIAnalysisContext BuildEngineerAdviceContext(
@@ -589,7 +743,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         builder.AppendLine($"Track/session/lap: {SelectionText}");
         builder.AppendLine($"Result confidence: {result?.Confidence.ToString() ?? ReferenceStatusText}");
         builder.AppendLine($"Reference lap: {ReferenceInfo.LapText}, source {ReferenceInfo.SourceText}, quality {ReferenceInfo.QualityText}, note {ReferenceInfo.WarningText}");
-        builder.AppendLine($"Total positive time loss: {TotalTimeLossText}");
+        builder.AppendLine($"Positive time-loss total: {TotalTimeLossText}");
+        builder.AppendLine($"Net time delta: {NetTimeDeltaText}");
         builder.AppendLine($"Weakest corner: {WeakestCornerText}");
         builder.AppendLine("Rows:");
 
@@ -656,8 +811,11 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     {
         AnalysisTimeText = "-";
         TotalTimeLossText = "-";
+        NetTimeDeltaText = "-";
         WeakestCornerText = "-";
         BestConfidenceCornerText = "-";
+        DataQualityText = "-";
+        DataQualityReasonText = "-";
         ReferenceInfo = CornerReferenceInfo.None("缺少可用参考圈");
     }
 
@@ -669,19 +827,22 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     {
         var rows = CornerRows.ToArray();
         var totalLoss = rows.Sum(row => row.PositiveTimeLossInMs);
+        var netTimeDelta = rows
+            .Where(row => row.TimeLossInMs is not null)
+            .Sum(row => row.TimeLossInMs!.Value);
         var weakestCorner = rows
+            .Where(row => row.PositiveTimeLossInMs > 0)
             .OrderByDescending(row => row.PositiveTimeLossInMs)
             .ThenBy(row => row.CornerNumber ?? int.MaxValue)
             .FirstOrDefault();
-        var bestConfidenceCorner = rows
-            .OrderByDescending(row => ResolveConfidenceRank(row.ConfidenceText))
-            .ThenBy(row => row.PositiveTimeLossInMs)
-            .FirstOrDefault();
 
         AnalysisTimeText = DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
-        TotalTimeLossText = totalLoss > 0 ? $"+{totalLoss / 1000d:0.000}s" : "-";
-        WeakestCornerText = weakestCorner is null ? "-" : $"{weakestCorner.CornerText} · {FormatLossSeconds(weakestCorner.TimeLossInMs)}";
-        BestConfidenceCornerText = bestConfidenceCorner is null ? "-" : $"{bestConfidenceCorner.CornerText} · {bestConfidenceCorner.ConfidenceText}";
+        TotalTimeLossText = FormatPositiveSeconds(totalLoss);
+        NetTimeDeltaText = FormatSignedSeconds(netTimeDelta);
+        WeakestCornerText = weakestCorner is null ? "没有明显损失" : $"{weakestCorner.CornerText} · {FormatLossSeconds(weakestCorner.TimeLossInMs)}";
+        BestConfidenceCornerText = "-";
+        DataQualityText = result.Confidence.ToString();
+        DataQualityReasonText = BuildDataQualityReasonText(result, referenceInfo);
         ReferenceInfo = referenceInfo;
         SelectedCorner = weakestCorner ?? rows.FirstOrDefault();
 
@@ -691,20 +852,104 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         }
     }
 
-    private static int ResolveConfidenceRank(string confidenceText)
+    private static string BuildDataQualityReasonText(CornerMetricsResult result, CornerReferenceInfo referenceInfo)
     {
-        return confidenceText switch
+        var reasons = result.Warnings
+            .Select(FormatDataQualityReason)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (!referenceInfo.HasReference)
         {
-            nameof(ConfidenceLevel.High) => 3,
-            nameof(ConfidenceLevel.Medium) => 2,
-            nameof(ConfidenceLevel.Low) => 1,
-            _ => 0
+            reasons.Add("缺少可用参考圈");
+        }
+        else if (referenceInfo.Confidence is ConfidenceLevel.Low or ConfidenceLevel.Medium &&
+                 !string.IsNullOrWhiteSpace(referenceInfo.WarningText))
+        {
+            reasons.Add(referenceInfo.WarningText);
+        }
+
+        return reasons.Count == 0 ? "数据质量良好" : string.Join(" / ", reasons.Distinct(StringComparer.Ordinal));
+    }
+
+    private static string FormatDataQualityReason(DataQualityWarning warning)
+    {
+        return warning switch
+        {
+            DataQualityWarning.EstimatedTrackMap => "使用估算赛道图",
+            DataQualityWarning.MissingReferenceLap => "缺少参考圈",
+            DataQualityWarning.LowSampleDensity => "采样偏少",
+            DataQualityWarning.MissingSamples => "缺少采样",
+            DataQualityWarning.MissingLapDistance => "缺少距离采样",
+            DataQualityWarning.MissingTimingSamples => "缺少计时采样",
+            DataQualityWarning.MissingSpeedSamples => "缺少速度采样",
+            DataQualityWarning.MissingThrottleSamples => "缺少油门采样",
+            DataQualityWarning.MissingBrakeSamples => "缺少刹车采样",
+            DataQualityWarning.MissingSteeringSamples => "缺少转向采样",
+            DataQualityWarning.UnsupportedTrack => "赛道暂不支持",
+            _ => warning.ToString()
         };
     }
 
     private static string FormatLossSeconds(int? timeLossInMs)
     {
         return timeLossInMs is null ? "缺少参考" : $"{timeLossInMs.Value / 1000d:+0.000;-0.000;0.000}s";
+    }
+
+    private static string FormatPositiveSeconds(int timeInMs)
+    {
+        return timeInMs > 0 ? $"+{timeInMs / 1000d:0.000}s" : "0.000s";
+    }
+
+    private static string FormatSignedSeconds(int timeInMs)
+    {
+        return $"{timeInMs / 1000d:+0.000;-0.000;0.000}s";
+    }
+
+    private static ReferenceCornerMetrics? BuildReferenceCornerMetrics(
+        TrackSegment segment,
+        IReadOnlyList<LapSample>? referenceSamples)
+    {
+        if (referenceSamples is null || referenceSamples.Count == 0)
+        {
+            return null;
+        }
+
+        var segmentSamples = referenceSamples
+            .Where(sample => sample.LapDistance is not null && segment.ContainsDistance(sample.LapDistance.Value))
+            .OrderBy(sample => sample.LapDistance)
+            .ToArray();
+        if (segmentSamples.Length == 0)
+        {
+            return null;
+        }
+
+        return new ReferenceCornerMetrics(
+            segmentSamples.FirstOrDefault()?.SpeedKph,
+            MinOrNull(segmentSamples.Select(sample => sample.SpeedKph)),
+            segmentSamples.LastOrDefault()?.SpeedKph,
+            MaxOrNull(segmentSamples.Select(sample => sample.Brake)));
+    }
+
+    private static double? MinOrNull(IEnumerable<double?> values)
+    {
+        var concreteValues = values
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        return concreteValues.Length == 0 ? null : concreteValues.Min();
+    }
+
+    private static double? MaxOrNull(IEnumerable<double?> values)
+    {
+        var concreteValues = values
+            .Where(value => value is not null)
+            .Select(value => value!.Value)
+            .ToArray();
+
+        return concreteValues.Length == 0 ? null : concreteValues.Max();
     }
 
     private async Task<ReferenceLapSelection> ResolveReferenceLapAsync(
@@ -1046,6 +1291,21 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         }
     }
 
+    private sealed record ReferenceCornerMetrics(
+        double? EntrySpeedKph,
+        double? MinimumSpeedKph,
+        double? ExitSpeedKph,
+        double? MaxBrake);
+
+    private enum CornerEngineerAdviceState
+    {
+        Ready,
+        Loading,
+        Generated,
+        InsufficientData,
+        Failed
+    }
+
     private void OnHistoryLapsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (HistoryBrowser.HistoryLaps.Count == 0)
@@ -1068,6 +1328,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         }
 
         OnPropertyChanged(nameof(SelectionText));
+        OnPropertyChanged(nameof(HasReferenceLapChoices));
+        OnPropertyChanged(nameof(ReferencePickerText));
     }
 
     private void OnHistoryBrowserPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -1077,6 +1339,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             SelectedLap = null;
             SelectedReferenceLap = null;
             OnPropertyChanged(nameof(SelectionText));
+            OnPropertyChanged(nameof(HasReferenceLapChoices));
+            OnPropertyChanged(nameof(ReferencePickerText));
         }
 
         if (e.PropertyName == nameof(HistorySessionBrowserViewModel.IsLoadingLaps)

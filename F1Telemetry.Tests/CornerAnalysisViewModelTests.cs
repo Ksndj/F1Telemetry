@@ -1,7 +1,9 @@
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
+using F1Telemetry.Analytics.Corners;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Analytics.Tracks;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -265,6 +267,75 @@ public sealed class CornerAnalysisViewModelTests
     }
 
     /// <summary>
+    /// Verifies repeated AI clicks while loading do not start duplicate requests.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WhileLoading_DoesNotStartDuplicateRequest()
+    {
+        var aiService = new RecordingAiAnalysisService
+        {
+            Delay = TimeSpan.FromMilliseconds(150),
+            Result = CreateSuccessfulAiResult()
+        };
+        var viewModel = await CreateReadyAiAdviceViewModelAsync("session-ai-repeat", aiService);
+
+        var first = viewModel.GenerateEngineerAdviceAsync();
+        await Task.Delay(20);
+        var second = viewModel.GenerateEngineerAdviceAsync();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, aiService.RequestCount);
+        Assert.Equal("已生成", viewModel.EngineerAdviceButtonText);
+        Assert.False(viewModel.IsEngineerAdviceLoading);
+    }
+
+    /// <summary>
+    /// Verifies a failed AI request is visible and can be retried.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_AfterFailure_AllowsRetry()
+    {
+        var aiService = new RecordingAiAnalysisService();
+        aiService.Results.Enqueue(new AIAnalysisResult
+        {
+            IsSuccess = false,
+            ErrorMessage = "service unavailable"
+        });
+        aiService.Results.Enqueue(CreateSuccessfulAiResult());
+        var viewModel = await CreateReadyAiAdviceViewModelAsync("session-ai-retry", aiService);
+
+        await viewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal("生成失败", viewModel.EngineerAdviceButtonText);
+        Assert.Contains("service unavailable", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.True(viewModel.GenerateEngineerAdviceCommand.CanExecute(null));
+
+        await viewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal(2, aiService.RequestCount);
+        Assert.Equal("已生成", viewModel.EngineerAdviceButtonText);
+        Assert.Contains("已生成", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the AI button reports insufficient data when no rows are available.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WithoutRows_ShowsInsufficientData()
+    {
+        var viewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-empty",
+            new RecordingAiAnalysisService(),
+            addCornerRow: false);
+
+        await viewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal("数据不足", viewModel.EngineerAdviceButtonText);
+        Assert.Contains("当前数据不足", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.False(viewModel.GenerateEngineerAdviceCommand.CanExecute(null));
+    }
+
+    /// <summary>
     /// Verifies the automatic reference selector prefers the fastest valid same-stint lap.
     /// </summary>
     [Fact]
@@ -293,7 +364,71 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Equal(ReferenceLapSource.SameStintBest, viewModel.ReferenceInfo.Source);
         Assert.Equal(4, viewModel.ReferenceInfo.LapNumber);
         Assert.Equal("Lap 4", viewModel.ReferenceStatusText);
+        Assert.True(viewModel.HasReferenceLapChoices);
+        Assert.Equal("自动参考圈：Lap 4", viewModel.ReferencePickerText);
         Assert.DoesNotContain(viewModel.CornerRows, row => row.WarningDisplayText.Contains("MissingRefLap", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Verifies the reference picker reflects manual selection without showing a blank state.
+    /// </summary>
+    [Fact]
+    public async Task SelectedReferenceLap_WithManualSelection_UpdatesPickerAndSource()
+    {
+        var historyBrowser = CreateHistoryBrowser(
+            "session-manual-ref",
+            [
+                CreateStoredLap("session-manual-ref", 2, 88_000, "Soft"),
+                CreateStoredLap("session-manual-ref", 4, 90_000, "Medium"),
+                CreateStoredLap("session-manual-ref", 5, 93_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateCornerSamples("session-manual-ref", 2, 9_000),
+                ..CreateCornerSamples("session-manual-ref", 4, 9_200),
+                ..CreateCornerSamples("session-manual-ref", 5, 10_000)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+        await viewModel.RefreshAsync();
+
+        viewModel.SelectedReferenceLap = historyBrowser.HistoryLaps.Single(lap => lap.LapNumber == 2);
+
+        Assert.Equal(ReferenceLapSource.Manual, viewModel.ReferenceInfo.Source);
+        Assert.Equal("手动参考圈：Lap 2", viewModel.ReferencePickerText);
+    }
+
+    /// <summary>
+    /// Verifies positive loss and net time delta cards use the same row values as the table.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithMixedCornerDeltas_CalculatesPositiveAndNetTotals()
+    {
+        var sessionId = "session-delta";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 4, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 5, 93_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateTwoSegmentSamples(sessionId, 4, firstSegmentDurationMs: 800, secondSegmentDurationMs: 900),
+                ..CreateTwoSegmentSamples(sessionId, 5, firstSegmentDurationMs: 1_000, secondSegmentDurationMs: 600)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(historyBrowser, sampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal("+0.200s", viewModel.TotalTimeLossText);
+        Assert.Equal("-0.100s", viewModel.NetTimeDeltaText);
+        Assert.Contains(viewModel.CornerRows, row => row.TimeLossInMs == 200);
+        Assert.Contains(viewModel.CornerRows, row => row.TimeLossInMs == -300);
     }
 
     /// <summary>
@@ -400,9 +535,92 @@ public sealed class CornerAnalysisViewModelTests
 
         Assert.Equal(ReferenceLapSource.None, viewModel.ReferenceInfo.Source);
         Assert.Equal("缺少可用参考圈", viewModel.ReferenceStatusText);
+        Assert.False(viewModel.HasReferenceLapChoices);
+        Assert.Equal("暂无可用参考圈", viewModel.ReferencePickerText);
         Assert.Contains("缺少可用参考圈", viewModel.ReferenceInfo.WarningText, StringComparison.Ordinal);
         Assert.DoesNotContain(viewModel.CornerRows, row => row.WarningDisplayText.Contains("MissingRefLap", StringComparison.Ordinal));
-        Assert.Contains(viewModel.CornerRows, row => row.WarningDisplayText.Contains("缺少参考圈", StringComparison.Ordinal));
+        Assert.Contains(viewModel.CornerRows, row => row.WarningDisplayText.Contains("缺参考", StringComparison.Ordinal));
+    }
+
+    private static async Task<CornerAnalysisViewModel> CreateReadyAiAdviceViewModelAsync(
+        string sessionId,
+        RecordingAiAnalysisService aiService,
+        bool addCornerRow = true)
+    {
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 7, 91_000, "Medium")
+            ]);
+        await historyBrowser.RefreshSessionsAsync();
+        await historyBrowser.LoadSelectedSessionLapsAsync();
+
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            new RecordingLapSampleRepository(),
+            aiAnalysisService: aiService,
+            settingsStore: CreateEnabledAiSettingsStore());
+        viewModel.SelectedLap = historyBrowser.HistoryLaps.Single(lap => lap.LapNumber == 7);
+        if (addCornerRow)
+        {
+            viewModel.CornerRows.Add(CreateTestCornerRow());
+        }
+
+        return viewModel;
+    }
+
+    private static FixedSettingsStore CreateEnabledAiSettingsStore()
+    {
+        return new FixedSettingsStore(
+            new AppSettingsDocument
+            {
+                Ai = new AISettings
+                {
+                    AiEnabled = true,
+                    ApiKey = "test-key"
+                },
+                Tts = new TtsOptions
+                {
+                    TtsEnabled = false
+                }
+            });
+    }
+
+    private static AIAnalysisResult CreateSuccessfulAiResult()
+    {
+        return new AIAnalysisResult
+        {
+            IsSuccess = true,
+            Summary = "7 号弯建议已生成。",
+            Improvements =
+            [
+                "7 号弯入弯前稳定刹车。",
+                "最低速度后再逐步加油。",
+                "出弯保持方向盘更早回正。"
+            ],
+            Tts = "7号弯先稳住入弯。"
+        };
+    }
+
+    private static CornerSummaryRowViewModel CreateTestCornerRow()
+    {
+        return CornerSummaryRowViewModel.FromSummary(new CornerSummary
+        {
+            Segment = new TrackSegment
+            {
+                SegmentId = "t7",
+                Name = "Turns 7-8",
+                SegmentType = TrackSegmentType.CornerComplex,
+                CornerNumber = 7
+            },
+            EntrySpeedKph = 170,
+            MinSpeedKph = 120,
+            ExitSpeedKph = 160,
+            MaxBrake = 0.5,
+            TimeLossToReferenceInMs = 120,
+            Confidence = ConfidenceLevel.Medium,
+            Warnings = []
+        });
     }
 
     private static HistorySessionBrowserViewModel CreateHistoryBrowserWithSupportedLap(string sessionId)
@@ -499,6 +717,23 @@ public sealed class CornerAnalysisViewModelTests
                 PitStatus = pitStatus,
                 FuelRemainingLitres = fuelLitres
             }
+        ];
+    }
+
+    private static StoredLapSample[] CreateTwoSegmentSamples(
+        string sessionId,
+        int lapNumber,
+        int firstSegmentDurationMs,
+        int secondSegmentDurationMs)
+    {
+        return
+        [
+            CreateSample(sessionId, lapNumber, 0, 260, 1_000, 225, 0.8, 0.0),
+            CreateSample(sessionId, lapNumber, 1, 390, 1_000 + firstSegmentDurationMs / 2, 145, 0.2, 0.8),
+            CreateSample(sessionId, lapNumber, 2, 520, 1_000 + firstSegmentDurationMs, 185, 0.9, 0.0),
+            CreateSample(sessionId, lapNumber, 3, 700, 3_000, 210, 0.7, 0.0),
+            CreateSample(sessionId, lapNumber, 4, 850, 3_000 + secondSegmentDurationMs / 2, 130, 0.2, 0.7),
+            CreateSample(sessionId, lapNumber, 5, 1_000, 3_000 + secondSegmentDurationMs, 176, 0.9, 0.0)
         ];
     }
 
@@ -618,16 +853,25 @@ public sealed class CornerAnalysisViewModelTests
     {
         public AIAnalysisResult Result { get; init; } = new();
 
+        public Queue<AIAnalysisResult> Results { get; } = new();
+
+        public TimeSpan Delay { get; init; }
+
         public int RequestCount { get; private set; }
 
-        public Task<AIAnalysisResult> AnalyzeAsync(
+        public async Task<AIAnalysisResult> AnalyzeAsync(
             AIAnalysisContext context,
             AISettings settings,
             CancellationToken cancellationToken = default)
         {
             RequestCount++;
             Assert.Contains("Corner analysis", context.TelemetryAnalysisSummary, StringComparison.Ordinal);
-            return Task.FromResult(Result);
+            if (Delay > TimeSpan.Zero)
+            {
+                await Task.Delay(Delay, cancellationToken);
+            }
+
+            return Results.Count > 0 ? Results.Dequeue() : Result;
         }
     }
 

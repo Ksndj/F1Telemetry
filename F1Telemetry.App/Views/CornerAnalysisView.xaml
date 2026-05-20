@@ -175,6 +175,11 @@
                             <ComboBox Grid.Column="4"
                                       Style="{StaticResource CornerComboBoxStyle}"
                                       DisplayMemberPath="LapText"
+                                      IsEditable="True"
+                                      IsReadOnly="True"
+                                      IsTextSearchEnabled="False"
+                                      IsEnabled="{Binding CornerAnalysis.HasReferenceLapChoices}"
+                                      Text="{Binding CornerAnalysis.ReferencePickerText, Mode=OneWay}"
                                       ToolTip="参考圈"
                                       ItemsSource="{Binding CornerAnalysis.HistoryBrowser.HistoryLaps}"
                                       SelectedItem="{Binding CornerAnalysis.SelectedReferenceLap, Mode=TwoWay}" />
@@ -222,12 +227,15 @@
                 <Border Style="{StaticResource CardStyle}"
                         BorderBrush="#1D64A8">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="本圈总损失" />
+                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="正损失合计" />
                         <TextBlock Margin="0,8,0,0"
                                    FontSize="24"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
                                    Text="{Binding CornerAnalysis.TotalTimeLossText}" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#AFC2DA"
+                                   Text="{Binding CornerAnalysis.NetTimeDeltaText, StringFormat=净时间差：{0}}" />
                     </StackPanel>
                 </Border>
 
@@ -251,13 +259,18 @@
                         Background="#0D2A24"
                         BorderBrush="#2E7D5B">
                     <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最高置信结果" />
+                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="数据质量" />
                         <TextBlock Margin="0,8,0,0"
-                                   FontSize="18"
+                                   FontSize="22"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
-                                   Text="{Binding CornerAnalysis.BestConfidenceCornerText}"
+                                   Text="{Binding CornerAnalysis.DataQualityText}"
                                    TextTrimming="CharacterEllipsis" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Foreground="#AFC2DA"
+                                   Text="{Binding CornerAnalysis.DataQualityReasonText}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding CornerAnalysis.DataQualityReasonText}" />
                     </StackPanel>
                 </Border>
 
@@ -280,8 +293,9 @@
                                    Text="{Binding CornerAnalysis.ReferenceInfo.QualityText, StringFormat=数据质量：{0}}" />
                         <TextBlock Margin="0,3,0,0"
                                    Foreground="#FBBF24"
-                                   Text="{Binding CornerAnalysis.ReferenceInfo.WarningText}"
-                                   TextTrimming="CharacterEllipsis" />
+                                   Text="{Binding CornerAnalysis.ReferenceInfo.WarningText, StringFormat=风险提示：{0}}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding CornerAnalysis.ReferenceInfo.WarningText}" />
                     </StackPanel>
                 </Border>
             </Grid>
@@ -338,7 +352,10 @@
                                         <TextBlock Grid.Column="2" Style="{StaticResource HeaderLabelStyle}" Text="最低" />
                                         <TextBlock Grid.Column="3" Style="{StaticResource HeaderLabelStyle}" Text="入 / 弯 / 出" />
                                         <TextBlock Grid.Column="4" Style="{StaticResource HeaderLabelStyle}" Text="刹车" />
-                                        <TextBlock Grid.Column="5" Style="{StaticResource HeaderLabelStyle}" Text="损失" />
+                                        <TextBlock Grid.Column="5"
+                                                   Style="{StaticResource HeaderLabelStyle}"
+                                                   Text="时间差"
+                                                   ToolTip="正数为比参考圈慢，负数为比参考圈快。" />
                                         <TextBlock Grid.Column="6" Style="{StaticResource HeaderLabelStyle}" Text="置信" />
                                         <TextBlock Grid.Column="7" Style="{StaticResource HeaderLabelStyle}" Text="数据限制" />
                                     </Grid>
@@ -401,7 +418,8 @@
                                                            FontWeight="SemiBold"
                                                            Foreground="{Binding TimeLossBrush}"
                                                            Text="{Binding TimeLossText}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding TimeDifferenceTooltipText}" />
                                                 <Border Grid.Column="6"
                                                         Width="52"
                                                         Height="24"
@@ -420,7 +438,8 @@
                                                            VerticalAlignment="Center"
                                                            Foreground="{Binding WarningBrush}"
                                                            Text="{Binding CompactWarningText}"
-                                                           TextTrimming="CharacterEllipsis" />
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding WarningTooltipText}" />
                                             </Grid>
                                         </DataTemplate>
                                     </ListBox.ItemTemplate>
@@ -465,36 +484,49 @@
                                 <Border Style="{StaticResource CardStyle}" Padding="12">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="入弯速度" />
-                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource MetricValueStyle}" Text="{Binding CornerAnalysis.SelectedCorner.EntrySpeedText}" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Style="{StaticResource MetricValueStyle}"
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.EntrySpeedComparisonText}"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最低速度" />
-                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource MetricValueStyle}" Text="{Binding CornerAnalysis.SelectedCorner.MinimumSpeedText}" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Style="{StaticResource MetricValueStyle}"
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.MinimumSpeedComparisonText}"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Column="4" Style="{StaticResource CardStyle}" Padding="12">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="出弯速度" />
-                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource MetricValueStyle}" Text="{Binding CornerAnalysis.SelectedCorner.ExitSpeedText}" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Style="{StaticResource MetricValueStyle}"
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.ExitSpeedComparisonText}"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
 
                                 <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最大刹车" />
-                                        <TextBlock Margin="0,6,0,0" Style="{StaticResource MetricValueStyle}" Text="{Binding CornerAnalysis.SelectedCorner.BrakeText}" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   Style="{StaticResource MetricValueStyle}"
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.BrakeComparisonText}"
+                                                   TextWrapping="Wrap" />
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
                                     <StackPanel>
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="损失时间" />
+                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="时间差" />
                                         <TextBlock Margin="0,6,0,0"
                                                    FontSize="15"
                                                    FontWeight="SemiBold"
                                                    Foreground="{Binding CornerAnalysis.SelectedCorner.TimeLossBrush}"
-                                                   Text="{Binding CornerAnalysis.SelectedCorner.TimeLossText}" />
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.TimeLossText}"
+                                                   ToolTip="{Binding CornerAnalysis.SelectedCorner.TimeDifferenceTooltipText}" />
                                     </StackPanel>
                                 </Border>
                                 <Border Grid.Row="2" Grid.Column="4" Style="{StaticResource CardStyle}" Padding="12">
