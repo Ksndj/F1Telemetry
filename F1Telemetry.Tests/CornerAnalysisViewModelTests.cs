@@ -4,6 +4,7 @@ using F1Telemetry.Analytics.Corners;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Tracks;
+using F1Telemetry.App.TrackMaps;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -591,6 +592,46 @@ public sealed class CornerAnalysisViewModelTests
     }
 
     /// <summary>
+    /// Verifies the selected corner row receives a Motion-based track-map outline and highlight.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithMotionTrajectory_BuildsTrackMapEvidence()
+    {
+        var sessionId = "session-track-map";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var trackMapStore = new InMemoryTrackMapTrajectoryStore();
+        trackMapStore.RecordCompletedLap($"uid-{sessionId}", 0, 1, CreateMotionTrackSamples(1, 80));
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()),
+            trackMapTrajectoryStore: trackMapStore);
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.False(string.IsNullOrWhiteSpace(row.TrackMapPathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.TrackMapHighlightPathData));
+        Assert.Equal("Motion 轨迹", row.TrackMapStatusText);
+        Assert.Contains("Motion 轨迹", row.TrackMapSourceText, StringComparison.Ordinal);
+        Assert.Contains("估算位置", row.TrackMapWarningText, StringComparison.Ordinal);
+        Assert.True(row.TrackMapMarkerSize > 0);
+    }
+
+    /// <summary>
     /// Verifies missing reference laps show explicit chart empty states instead of blank graphs.
     /// </summary>
     [Fact]
@@ -900,6 +941,26 @@ public sealed class CornerAnalysisViewModelTests
             CreateSample(sessionId, lapNumber, 1, 50, baseTimeMs + 500, 142, 0.18, 0.78),
             CreateSample(sessionId, lapNumber, 2, thirdDistance, baseTimeMs + 1_000, 190, 0.94, 0.05)
         ];
+    }
+
+    private static IReadOnlyList<LapSample> CreateMotionTrackSamples(int lapNumber, int count)
+    {
+        var samples = new List<LapSample>(count);
+        for (var index = 0; index < count; index++)
+        {
+            var progress = count == 1 ? 0d : index / (count - 1d);
+            var angle = progress * Math.PI * 2d;
+            samples.Add(new LapSample
+            {
+                LapNumber = lapNumber,
+                LapDistance = (float)(progress * 1_000d),
+                WorldPositionX = (float)(Math.Cos(angle) * 120d),
+                WorldPositionZ = (float)(Math.Sin(angle) * 70d),
+                IsValid = true
+            });
+        }
+
+        return samples;
     }
 
     private static TrackSegmentMap CreateVisualTestMap(float? lapLengthMeters = 1_000)

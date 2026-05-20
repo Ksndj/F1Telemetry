@@ -11,6 +11,7 @@ using F1Telemetry.Analytics.Corners;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Tracks;
+using F1Telemetry.App.TrackMaps;
 using F1Telemetry.Core.Abstractions;
 using F1Telemetry.Core.Models;
 using F1Telemetry.Storage.Interfaces;
@@ -32,11 +33,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private const float SignificantFuelDifferenceLitres = 5f;
     private const double VisualChartWidth = 220d;
     private const double VisualChartHeight = 72d;
+    private const double TrackMapCanvasWidth = 240d;
+    private const double TrackMapCanvasHeight = 170d;
     private const int PositionIndicatorSegments = 10;
     private readonly ILapSampleRepository _lapSampleRepository;
     private readonly IEventRepository? _eventRepository;
     private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
     private readonly CornerMetricsExtractor _cornerMetricsExtractor;
+    private readonly TrackMapBuilder _trackMapBuilder;
+    private readonly ITrackMapTrajectoryStore? _trackMapTrajectoryStore;
     private readonly IAIAnalysisService? _aiAnalysisService;
     private readonly IAppSettingsStore? _settingsStore;
     private readonly TtsMessageFactory? _ttsMessageFactory;
@@ -81,6 +86,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     /// <param name="settingsStore">Optional settings store used to load AI/TTS options.</param>
     /// <param name="ttsMessageFactory">Optional TTS message factory for AI advice speech.</param>
     /// <param name="ttsQueue">Optional TTS queue used to speak AI advice.</param>
+    /// <param name="trackMapTrajectoryStore">Optional live Motion trajectory store used for track-map rendering.</param>
     public CornerAnalysisViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapSampleRepository lapSampleRepository,
@@ -90,13 +96,16 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         IAIAnalysisService? aiAnalysisService = null,
         IAppSettingsStore? settingsStore = null,
         TtsMessageFactory? ttsMessageFactory = null,
-        TtsQueue? ttsQueue = null)
+        TtsQueue? ttsQueue = null,
+        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null)
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapSampleRepository = lapSampleRepository ?? throw new ArgumentNullException(nameof(lapSampleRepository));
         _eventRepository = eventRepository;
         _trackSegmentMapProvider = trackSegmentMapProvider ?? new StaticTrackSegmentMapProvider();
         _cornerMetricsExtractor = cornerMetricsExtractor ?? new CornerMetricsExtractor();
+        _trackMapBuilder = new TrackMapBuilder();
+        _trackMapTrajectoryStore = trackMapTrajectoryStore;
         _aiAnalysisService = aiAnalysisService;
         _settingsStore = settingsStore;
         _ttsMessageFactory = ttsMessageFactory;
@@ -545,11 +554,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             var referenceSamples = referenceSelection.Samples.Count == 0
                 ? null
                 : referenceSelection.Samples.Select(ToLapSample).ToArray();
+            var trackMapSnapshot = ResolveTrackMapSnapshot(
+                session,
+                referenceSelection.Info,
+                lapNumber.Value);
             var result = _cornerMetricsExtractor.Extract(map, lapSamples, referenceSamples);
             foreach (var summary in result.Corners)
             {
                 var referenceMetrics = BuildReferenceCornerMetrics(summary.Segment, referenceSamples);
-                var visualEvidence = BuildVisualEvidence(summary.Segment, map, lapSamples, referenceSamples);
+                var visualEvidence = BuildVisualEvidence(summary.Segment, map, lapSamples, referenceSamples, trackMapSnapshot);
                 var row = CornerSummaryRowViewModel.FromSummary(
                     summary,
                     referenceMetrics?.EntrySpeedKph,
@@ -566,7 +579,17 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                     visualEvidence.Throttle.ReferencePathData,
                     visualEvidence.Throttle.StatusText,
                     visualEvidence.Position.IndicatorText,
-                    visualEvidence.Position.StatusText);
+                    visualEvidence.Position.StatusText,
+                    visualEvidence.TrackMap.PathData,
+                    visualEvidence.TrackMap.HighlightPathData,
+                    visualEvidence.TrackMap.StatusText,
+                    visualEvidence.TrackMap.SourceText,
+                    visualEvidence.TrackMap.QualityText,
+                    visualEvidence.TrackMap.WarningText,
+                    visualEvidence.TrackMap.MarkerX,
+                    visualEvidence.TrackMap.MarkerY,
+                    visualEvidence.TrackMap.MarkerSize,
+                    visualEvidence.TrackMap.CornerLabelText);
                 CornerRows.Add(row);
             }
 
@@ -1037,11 +1060,31 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         return $"{timeInMs / 1000d:+0.000;-0.000;0.000}s";
     }
 
-    private static CornerVisualEvidence BuildVisualEvidence(
+    private TrackMapSnapshot ResolveTrackMapSnapshot(
+        HistorySessionItemViewModel session,
+        CornerReferenceInfo referenceInfo,
+        int selectedLapNumber)
+    {
+        var preferredLapNumber = referenceInfo.HasReference
+            ? referenceInfo.LapNumber
+            : selectedLapNumber;
+        return _trackMapTrajectoryStore?.GetPreferredOrBest(
+                session.SessionUid,
+                session.TrackId,
+                preferredLapNumber)
+            ?? TrackMapBuilder.CreateEmptySnapshot(
+                session.SessionUid,
+                session.TrackId,
+                preferredLapNumber ?? selectedLapNumber,
+                "等待 Motion 数据");
+    }
+
+    private CornerVisualEvidence BuildVisualEvidence(
         TrackSegment segment,
         TrackSegmentMap map,
         IReadOnlyList<LapSample> currentSamples,
-        IReadOnlyList<LapSample>? referenceSamples)
+        IReadOnlyList<LapSample>? referenceSamples,
+        TrackMapSnapshot trackMapSnapshot)
     {
         var currentSegmentSamples = SelectSegmentSamples(segment, currentSamples);
         var referenceSegmentSamples = referenceSamples is null
@@ -1052,7 +1095,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.SpeedKph),
             BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.Brake),
             BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.Throttle),
-            BuildPositionEvidence(segment, map));
+            BuildPositionEvidence(segment, map),
+            BuildTrackMapEvidence(segment, map, trackMapSnapshot));
     }
 
     private static IReadOnlyList<LapSample> SelectSegmentSamples(
@@ -1148,6 +1192,93 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         return new CornerPositionEvidence(
             $"起点 {beforeMarker}●{afterMarker}  {cornerText}",
             $"{status} · {percent:0}%");
+    }
+
+    private CornerTrackMapEvidence BuildTrackMapEvidence(
+        TrackSegment segment,
+        TrackSegmentMap map,
+        TrackMapSnapshot snapshot)
+    {
+        var isEstimated = map.Status == TrackSegmentMapStatus.Estimated ||
+                          map.Warnings.Contains(DataQualityWarning.EstimatedTrackMap) ||
+                          segment.Warnings.Contains(DataQualityWarning.EstimatedTrackMap);
+        var cornerLabel = segment.CornerNumber is null
+            ? segment.Name
+            : $"T{segment.CornerNumber.Value.ToString(CultureInfo.InvariantCulture)} {segment.Name}";
+        if (!snapshot.HasDrawableMap)
+        {
+            return new CornerTrackMapEvidence(
+                null,
+                null,
+                snapshot.WarningText,
+                $"来源：{snapshot.Source}",
+                $"质量：{snapshot.Quality}",
+                snapshot.WarningText,
+                0d,
+                0d,
+                0d,
+                string.Empty);
+        }
+
+        var overlay = _trackMapBuilder.BuildOverlay(
+            snapshot,
+            segment,
+            cornerLabel,
+            isEstimated,
+            map.LapLengthMeters);
+        var statusText = overlay.HighlightPoints.Count == 0
+            ? overlay.WarningText
+            : "Motion 轨迹";
+        var warningText = BuildTrackMapWarningText(snapshot, overlay);
+        var hasMarker = overlay.MarkerX is not null && overlay.MarkerY is not null;
+        return new CornerTrackMapEvidence(
+            BuildTrackMapPathData(snapshot.Points),
+            BuildTrackMapPathData(overlay.HighlightPoints),
+            statusText,
+            $"来源：{snapshot.Source}",
+            $"质量：{snapshot.Quality}",
+            warningText,
+            (overlay.MarkerX ?? 0d) * TrackMapCanvasWidth,
+            (overlay.MarkerY ?? 0d) * TrackMapCanvasHeight,
+            hasMarker ? 9d : 0d,
+            hasMarker ? cornerLabel : string.Empty);
+    }
+
+    private static string? BuildTrackMapPathData(IReadOnlyList<TrackMapPoint> points)
+    {
+        if (points.Count == 0)
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder();
+        for (var index = 0; index < points.Count; index++)
+        {
+            var x = points[index].NormalizedX * TrackMapCanvasWidth;
+            var y = points[index].NormalizedY * TrackMapCanvasHeight;
+            builder.Append(index == 0 ? "M " : " L ");
+            builder.Append(x.ToString("0.##", CultureInfo.InvariantCulture));
+            builder.Append(',');
+            builder.Append(y.ToString("0.##", CultureInfo.InvariantCulture));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string BuildTrackMapWarningText(TrackMapSnapshot snapshot, CornerTrackMapOverlay overlay)
+    {
+        var warnings = new List<string>();
+        if (!string.IsNullOrWhiteSpace(snapshot.WarningText))
+        {
+            warnings.Add(snapshot.WarningText);
+        }
+
+        if (!string.IsNullOrWhiteSpace(overlay.WarningText))
+        {
+            warnings.Add(overlay.WarningText);
+        }
+
+        return warnings.Count == 0 ? "弯角位置来自 Motion 轨迹" : string.Join(" · ", warnings.Distinct(StringComparer.Ordinal));
     }
 
     private static float CalculateSegmentMidpoint(TrackSegment segment, float lapLengthMeters)
@@ -1557,7 +1688,20 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         CornerMetricChartEvidence Speed,
         CornerMetricChartEvidence Brake,
         CornerMetricChartEvidence Throttle,
-        CornerPositionEvidence Position);
+        CornerPositionEvidence Position,
+        CornerTrackMapEvidence TrackMap);
+
+    private sealed record CornerTrackMapEvidence(
+        string? PathData,
+        string? HighlightPathData,
+        string StatusText,
+        string SourceText,
+        string QualityText,
+        string WarningText,
+        double MarkerX,
+        double MarkerY,
+        double MarkerSize,
+        string CornerLabelText);
 
     private sealed record CornerMetricChartEvidence(
         string? CurrentPathData,

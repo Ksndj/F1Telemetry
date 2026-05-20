@@ -215,6 +215,66 @@ public sealed class CornerSummaryRowViewModel
     public string PositionStatusText { get; init; } = "暂无赛道位置数据";
 
     /// <summary>
+    /// Gets the normalized Motion track-map outline path.
+    /// </summary>
+    public string? TrackMapPathData { get; init; }
+
+    /// <summary>
+    /// Gets the selected-corner highlighted track-map path.
+    /// </summary>
+    public string? TrackMapHighlightPathData { get; init; }
+
+    /// <summary>
+    /// Gets the track-map status text.
+    /// </summary>
+    public string TrackMapStatusText { get; init; } = "等待 Motion 数据";
+
+    /// <summary>
+    /// Gets the track-map source text.
+    /// </summary>
+    public string TrackMapSourceText { get; init; } = "来源：Motion 轨迹";
+
+    /// <summary>
+    /// Gets the track-map quality text.
+    /// </summary>
+    public string TrackMapQualityText { get; init; } = "质量：Low";
+
+    /// <summary>
+    /// Gets the track-map warning text.
+    /// </summary>
+    public string TrackMapWarningText { get; init; } = "等待 Motion 数据";
+
+    /// <summary>
+    /// Gets the track-map marker X coordinate in canvas pixels.
+    /// </summary>
+    public double TrackMapMarkerX { get; init; }
+
+    /// <summary>
+    /// Gets the track-map marker Y coordinate in canvas pixels.
+    /// </summary>
+    public double TrackMapMarkerY { get; init; }
+
+    /// <summary>
+    /// Gets the track-map marker size in canvas pixels.
+    /// </summary>
+    public double TrackMapMarkerSize { get; init; }
+
+    /// <summary>
+    /// Gets the marker left coordinate for WPF Canvas positioning.
+    /// </summary>
+    public double TrackMapMarkerLeft => TrackMapMarkerX - TrackMapMarkerSize / 2d;
+
+    /// <summary>
+    /// Gets the marker top coordinate for WPF Canvas positioning.
+    /// </summary>
+    public double TrackMapMarkerTop => TrackMapMarkerY - TrackMapMarkerSize / 2d;
+
+    /// <summary>
+    /// Gets the selected-corner marker label.
+    /// </summary>
+    public string TrackMapCornerLabelText { get; init; } = "-";
+
+    /// <summary>
     /// Creates a row from a corner summary.
     /// </summary>
     /// <param name="summary">The corner summary to project.</param>
@@ -233,6 +293,16 @@ public sealed class CornerSummaryRowViewModel
     /// <param name="throttleChartStatusText">Throttle chart status text.</param>
     /// <param name="positionIndicatorText">Lightweight corner-position indicator text.</param>
     /// <param name="positionStatusText">Corner-position data status text.</param>
+    /// <param name="trackMapPathData">Motion track-map outline path data.</param>
+    /// <param name="trackMapHighlightPathData">Selected-corner track-map highlight path data.</param>
+    /// <param name="trackMapStatusText">Track-map status text.</param>
+    /// <param name="trackMapSourceText">Track-map source text.</param>
+    /// <param name="trackMapQualityText">Track-map quality text.</param>
+    /// <param name="trackMapWarningText">Track-map warning text.</param>
+    /// <param name="trackMapMarkerX">Track-map marker X coordinate.</param>
+    /// <param name="trackMapMarkerY">Track-map marker Y coordinate.</param>
+    /// <param name="trackMapMarkerSize">Track-map marker size.</param>
+    /// <param name="trackMapCornerLabelText">Track-map marker label text.</param>
     public static CornerSummaryRowViewModel FromSummary(
         CornerSummary summary,
         double? referenceEntrySpeedKph = null,
@@ -249,7 +319,17 @@ public sealed class CornerSummaryRowViewModel
         string? throttleReferencePathData = null,
         string throttleChartStatusText = "采样不足，暂无法绘制",
         string positionIndicatorText = "暂无赛道位置数据",
-        string positionStatusText = "暂无赛道位置数据")
+        string positionStatusText = "暂无赛道位置数据",
+        string? trackMapPathData = null,
+        string? trackMapHighlightPathData = null,
+        string trackMapStatusText = "等待 Motion 数据",
+        string trackMapSourceText = "来源：Motion 轨迹",
+        string trackMapQualityText = "质量：Low",
+        string trackMapWarningText = "等待 Motion 数据",
+        double trackMapMarkerX = 0d,
+        double trackMapMarkerY = 0d,
+        double trackMapMarkerSize = 0d,
+        string trackMapCornerLabelText = "-")
     {
         ArgumentNullException.ThrowIfNull(summary);
         var warningText = summary.Warnings.Count == 0 ? "-" : string.Join(" / ", summary.Warnings);
@@ -298,7 +378,17 @@ public sealed class CornerSummaryRowViewModel
             ThrottleReferencePathData = throttleReferencePathData,
             ThrottleChartStatusText = throttleChartStatusText,
             PositionIndicatorText = positionIndicatorText,
-            PositionStatusText = positionStatusText
+            PositionStatusText = positionStatusText,
+            TrackMapPathData = trackMapPathData,
+            TrackMapHighlightPathData = trackMapHighlightPathData,
+            TrackMapStatusText = trackMapStatusText,
+            TrackMapSourceText = trackMapSourceText,
+            TrackMapQualityText = trackMapQualityText,
+            TrackMapWarningText = trackMapWarningText,
+            TrackMapMarkerX = trackMapMarkerX,
+            TrackMapMarkerY = trackMapMarkerY,
+            TrackMapMarkerSize = trackMapMarkerSize,
+            TrackMapCornerLabelText = trackMapCornerLabelText
         };
     }
 

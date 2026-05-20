@@ -457,9 +457,11 @@
                 <Grid Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="12" />
+                        <RowDefinition Height="10" />
                         <RowDefinition Height="Auto" />
-                        <RowDefinition Height="12" />
+                        <RowDefinition Height="10" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="10" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
@@ -542,7 +544,34 @@
                                     </StackPanel>
                                 </Border>
                             </Grid>
-                            <Border Margin="0,14,0,0"
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2"
+                            Style="{StaticResource PanelStyle}"
+                            Padding="16">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="10" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="8" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Foreground="#F8FAFC"
+                                           Text="赛道位置" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="#93A9C8"
+                                           Text="{Binding CornerAnalysis.SelectedCorner.TrackMapStatusText}" />
+                            </Grid>
+                            <Border Grid.Row="2"
                                     Style="{StaticResource CardStyle}"
                                     Padding="12">
                                 <Grid>
@@ -551,28 +580,71 @@
                                         <RowDefinition Height="8" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Style="{StaticResource MetricLabelStyle}" Text="弯角位置" />
-                                    <TextBlock Grid.Column="1"
-                                               Foreground="#FBBF24"
-                                               Text="{Binding CornerAnalysis.SelectedCorner.PositionStatusText}" />
+                                    <Viewbox Height="170"
+                                             Stretch="Uniform">
+                                        <Canvas Width="240"
+                                                Height="170"
+                                                ClipToBounds="True">
+                                            <Rectangle Width="240"
+                                                       Height="170"
+                                                       RadiusX="12"
+                                                       RadiusY="12"
+                                                       Fill="#0B1628"
+                                                       Stroke="#1D3B5C"
+                                                       StrokeThickness="1" />
+                                            <Path Data="{Binding CornerAnalysis.SelectedCorner.TrackMapPathData}"
+                                                  Stroke="#6B7F99"
+                                                  StrokeThickness="3"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round" />
+                                            <Path Data="{Binding CornerAnalysis.SelectedCorner.TrackMapHighlightPathData}"
+                                                  Stroke="#38BDF8"
+                                                  StrokeThickness="5"
+                                                  StrokeStartLineCap="Round"
+                                                  StrokeEndLineCap="Round"
+                                                  StrokeLineJoin="Round" />
+                                            <Ellipse Canvas.Left="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerLeft}"
+                                                     Canvas.Top="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerTop}"
+                                                     Width="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerSize}"
+                                                     Height="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerSize}"
+                                                     Fill="#FBBF24"
+                                                     Stroke="#0B1628"
+                                                     StrokeThickness="2" />
+                                            <TextBlock Canvas.Left="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerX}"
+                                                       Canvas.Top="{Binding CornerAnalysis.SelectedCorner.TrackMapMarkerY}"
+                                                       Margin="8,-18,0,0"
+                                                       Foreground="#F8FAFC"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       Text="{Binding CornerAnalysis.SelectedCorner.TrackMapCornerLabelText}" />
+                                        </Canvas>
+                                    </Viewbox>
                                     <TextBlock Grid.Row="2"
-                                               Grid.ColumnSpan="2"
-                                               FontSize="15"
-                                               FontWeight="SemiBold"
                                                Foreground="#D7E4F3"
-                                               Text="{Binding CornerAnalysis.SelectedCorner.PositionIndicatorText}"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding CornerAnalysis.SelectedCorner.PositionIndicatorText}" />
+                                               FontWeight="SemiBold"
+                                               Text="{Binding CornerAnalysis.SelectedCorner.TrackMapWarningText}"
+                                               TextWrapping="Wrap"
+                                               ToolTip="{Binding CornerAnalysis.SelectedCorner.TrackMapWarningText}" />
                                 </Grid>
                             </Border>
-                        </StackPanel>
+                            <Grid Grid.Row="4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Foreground="#93A9C8"
+                                           Text="{Binding CornerAnalysis.SelectedCorner.TrackMapSourceText}" />
+                                <TextBlock Grid.Column="2"
+                                           Foreground="#93A9C8"
+                                           HorizontalAlignment="Right"
+                                           Text="{Binding CornerAnalysis.SelectedCorner.TrackMapQualityText}" />
+                            </Grid>
+                        </Grid>
                     </Border>
 
-                    <Border Grid.Row="2"
+                    <Border Grid.Row="4"
                             Style="{StaticResource PanelStyle}"
                             Padding="16">
                         <Grid>
@@ -697,7 +769,7 @@
                         </Grid>
                     </Border>
 
-                    <Border Grid.Row="4"
+                    <Border Grid.Row="6"
                             Style="{StaticResource PanelStyle}">
                         <Grid>
                             <Grid.RowDefinitions>
