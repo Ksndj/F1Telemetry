@@ -118,6 +118,23 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="ShellTelemetryCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="44" />
+            <Setter Property="Padding" Value="14,9" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="#0D1B2E" />
+            <Setter Property="BorderBrush" Value="#1B3354" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="ShellTelemetryLabelStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#B7C9E2" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
     </Window.Resources>
     <Grid x:Name="WindowRoot"
           Background="#08111F"
@@ -317,85 +334,142 @@
         <Border x:Name="TopStatusBar"
                 Grid.Column="1"
                 Margin="16,16,20,16"
-                Padding="22"
-                CornerRadius="22"
-                Background="#0F1B2E">
-            <StackPanel>
-                <TextBlock x:Name="ShellTitleText"
-                           FontSize="30"
-                           FontWeight="SemiBold"
-                           Foreground="White"
-                           Text="{Binding AppTitleText}" />
-                <TextBlock Margin="0,6,0,0"
-                           Foreground="#9AB0C9"
-                           Text="{Binding Subtitle}"
-                           TextWrapping="Wrap" />
+                Padding="10"
+                CornerRadius="12"
+                Background="#081321"
+                BorderBrush="#17304E"
+                BorderThickness="1">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="6" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-                <WrapPanel Margin="0,18,0,0">
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="连接状态" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding ConnectionStateText}" />
-                        </StackPanel>
+                <WrapPanel>
+                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="连接状态" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding ConnectionStateText}" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="赛道" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding TrackText}" />
-                        </StackPanel>
+                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛道" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding TrackText}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="赛制" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding SessionTypeText}" />
-                        </StackPanel>
+                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛制" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding SessionTypeText}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="比赛进度" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding LapText}" />
-                        </StackPanel>
+                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="比赛进度" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding LapText}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="天气" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding WeatherText}" />
-                        </StackPanel>
+                    <Border MinWidth="116" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="天气" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding WeatherText}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
-                        <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="UDP PPS" />
-                            <TextBlock Margin="0,4,0,0" Foreground="White" Text="{Binding PacketsPerSecond}" />
-                        </StackPanel>
+                    <Border MinWidth="108" Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="UDP PPS" />
+                            <TextBlock Grid.Column="2"
+                                       Foreground="#F8FAFC"
+                                       FontWeight="SemiBold"
+                                       Text="{Binding PacketsPerSecond}" />
+                        </Grid>
                     </Border>
-                    <Border Margin="0,0,12,10" Padding="12,8" CornerRadius="14" Background="#132743">
+                    <Border Style="{StaticResource ShellTelemetryCardStyle}">
                         <WrapPanel VerticalAlignment="Center">
                             <TextBlock Margin="0,0,10,0"
-                                       VerticalAlignment="Center"
-                                       Foreground="#7FA5D8"
+                                       Style="{StaticResource ShellTelemetryLabelStyle}"
                                        Text="监听端口" />
-                            <TextBox Width="120"
+                            <TextBox Width="118"
+                                     Height="32"
                                      Margin="0,0,10,0"
-                                     Padding="10,6"
+                                     Padding="10,5"
                                      Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Width="108"
-                                    Height="36"
-                                    Margin="0,0,10,0"
+                            <Button Width="96"
+                                    Height="32"
+                                    Margin="0,0,8,0"
                                     Command="{Binding StartListeningCommand}"
                                     Content="开始监听" />
-                            <Button Width="108"
-                                    Height="36"
+                            <Button Width="96"
+                                    Height="32"
                                     Command="{Binding StopListeningCommand}"
                                     Content="停止监听" />
                         </WrapPanel>
                     </Border>
                 </WrapPanel>
 
-                <TextBlock Margin="0,4,0,0"
+                <TextBlock Grid.Row="2"
+                           Margin="8,0,0,0"
                            Foreground="#B5C7DC"
                            Text="{Binding StatusMessage}"
                            TextWrapping="Wrap" />
-            </StackPanel>
+
+                <TextBlock x:Name="ShellTitleText"
+                           Width="0"
+                           Height="0"
+                           Opacity="0"
+                           Text="{Binding AppTitleText}" />
+            </Grid>
         </Border>
 
         <ContentControl x:Name="ContentHost"

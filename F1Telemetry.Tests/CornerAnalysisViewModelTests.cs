@@ -614,6 +614,8 @@ public sealed class CornerAnalysisViewModelTests
         Assert.False(string.IsNullOrWhiteSpace(row.ThrottleReferencePathData));
         Assert.Contains("T1 Test Corner", row.PositionIndicatorText, StringComparison.Ordinal);
         Assert.Contains("估算位置", row.PositionStatusText, StringComparison.Ordinal);
+        Assert.Contains("Test Corner", viewModel.BestConfidenceCornerText, StringComparison.Ordinal);
+        Assert.Contains(row.ConfidenceText, viewModel.BestConfidenceCornerText, StringComparison.Ordinal);
     }
 
     /// <summary>

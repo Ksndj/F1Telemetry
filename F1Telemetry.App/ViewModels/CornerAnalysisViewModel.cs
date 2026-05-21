@@ -1035,12 +1035,18 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             .OrderByDescending(row => row.PositiveTimeLossInMs)
             .ThenBy(row => row.CornerNumber ?? int.MaxValue)
             .FirstOrDefault();
+        var bestConfidenceCorner = rows
+            .OrderByDescending(row => ResolveConfidenceRank(row.ConfidenceText))
+            .ThenBy(row => row.CornerNumber ?? int.MaxValue)
+            .FirstOrDefault();
 
         AnalysisTimeText = DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         TotalTimeLossText = FormatPositiveSeconds(totalLoss);
         NetTimeDeltaText = FormatSignedSeconds(netTimeDelta);
         WeakestCornerText = weakestCorner is null ? "没有明显损失" : $"{weakestCorner.CornerText} · {FormatLossSeconds(weakestCorner.TimeLossInMs)}";
-        BestConfidenceCornerText = "-";
+        BestConfidenceCornerText = bestConfidenceCorner is null
+            ? "-"
+            : $"{bestConfidenceCorner.CornerText} · {bestConfidenceCorner.ConfidenceText}";
         DataQualityText = result.Confidence.ToString();
         DataQualityReasonText = BuildDataQualityReasonText(result, referenceInfo);
         ReferenceInfo = referenceInfo;
@@ -1050,6 +1056,13 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber} 弯角分析：{rows.Length} 个弯角，置信度 {result.Confidence}。";
         }
+    }
+
+    private static int ResolveConfidenceRank(string confidenceText)
+    {
+        return Enum.TryParse<ConfidenceLevel>(confidenceText, out var confidence)
+            ? (int)confidence
+            : 0;
     }
 
     private static string BuildDataQualityReasonText(CornerMetricsResult result, CornerReferenceInfo referenceInfo)

@@ -344,6 +344,28 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// Verifies the top shell status area uses the compact telemetry dashboard structure.
+    /// </summary>
+    [Fact]
+    public void MainWindow_UsesCompactTelemetryStatusBarLayout()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+
+        Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("连接状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛道", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛制", xaml, StringComparison.Ordinal);
+        Assert.Contains("比赛进度", xaml, StringComparison.Ordinal);
+        Assert.Contains("天气", xaml, StringComparison.Ordinal);
+        Assert.Contains("UDP PPS", xaml, StringComparison.Ordinal);
+        Assert.Contains("监听端口", xaml, StringComparison.Ordinal);
+        Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that the legacy dashboard view can still load while migration continues.
     /// </summary>
     [Fact]

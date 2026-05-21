@@ -178,7 +178,13 @@ public sealed class TrackMapBuilderTests
 
         Assert.Contains("CornerAnalysisMainScrollViewer", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisHeader", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisFilterBar", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisRightDetails", xaml, StringComparison.Ordinal);
+        Assert.Contains("最高置信结果", xaml, StringComparison.Ordinal);
+        Assert.Contains("参考图状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("数据质量提示", xaml, StringComparison.Ordinal);
+        Assert.Contains("AI 分析备注", xaml, StringComparison.Ordinal);
         Assert.Contains("MaxHeight=\"132\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TrackMapEmptyStateText", xaml, StringComparison.Ordinal);
         Assert.Contains("HasDrawableTrackMap", xaml, StringComparison.Ordinal);
