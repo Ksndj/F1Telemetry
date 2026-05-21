@@ -53,13 +53,23 @@ public sealed class TrackMapBuilder
 
         if (rawPoints.Length == 0)
         {
-            return CreateEmptySnapshot(sessionUid, trackId, lapNumber, "等待 Motion 数据");
+            return CreateEmptySnapshot(
+                sessionUid,
+                trackId,
+                lapNumber,
+                TrackMapStatus.MissingMotionData,
+                "该会话缺少 Motion 坐标");
         }
 
         var dedupedPoints = DeduplicateByDistance(rawPoints);
         if (dedupedPoints.Count < MinimumDrawablePoints)
         {
-            return CreateEmptySnapshot(sessionUid, trackId, lapNumber, "轨迹采样不足，暂无法绘制");
+            return CreateEmptySnapshot(
+                sessionUid,
+                trackId,
+                lapNumber,
+                TrackMapStatus.InsufficientTrackPoints,
+                "轨迹采样不足，暂无法绘制");
         }
 
         var simplifiedPoints = Simplify(dedupedPoints, MaxDrawablePoints);
@@ -71,7 +81,12 @@ public sealed class TrackMapBuilder
         var height = maxZ - minZ;
         if (width < 0.001f && height < 0.001f)
         {
-            return CreateEmptySnapshot(sessionUid, trackId, lapNumber, "轨迹采样不足，暂无法绘制");
+            return CreateEmptySnapshot(
+                sessionUid,
+                trackId,
+                lapNumber,
+                TrackMapStatus.InsufficientTrackPoints,
+                "轨迹采样不足，暂无法绘制");
         }
 
         width = Math.Max(width, 0.001f);
@@ -101,6 +116,7 @@ public sealed class TrackMapBuilder
             Points = normalized,
             Source = "Motion 轨迹",
             Quality = ResolveQuality(normalized.Length),
+            Status = TrackMapStatus.Ready,
             WarningText = normalized.Length >= 80 ? string.Empty : "Motion 轨迹采样偏少，地图仅供参考"
         };
     }
@@ -180,6 +196,30 @@ public sealed class TrackMapBuilder
     /// <returns>An empty snapshot suitable for UI binding.</returns>
     public static TrackMapSnapshot CreateEmptySnapshot(string sessionUid, int? trackId, int lapNumber, string warningText)
     {
+        return CreateEmptySnapshot(
+            sessionUid,
+            trackId,
+            lapNumber,
+            TrackMapStatusFormatter.ResolveStatus(warningText),
+            warningText);
+    }
+
+    /// <summary>
+    /// Creates an explicit empty track-map snapshot.
+    /// </summary>
+    /// <param name="sessionUid">The game session UID.</param>
+    /// <param name="trackId">The track id when known.</param>
+    /// <param name="lapNumber">The requested lap number.</param>
+    /// <param name="status">The structured empty-state status.</param>
+    /// <param name="warningText">The empty-state warning text.</param>
+    /// <returns>An empty snapshot suitable for UI binding.</returns>
+    public static TrackMapSnapshot CreateEmptySnapshot(
+        string sessionUid,
+        int? trackId,
+        int lapNumber,
+        TrackMapStatus status,
+        string warningText)
+    {
         return new TrackMapSnapshot
         {
             SessionUid = sessionUid,
@@ -188,7 +228,10 @@ public sealed class TrackMapBuilder
             Points = Array.Empty<TrackMapPoint>(),
             Source = "Motion 轨迹",
             Quality = "Low",
-            WarningText = string.IsNullOrWhiteSpace(warningText) ? "等待 Motion 数据" : warningText
+            Status = status,
+            WarningText = string.IsNullOrWhiteSpace(warningText)
+                ? TrackMapStatusFormatter.FormatStatus(status)
+                : warningText
         };
     }
 

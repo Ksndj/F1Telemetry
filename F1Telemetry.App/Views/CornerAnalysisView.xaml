@@ -300,7 +300,11 @@
                 </Border>
             </Grid>
 
-            <Grid Grid.Row="4">
+            <ScrollViewer x:Name="CornerAnalysisMainScrollViewer"
+                          Grid.Row="4"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" />
                     <ColumnDefinition Width="14" />
@@ -454,7 +458,8 @@
                     </Grid>
                 </Border>
 
-                <Grid Grid.Column="2">
+                <Grid x:Name="CornerAnalysisRightDetails"
+                      Grid.Column="2">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="10" />
@@ -462,7 +467,7 @@
                         <RowDefinition Height="10" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="10" />
-                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
                     <Border Style="{StaticResource PanelStyle}">
@@ -582,6 +587,16 @@
                                     </Grid.RowDefinitions>
                                     <Viewbox Height="170"
                                              Stretch="Uniform">
+                                        <Viewbox.Style>
+                                            <Style TargetType="{x:Type Viewbox}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasDrawableTrackMap}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Viewbox.Style>
                                         <Canvas Width="240"
                                                 Height="170"
                                                 ClipToBounds="True">
@@ -620,6 +635,30 @@
                                                        Text="{Binding CornerAnalysis.SelectedCorner.TrackMapCornerLabelText}" />
                                         </Canvas>
                                     </Viewbox>
+                                    <Border MinHeight="170"
+                                            CornerRadius="10"
+                                            Background="#0B1628"
+                                            BorderBrush="#1D3B5C"
+                                            BorderThickness="1">
+                                        <Border.Style>
+                                            <Style TargetType="{x:Type Border}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasDrawableTrackMap}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Margin="18"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"
+                                                   Foreground="#D7E4F3"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding CornerAnalysis.SelectedCorner.TrackMapEmptyStateText}"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap" />
+                                    </Border>
                                     <TextBlock Grid.Row="2"
                                                Foreground="#D7E4F3"
                                                FontWeight="SemiBold"
@@ -684,6 +723,16 @@
                                              Margin="0,6,0,0"
                                              Height="64"
                                              Stretch="Fill">
+                                        <Viewbox.Style>
+                                            <Style TargetType="{x:Type Viewbox}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasSpeedChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Viewbox.Style>
                                         <Canvas Width="220" Height="72">
                                             <Path Data="{Binding CornerAnalysis.SelectedCorner.SpeedReferencePathData}"
                                                   Stroke="#64748B"
@@ -694,6 +743,26 @@
                                                   StrokeThickness="2.5" />
                                         </Canvas>
                                     </Viewbox>
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,6,0,0"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="#AFC2DA"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding CornerAnalysis.SelectedCorner.SpeedChartStatusText}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasSpeedChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Border>
 
@@ -719,6 +788,16 @@
                                              Margin="0,6,0,0"
                                              Height="64"
                                              Stretch="Fill">
+                                        <Viewbox.Style>
+                                            <Style TargetType="{x:Type Viewbox}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasBrakeChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Viewbox.Style>
                                         <Canvas Width="220" Height="72">
                                             <Path Data="{Binding CornerAnalysis.SelectedCorner.BrakeReferencePathData}"
                                                   Stroke="#64748B"
@@ -729,6 +808,26 @@
                                                   StrokeThickness="2.5" />
                                         </Canvas>
                                     </Viewbox>
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,6,0,0"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="#AFC2DA"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding CornerAnalysis.SelectedCorner.BrakeChartStatusText}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasBrakeChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Border>
 
@@ -754,6 +853,16 @@
                                              Margin="0,6,0,0"
                                              Height="64"
                                              Stretch="Fill">
+                                        <Viewbox.Style>
+                                            <Style TargetType="{x:Type Viewbox}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasThrottleChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Viewbox.Style>
                                         <Canvas Width="220" Height="72">
                                             <Path Data="{Binding CornerAnalysis.SelectedCorner.ThrottleReferencePathData}"
                                                   Stroke="#64748B"
@@ -764,6 +873,26 @@
                                                   StrokeThickness="2.5" />
                                         </Canvas>
                                     </Viewbox>
+                                    <TextBlock Grid.Row="1"
+                                               Margin="0,6,0,0"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Foreground="#AFC2DA"
+                                               FontWeight="SemiBold"
+                                               Text="{Binding CornerAnalysis.SelectedCorner.ThrottleChartStatusText}"
+                                               TextAlignment="Center"
+                                               TextWrapping="Wrap">
+                                        <TextBlock.Style>
+                                            <Style TargetType="{x:Type TextBlock}">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding CornerAnalysis.SelectedCorner.HasThrottleChart}" Value="False">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </Grid>
                             </Border>
                         </Grid>
@@ -847,11 +976,13 @@
                         </Grid>
                     </Border>
                 </Grid>
-            </Grid>
+                </Grid>
+            </ScrollViewer>
 
             <Border Grid.Row="6"
                     Style="{StaticResource PanelStyle}"
-                    Padding="18">
+                    Padding="18"
+                    MaxHeight="132">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -863,9 +994,12 @@
                                FontWeight="SemiBold"
                                Foreground="#7DD3FC"
                                Text="AI 分析备注" />
-                    <TextBlock Grid.Column="2"
-                               Style="{StaticResource MutedTextStyle}"
-                               Text="{Binding CornerAnalysis.AiAnnotationText}" />
+                    <ScrollViewer Grid.Column="2"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  VerticalScrollBarVisibility="Auto">
+                        <TextBlock Style="{StaticResource MutedTextStyle}"
+                                   Text="{Binding CornerAnalysis.AiAnnotationText}" />
+                    </ScrollViewer>
                 </Grid>
             </Border>
         </Grid>

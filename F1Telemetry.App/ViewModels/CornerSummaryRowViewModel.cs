@@ -175,6 +175,12 @@ public sealed class CornerSummaryRowViewModel
     public string SpeedChartStatusText { get; init; } = "采样不足，暂无法绘制";
 
     /// <summary>
+    /// Gets a value indicating whether the speed chart has drawable paths.
+    /// </summary>
+    public bool HasSpeedChart => !string.IsNullOrWhiteSpace(SpeedCurrentPathData)
+        && !string.IsNullOrWhiteSpace(SpeedReferencePathData);
+
+    /// <summary>
     /// Gets the current-lap brake chart path for the selected corner.
     /// </summary>
     public string? BrakeCurrentPathData { get; init; }
@@ -190,6 +196,12 @@ public sealed class CornerSummaryRowViewModel
     public string BrakeChartStatusText { get; init; } = "采样不足，暂无法绘制";
 
     /// <summary>
+    /// Gets a value indicating whether the brake chart has drawable paths.
+    /// </summary>
+    public bool HasBrakeChart => !string.IsNullOrWhiteSpace(BrakeCurrentPathData)
+        && !string.IsNullOrWhiteSpace(BrakeReferencePathData);
+
+    /// <summary>
     /// Gets the current-lap throttle chart path for the selected corner.
     /// </summary>
     public string? ThrottleCurrentPathData { get; init; }
@@ -203,6 +215,12 @@ public sealed class CornerSummaryRowViewModel
     /// Gets the throttle chart status text.
     /// </summary>
     public string ThrottleChartStatusText { get; init; } = "采样不足，暂无法绘制";
+
+    /// <summary>
+    /// Gets a value indicating whether the throttle chart has drawable paths.
+    /// </summary>
+    public bool HasThrottleChart => !string.IsNullOrWhiteSpace(ThrottleCurrentPathData)
+        && !string.IsNullOrWhiteSpace(ThrottleReferencePathData);
 
     /// <summary>
     /// Gets the lightweight corner-position indicator text.
@@ -225,6 +243,11 @@ public sealed class CornerSummaryRowViewModel
     public string? TrackMapHighlightPathData { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether the track map has a drawable outline.
+    /// </summary>
+    public bool HasDrawableTrackMap => !string.IsNullOrWhiteSpace(TrackMapPathData);
+
+    /// <summary>
     /// Gets the track-map status text.
     /// </summary>
     public string TrackMapStatusText { get; init; } = "等待 Motion 数据";
@@ -243,6 +266,11 @@ public sealed class CornerSummaryRowViewModel
     /// Gets the track-map warning text.
     /// </summary>
     public string TrackMapWarningText { get; init; } = "等待 Motion 数据";
+
+    /// <summary>
+    /// Gets the full track-map empty-state explanation.
+    /// </summary>
+    public string TrackMapEmptyStateText { get; init; } = "等待完整圈轨迹后显示赛道图。";
 
     /// <summary>
     /// Gets the track-map marker X coordinate in canvas pixels.
@@ -299,6 +327,7 @@ public sealed class CornerSummaryRowViewModel
     /// <param name="trackMapSourceText">Track-map source text.</param>
     /// <param name="trackMapQualityText">Track-map quality text.</param>
     /// <param name="trackMapWarningText">Track-map warning text.</param>
+    /// <param name="trackMapEmptyStateText">Track-map empty-state text.</param>
     /// <param name="trackMapMarkerX">Track-map marker X coordinate.</param>
     /// <param name="trackMapMarkerY">Track-map marker Y coordinate.</param>
     /// <param name="trackMapMarkerSize">Track-map marker size.</param>
@@ -326,6 +355,7 @@ public sealed class CornerSummaryRowViewModel
         string trackMapSourceText = "来源：Motion 轨迹",
         string trackMapQualityText = "质量：Low",
         string trackMapWarningText = "等待 Motion 数据",
+        string trackMapEmptyStateText = "等待完整圈轨迹后显示赛道图。",
         double trackMapMarkerX = 0d,
         double trackMapMarkerY = 0d,
         double trackMapMarkerSize = 0d,
@@ -385,6 +415,7 @@ public sealed class CornerSummaryRowViewModel
             TrackMapSourceText = trackMapSourceText,
             TrackMapQualityText = trackMapQualityText,
             TrackMapWarningText = trackMapWarningText,
+            TrackMapEmptyStateText = trackMapEmptyStateText,
             TrackMapMarkerX = trackMapMarkerX,
             TrackMapMarkerY = trackMapMarkerY,
             TrackMapMarkerSize = trackMapMarkerSize,

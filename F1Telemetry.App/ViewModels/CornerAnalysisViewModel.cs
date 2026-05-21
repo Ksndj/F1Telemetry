@@ -556,7 +556,6 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 : referenceSelection.Samples.Select(ToLapSample).ToArray();
             var trackMapSnapshot = ResolveTrackMapSnapshot(
                 session,
-                referenceSelection.Info,
                 lapNumber.Value);
             var result = _cornerMetricsExtractor.Extract(map, lapSamples, referenceSamples);
             foreach (var summary in result.Corners)
@@ -586,6 +585,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                     visualEvidence.TrackMap.SourceText,
                     visualEvidence.TrackMap.QualityText,
                     visualEvidence.TrackMap.WarningText,
+                    visualEvidence.TrackMap.EmptyStateText,
                     visualEvidence.TrackMap.MarkerX,
                     visualEvidence.TrackMap.MarkerY,
                     visualEvidence.TrackMap.MarkerSize,
@@ -667,8 +667,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
     private void SetEngineerAdviceInsufficientCards()
     {
-        EngineerAdviceNoticeText = "参考圈或采样不足，建议仅供参考";
-        EngineerPrimaryProblemText = "当前数据不足，无法确认主要问题。";
+        EngineerAdviceNoticeText = "数据不足，无法生成建议";
+        EngineerPrimaryProblemText = "数据不足，无法生成建议。";
         EngineerDrivingActionText = "先补齐参考圈或 LapSample 后再复盘。";
         EngineerNextLapFocusText = "下一圈先稳定完成有效圈。";
     }
@@ -717,7 +717,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         if (session is null || lap is null || CornerRows.Count == 0)
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
-            EngineerAdviceStatusText = "当前数据不足，建议仅供参考。";
+            EngineerAdviceStatusText = "数据不足，无法生成建议。";
             SetEngineerAdviceInsufficientCards();
             return;
         }
@@ -747,6 +747,14 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
                 SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
                 EngineerAdviceStatusText = "生成失败：AI未启用。";
                 SetEngineerAdviceFailureCards("生成失败：AI未启用。");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(settings.Ai.ApiKey))
+            {
+                SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
+                EngineerAdviceStatusText = "生成失败：API Key 未配置";
+                SetEngineerAdviceFailureCards("API Key 未配置");
                 return;
             }
 
@@ -784,8 +792,8 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.Failed);
-            EngineerAdviceStatusText = "生成失败：AI请求超时，请重试。";
-            SetEngineerAdviceFailureCards("生成失败：AI请求超时，请重试。");
+            EngineerAdviceStatusText = "生成失败：请求超时";
+            SetEngineerAdviceFailureCards("请求超时");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -848,7 +856,46 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
     private static string ResolveFailureMessage(string? message)
     {
-        return string.IsNullOrWhiteSpace(message) ? "AI服务未返回有效结果。" : message.Trim();
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return "AI 返回格式无效";
+        }
+
+        var normalized = message.Trim();
+        if (string.Equals(normalized, AIErrorMessageFormatter.MissingApiKey, StringComparison.Ordinal)
+            || normalized.Contains("API Key", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("apikey", StringComparison.OrdinalIgnoreCase))
+        {
+            return "API Key 未配置";
+        }
+
+        if (string.Equals(normalized, AIErrorMessageFormatter.NetworkError, StringComparison.Ordinal)
+            || normalized.Contains("网络错误", StringComparison.Ordinal)
+            || normalized.Contains("network", StringComparison.OrdinalIgnoreCase))
+        {
+            return "网络请求失败";
+        }
+
+        if (string.Equals(normalized, AIErrorMessageFormatter.ParseFailure, StringComparison.Ordinal)
+            || normalized.Contains("解析失败", StringComparison.Ordinal)
+            || normalized.Contains("parse", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("format", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AI 返回格式无效";
+        }
+
+        if (normalized.Contains("timeout", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("超时", StringComparison.Ordinal))
+        {
+            return "请求超时";
+        }
+
+        if (normalized.Contains("数据不足", StringComparison.Ordinal))
+        {
+            return "数据不足，无法生成建议";
+        }
+
+        return normalized;
     }
 
     private AIAnalysisContext BuildEngineerAdviceContext(
@@ -1062,21 +1109,18 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
     private TrackMapSnapshot ResolveTrackMapSnapshot(
         HistorySessionItemViewModel session,
-        CornerReferenceInfo referenceInfo,
         int selectedLapNumber)
     {
-        var preferredLapNumber = referenceInfo.HasReference
-            ? referenceInfo.LapNumber
-            : selectedLapNumber;
         return _trackMapTrajectoryStore?.GetPreferredOrBest(
                 session.SessionUid,
                 session.TrackId,
-                preferredLapNumber)
+                selectedLapNumber)
             ?? TrackMapBuilder.CreateEmptySnapshot(
                 session.SessionUid,
                 session.TrackId,
-                preferredLapNumber ?? selectedLapNumber,
-                "等待 Motion 数据");
+                selectedLapNumber,
+                TrackMapStatus.MissingMotionData,
+                "该会话缺少 Motion 坐标");
     }
 
     private CornerVisualEvidence BuildVisualEvidence(
@@ -1207,13 +1251,31 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             : $"T{segment.CornerNumber.Value.ToString(CultureInfo.InvariantCulture)} {segment.Name}";
         if (!snapshot.HasDrawableMap)
         {
+            var statusText = TrackMapStatusFormatter.FormatStatus(snapshot.Status);
             return new CornerTrackMapEvidence(
                 null,
                 null,
-                snapshot.WarningText,
+                statusText,
                 $"来源：{snapshot.Source}",
                 $"质量：{snapshot.Quality}",
                 snapshot.WarningText,
+                TrackMapStatusFormatter.FormatEmptyState(snapshot.Status),
+                0d,
+                0d,
+                0d,
+                string.Empty);
+        }
+
+        if (!HasCornerRange(segment, map))
+        {
+            return new CornerTrackMapEvidence(
+                BuildTrackMapPathData(snapshot.Points),
+                null,
+                TrackMapStatusFormatter.FormatStatus(TrackMapStatus.MissingCornerRange),
+                $"来源：{snapshot.Source}",
+                $"质量：{snapshot.Quality}",
+                "暂无弯角位置数据",
+                TrackMapStatusFormatter.FormatEmptyState(TrackMapStatus.MissingCornerRange),
                 0d,
                 0d,
                 0d,
@@ -1226,22 +1288,28 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             cornerLabel,
             isEstimated,
             map.LapLengthMeters);
-        var statusText = overlay.HighlightPoints.Count == 0
-            ? overlay.WarningText
-            : "Motion 轨迹";
         var warningText = BuildTrackMapWarningText(snapshot, overlay);
         var hasMarker = overlay.MarkerX is not null && overlay.MarkerY is not null;
         return new CornerTrackMapEvidence(
             BuildTrackMapPathData(snapshot.Points),
             BuildTrackMapPathData(overlay.HighlightPoints),
-            statusText,
+            TrackMapStatusFormatter.FormatStatus(TrackMapStatus.Ready),
             $"来源：{snapshot.Source}",
             $"质量：{snapshot.Quality}",
             warningText,
+            string.Empty,
             (overlay.MarkerX ?? 0d) * TrackMapCanvasWidth,
             (overlay.MarkerY ?? 0d) * TrackMapCanvasHeight,
             hasMarker ? 9d : 0d,
             hasMarker ? cornerLabel : string.Empty);
+    }
+
+    private static bool HasCornerRange(TrackSegment segment, TrackSegmentMap map)
+    {
+        return map.LapLengthMeters is > 0
+            && float.IsFinite(segment.StartDistanceMeters)
+            && float.IsFinite(segment.EndDistanceMeters)
+            && Math.Abs(segment.EndDistanceMeters - segment.StartDistanceMeters) > 0.001f;
     }
 
     private static string? BuildTrackMapPathData(IReadOnlyList<TrackMapPoint> points)
@@ -1698,6 +1766,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         string SourceText,
         string QualityText,
         string WarningText,
+        string EmptyStateText,
         double MarkerX,
         double MarkerY,
         double MarkerSize,

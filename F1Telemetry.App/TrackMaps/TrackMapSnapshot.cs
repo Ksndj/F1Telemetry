@@ -36,6 +36,11 @@ public sealed record TrackMapSnapshot
     public string Quality { get; init; } = "Low";
 
     /// <summary>
+    /// Gets the structured drawing status for the map.
+    /// </summary>
+    public TrackMapStatus Status { get; init; } = TrackMapStatus.WaitingMotionData;
+
+    /// <summary>
     /// Gets the warning or empty-state text for this snapshot.
     /// </summary>
     public string WarningText { get; init; } = "等待 Motion 数据";

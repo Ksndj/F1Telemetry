@@ -45,7 +45,12 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
     {
         if (string.IsNullOrWhiteSpace(sessionUid))
         {
-            return TrackMapBuilder.CreateEmptySnapshot(string.Empty, trackId, preferredLapNumber ?? 0, "等待 Motion 数据");
+            return TrackMapBuilder.CreateEmptySnapshot(
+                string.Empty,
+                trackId,
+                preferredLapNumber ?? 0,
+                TrackMapStatus.WaitingMotionData,
+                "等待 Motion 数据");
         }
 
         lock (_syncRoot)
@@ -58,7 +63,12 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
 
             if (sessionSnapshots.Length == 0)
             {
-                return TrackMapBuilder.CreateEmptySnapshot(sessionUid, trackId, preferredLapNumber ?? 0, "等待 Motion 数据");
+                return TrackMapBuilder.CreateEmptySnapshot(
+                    sessionUid,
+                    trackId,
+                    preferredLapNumber ?? 0,
+                    TrackMapStatus.MissingMotionData,
+                    "该会话缺少 Motion 坐标");
             }
 
             var preferred = preferredLapNumber is null
@@ -76,11 +86,12 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
                 .FirstOrDefault();
             if (best is not null)
             {
+                const string fallbackWarning = "当前圈缺少轨迹，已使用当前会话采样最完整圈";
                 return best with
                 {
                     WarningText = string.IsNullOrWhiteSpace(best.WarningText)
-                        ? "参考圈缺少轨迹，已使用当前会话采样最完整圈"
-                        : best.WarningText
+                        ? fallbackWarning
+                        : $"{best.WarningText} · {fallbackWarning}"
                 };
             }
 

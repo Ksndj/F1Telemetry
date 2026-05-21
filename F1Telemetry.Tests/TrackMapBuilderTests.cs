@@ -51,7 +51,21 @@ public sealed class TrackMapBuilderTests
         var snapshot = new TrackMapBuilder().BuildSnapshot("uid-1", 0, 3, CreateRectangleSamples(3, 4, 100, 50));
 
         Assert.False(snapshot.HasDrawableMap);
+        Assert.Equal(TrackMapStatus.InsufficientTrackPoints, snapshot.Status);
         Assert.Equal("轨迹采样不足，暂无法绘制", snapshot.WarningText);
+    }
+
+    /// <summary>
+    /// Verifies samples without Motion coordinates produce the historical missing-Motion state.
+    /// </summary>
+    [Fact]
+    public void BuildSnapshot_WithoutMotionCoordinates_ReturnsMissingMotionState()
+    {
+        var snapshot = new TrackMapBuilder().BuildSnapshot("uid-1", 0, 3, CreateSamplesWithoutMotion(3, 12));
+
+        Assert.False(snapshot.HasDrawableMap);
+        Assert.Equal(TrackMapStatus.MissingMotionData, snapshot.Status);
+        Assert.Equal("该会话缺少 Motion 坐标", snapshot.WarningText);
     }
 
     /// <summary>
@@ -68,7 +82,22 @@ public sealed class TrackMapBuilderTests
 
         Assert.Equal(4, snapshot.LapNumber);
         Assert.True(snapshot.HasDrawableMap);
+        Assert.Equal(TrackMapStatus.Ready, snapshot.Status);
         Assert.Contains("采样最完整圈", snapshot.WarningText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies historical sessions without recorded Motion snapshots do not keep waiting for live data.
+    /// </summary>
+    [Fact]
+    public void GetPreferredOrBest_WhenHistoricalSessionHasNoMotion_ReturnsMissingMotionState()
+    {
+        var snapshot = new InMemoryTrackMapTrajectoryStore().GetPreferredOrBest("uid-missing", 0, 6);
+
+        Assert.False(snapshot.HasDrawableMap);
+        Assert.Equal(TrackMapStatus.MissingMotionData, snapshot.Status);
+        Assert.Equal("该会话缺少 Motion 坐标", snapshot.WarningText);
+        Assert.DoesNotContain("等待 Motion 数据", snapshot.WarningText, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -139,6 +168,25 @@ public sealed class TrackMapBuilderTests
         Assert.DoesNotContain("formula1", xaml, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Verifies the corner-analysis view keeps the middle content scrollable and exposes chart/map empty states.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_UsesScrollableMainContentAndExplicitEmptyStates()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+
+        Assert.Contains("CornerAnalysisMainScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisRightDetails", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"132\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TrackMapEmptyStateText", xaml, StringComparison.Ordinal);
+        Assert.Contains("HasDrawableTrackMap", xaml, StringComparison.Ordinal);
+        Assert.Contains("HasSpeedChart", xaml, StringComparison.Ordinal);
+        Assert.Contains("HasBrakeChart", xaml, StringComparison.Ordinal);
+        Assert.Contains("HasThrottleChart", xaml, StringComparison.Ordinal);
+    }
+
     private static IReadOnlyList<LapSample> CreateRectangleSamples(int lapNumber, int count, float width, float height)
     {
         var samples = new List<LapSample>(count);
@@ -180,6 +228,18 @@ public sealed class TrackMapBuilderTests
         }
 
         return samples;
+    }
+
+    private static IReadOnlyList<LapSample> CreateSamplesWithoutMotion(int lapNumber, int count)
+    {
+        return Enumerable.Range(0, count)
+            .Select(index => new LapSample
+            {
+                LapNumber = lapNumber,
+                LapDistance = index * 10f,
+                IsValid = true
+            })
+            .ToArray();
     }
 
     private static string FindRepositoryFile(params string[] segments)
