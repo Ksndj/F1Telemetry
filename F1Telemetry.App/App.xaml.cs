@@ -8,6 +8,7 @@ using F1Telemetry.Analytics.State;
 using F1Telemetry.Core;
 using F1Telemetry.Core.Eventing;
 using F1Telemetry.App.Services;
+using F1Telemetry.App.TrackMaps;
 using F1Telemetry.Storage.Repositories;
 using F1Telemetry.Storage.Services;
 using F1Telemetry.TTS.Models;
@@ -41,6 +42,7 @@ public partial class App : Application
         _aiHttpClient = new HttpClient();
         var ttsQueue = new TtsQueue(new WindowsTtsService(), new TtsOptions());
         var ttsMessageFactory = new TtsMessageFactory();
+        var trackMapTrajectoryStore = new InMemoryTrackMapTrajectoryStore();
         var aiAnalysisService = new DeepSeekAnalysisService(
             new DeepSeekClient(_aiHttpClient),
             new PromptBuilder());
@@ -100,7 +102,9 @@ public partial class App : Application
                 aiAnalysisService: aiAnalysisService,
                 settingsStore: appSettingsStore,
                 ttsMessageFactory: ttsMessageFactory,
-                ttsQueue: ttsQueue));
+                ttsQueue: ttsQueue,
+                trackMapTrajectoryStore: trackMapTrajectoryStore),
+            trackMapTrajectoryStore: trackMapTrajectoryStore);
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

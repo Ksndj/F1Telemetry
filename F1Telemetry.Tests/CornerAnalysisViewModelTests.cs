@@ -4,6 +4,7 @@ using F1Telemetry.Analytics.Corners;
 using F1Telemetry.Analytics.Events;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Analytics.Tracks;
+using F1Telemetry.App.TrackMaps;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -261,6 +262,9 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Equal(2, aiService.RequestCount);
         Assert.Equal(3, viewModel.EngineerSuggestions.Count);
         Assert.Contains("7 号弯", viewModel.EngineerSuggestions[0], StringComparison.Ordinal);
+        Assert.Contains("7 号弯", viewModel.EngineerPrimaryProblemText, StringComparison.Ordinal);
+        Assert.Contains("提前轻刹", viewModel.EngineerDrivingActionText, StringComparison.Ordinal);
+        Assert.Contains("出弯油门", viewModel.EngineerNextLapFocusText, StringComparison.Ordinal);
         Assert.Contains("TTS冷却中", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
         Assert.Single(ttsService.SpokenTexts);
         Assert.Equal("7号弯先稳入弯，再提早出弯。", ttsService.SpokenTexts[0]);
@@ -308,6 +312,8 @@ public sealed class CornerAnalysisViewModelTests
 
         Assert.Equal("生成失败", viewModel.EngineerAdviceButtonText);
         Assert.Contains("service unavailable", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Contains("AI 生成失败", viewModel.EngineerPrimaryProblemText, StringComparison.Ordinal);
+        Assert.Contains("service unavailable", viewModel.EngineerDrivingActionText, StringComparison.Ordinal);
         Assert.True(viewModel.GenerateEngineerAdviceCommand.CanExecute(null));
 
         await viewModel.GenerateEngineerAdviceAsync();
@@ -315,6 +321,31 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Equal(2, aiService.RequestCount);
         Assert.Equal("已生成", viewModel.EngineerAdviceButtonText);
         Assert.Contains("已生成", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies AI request failures are normalized into a visible user-facing reason.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WithNetworkFailure_ShowsFailureReason()
+    {
+        var aiService = new RecordingAiAnalysisService
+        {
+            Result = new AIAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = F1Telemetry.AI.Services.AIErrorMessageFormatter.NetworkError
+            }
+        };
+        var viewModel = await CreateReadyAiAdviceViewModelAsync("session-ai-network", aiService);
+
+        await viewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal("生成失败", viewModel.EngineerAdviceButtonText);
+        Assert.Contains("网络请求失败", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Contains("网络请求失败", viewModel.EngineerAdviceNoticeText, StringComparison.Ordinal);
+        Assert.Contains("网络请求失败", viewModel.EngineerDrivingActionText, StringComparison.Ordinal);
+        Assert.True(viewModel.GenerateEngineerAdviceCommand.CanExecute(null));
     }
 
     /// <summary>
@@ -331,7 +362,8 @@ public sealed class CornerAnalysisViewModelTests
         await viewModel.GenerateEngineerAdviceAsync();
 
         Assert.Equal("数据不足", viewModel.EngineerAdviceButtonText);
-        Assert.Contains("当前数据不足", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Contains("数据不足，无法生成建议", viewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Contains("数据不足，无法生成建议", viewModel.EngineerAdviceNoticeText, StringComparison.Ordinal);
         Assert.False(viewModel.GenerateEngineerAdviceCommand.CanExecute(null));
     }
 
@@ -542,6 +574,268 @@ public sealed class CornerAnalysisViewModelTests
         Assert.Contains(viewModel.CornerRows, row => row.WarningDisplayText.Contains("缺参考", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// Verifies the detail panel receives speed, brake, and throttle comparison paths when current and reference samples exist.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithCurrentAndReferenceSamples_BuildsVisualComparisonCharts()
+    {
+        var sessionId = "session-visual";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()));
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Equal("当前圈 vs 参考圈", row.SpeedChartStatusText);
+        Assert.Equal("当前圈 vs 参考圈", row.BrakeChartStatusText);
+        Assert.Equal("当前圈 vs 参考圈", row.ThrottleChartStatusText);
+        Assert.False(string.IsNullOrWhiteSpace(row.SpeedCurrentPathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.SpeedReferencePathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.BrakeCurrentPathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.BrakeReferencePathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.ThrottleCurrentPathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.ThrottleReferencePathData));
+        Assert.Contains("T1 Test Corner", row.PositionIndicatorText, StringComparison.Ordinal);
+        Assert.Contains("估算位置", row.PositionStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the selected corner row receives a Motion-based track-map outline and highlight.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithMotionTrajectory_BuildsTrackMapEvidence()
+    {
+        var sessionId = "session-track-map";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var trackMapStore = new InMemoryTrackMapTrajectoryStore();
+        trackMapStore.RecordCompletedLap($"uid-{sessionId}", 0, 1, CreateMotionTrackSamples(1, 80));
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()),
+            trackMapTrajectoryStore: trackMapStore);
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.False(string.IsNullOrWhiteSpace(row.TrackMapPathData));
+        Assert.False(string.IsNullOrWhiteSpace(row.TrackMapHighlightPathData));
+        Assert.Equal("来源：Motion 轨迹", row.TrackMapStatusText);
+        Assert.Contains("Motion 轨迹", row.TrackMapSourceText, StringComparison.Ordinal);
+        Assert.Contains("采样最完整圈", row.TrackMapWarningText, StringComparison.Ordinal);
+        Assert.True(row.TrackMapMarkerSize > 0);
+        Assert.True(row.HasDrawableTrackMap);
+        Assert.Empty(row.TrackMapEmptyStateText);
+    }
+
+    /// <summary>
+    /// Verifies historical sessions without Motion snapshots show a complete missing-Motion map empty state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithoutMotionTrajectory_ShowsMissingTrackMapEmptyState()
+    {
+        var sessionId = "session-track-map-missing";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()));
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Null(row.TrackMapPathData);
+        Assert.False(row.HasDrawableTrackMap);
+        Assert.Equal("该会话缺少 Motion 坐标", row.TrackMapStatusText);
+        Assert.Equal("该会话缺少 Motion 坐标", row.TrackMapWarningText);
+        Assert.Contains("当前历史数据缺少 Motion 坐标", row.TrackMapEmptyStateText, StringComparison.Ordinal);
+        Assert.DoesNotContain("等待 Motion 数据", row.TrackMapStatusText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies sparse Motion coordinates show the track-map sampling empty state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithSparseMotionTrajectory_ShowsTrackSamplingState()
+    {
+        var sessionId = "session-track-map-sparse";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var trackMapStore = new InMemoryTrackMapTrajectoryStore();
+        trackMapStore.RecordCompletedLap($"uid-{sessionId}", 0, 2, CreateMotionTrackSamples(2, 4));
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()),
+            trackMapTrajectoryStore: trackMapStore);
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Null(row.TrackMapPathData);
+        Assert.False(row.HasDrawableTrackMap);
+        Assert.Equal("轨迹采样不足，暂无法绘制", row.TrackMapStatusText);
+        Assert.Equal("轨迹采样不足，暂无法绘制", row.TrackMapWarningText);
+        Assert.Contains("轨迹采样不足", row.TrackMapEmptyStateText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies missing reference laps show explicit chart empty states instead of blank graphs.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithoutReference_ShowsVisualMissingReferenceState()
+    {
+        var sessionId = "session-visual-no-ref";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()));
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Equal("缺少参考圈，暂无法对比", row.SpeedChartStatusText);
+        Assert.Equal("缺少参考圈，暂无法对比", row.BrakeChartStatusText);
+        Assert.Equal("缺少参考圈，暂无法对比", row.ThrottleChartStatusText);
+        Assert.Null(row.SpeedCurrentPathData);
+        Assert.Null(row.SpeedReferencePathData);
+    }
+
+    /// <summary>
+    /// Verifies sparse segment samples show the chart sampling empty state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithSparseSegmentSamples_ShowsVisualSamplingState()
+    {
+        var sessionId = "session-visual-sparse";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: true),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: true)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap()));
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Equal("采样不足，暂无法绘制", row.SpeedChartStatusText);
+        Assert.Equal("采样不足，暂无法绘制", row.BrakeChartStatusText);
+        Assert.Equal("采样不足，暂无法绘制", row.ThrottleChartStatusText);
+        Assert.Null(row.SpeedCurrentPathData);
+    }
+
+    /// <summary>
+    /// Verifies missing lap-length data shows a clear corner-position empty state.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithoutLapLength_ShowsMissingCornerPositionState()
+    {
+        var sessionId = "session-position-missing";
+        var historyBrowser = CreateHistoryBrowser(
+            sessionId,
+            [
+                CreateStoredLap(sessionId, 1, 90_000, "Medium"),
+                CreateStoredLap(sessionId, 2, 92_000, "Medium")
+            ]);
+        var sampleRepository = new RecordingLapSampleRepository
+        {
+            Samples =
+            [
+                ..CreateVisualSamples(sessionId, 1, 1_000, includeOnlyTwoInSegment: false),
+                ..CreateVisualSamples(sessionId, 2, 1_200, includeOnlyTwoInSegment: false)
+            ]
+        };
+        var viewModel = new CornerAnalysisViewModel(
+            historyBrowser,
+            sampleRepository,
+            trackSegmentMapProvider: new FixedTrackSegmentMapProvider(CreateVisualTestMap(lapLengthMeters: null)));
+
+        await viewModel.RefreshAsync();
+
+        var row = Assert.Single(viewModel.CornerRows);
+        Assert.Equal("暂无赛道位置数据", row.PositionIndicatorText);
+        Assert.Equal("暂无赛道位置数据", row.PositionStatusText);
+    }
+
     private static async Task<CornerAnalysisViewModel> CreateReadyAiAdviceViewModelAsync(
         string sessionId,
         RecordingAiAnalysisService aiService,
@@ -737,6 +1031,69 @@ public sealed class CornerAnalysisViewModelTests
         ];
     }
 
+    private static StoredLapSample[] CreateVisualSamples(
+        string sessionId,
+        int lapNumber,
+        int baseTimeMs,
+        bool includeOnlyTwoInSegment)
+    {
+        var thirdDistance = includeOnlyTwoInSegment ? 160 : 100;
+        return
+        [
+            CreateSample(sessionId, lapNumber, 0, 0, baseTimeMs, 218, 0.82, 0.02),
+            CreateSample(sessionId, lapNumber, 1, 50, baseTimeMs + 500, 142, 0.18, 0.78),
+            CreateSample(sessionId, lapNumber, 2, thirdDistance, baseTimeMs + 1_000, 190, 0.94, 0.05)
+        ];
+    }
+
+    private static IReadOnlyList<LapSample> CreateMotionTrackSamples(int lapNumber, int count)
+    {
+        var samples = new List<LapSample>(count);
+        for (var index = 0; index < count; index++)
+        {
+            var progress = count == 1 ? 0d : index / (count - 1d);
+            var angle = progress * Math.PI * 2d;
+            samples.Add(new LapSample
+            {
+                LapNumber = lapNumber,
+                LapDistance = (float)(progress * 1_000d),
+                WorldPositionX = (float)(Math.Cos(angle) * 120d),
+                WorldPositionZ = (float)(Math.Sin(angle) * 70d),
+                IsValid = true
+            });
+        }
+
+        return samples;
+    }
+
+    private static TrackSegmentMap CreateVisualTestMap(float? lapLengthMeters = 1_000)
+    {
+        return new TrackSegmentMap
+        {
+            TrackId = 0,
+            TrackName = "Visual Test",
+            Status = TrackSegmentMapStatus.Estimated,
+            StatusReason = "test map",
+            LapLengthMeters = lapLengthMeters,
+            Confidence = ConfidenceLevel.Medium,
+            Warnings = [DataQualityWarning.EstimatedTrackMap],
+            Segments =
+            [
+                new TrackSegment
+                {
+                    SegmentId = "t1",
+                    Name = "Test Corner",
+                    SegmentType = TrackSegmentType.Corner,
+                    CornerNumber = 1,
+                    StartDistanceMeters = 0,
+                    EndDistanceMeters = 100,
+                    Confidence = ConfidenceLevel.Medium,
+                    Warnings = [DataQualityWarning.EstimatedTrackMap]
+                }
+            ]
+        };
+    }
+
     private static StoredLapSample CreateSample(
         string sessionId,
         int lapNumber,
@@ -763,6 +1120,21 @@ public sealed class CornerAnalysisViewModelTests
             IsValid = true,
             CreatedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddMilliseconds(timeMs)
         };
+    }
+
+    private sealed class FixedTrackSegmentMapProvider : ITrackSegmentMapProvider
+    {
+        private readonly TrackSegmentMap _map;
+
+        public FixedTrackSegmentMapProvider(TrackSegmentMap map)
+        {
+            _map = map;
+        }
+
+        public TrackSegmentMap GetMap(sbyte? trackId)
+        {
+            return _map;
+        }
     }
 
     private sealed class RecordingSessionRepository : ISessionRepository

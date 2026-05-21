@@ -33,6 +33,21 @@ public sealed record LapSample
     public float? TotalDistance { get; init; }
 
     /// <summary>
+    /// Gets the player car world X coordinate from Motion data when available.
+    /// </summary>
+    public float? WorldPositionX { get; init; }
+
+    /// <summary>
+    /// Gets the player car world Y coordinate from Motion data when available.
+    /// </summary>
+    public float? WorldPositionY { get; init; }
+
+    /// <summary>
+    /// Gets the player car world Z coordinate from Motion data when available.
+    /// </summary>
+    public float? WorldPositionZ { get; init; }
+
+    /// <summary>
     /// Gets the current lap time in milliseconds.
     /// </summary>
     public uint? CurrentLapTimeInMs { get; init; }

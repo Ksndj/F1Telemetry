@@ -16,6 +16,7 @@ using F1Telemetry.App.Charts;
 using F1Telemetry.App.Formatting;
 using F1Telemetry.App.Logging;
 using F1Telemetry.App.Services;
+using F1Telemetry.App.TrackMaps;
 using F1Telemetry.App.Windowing;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core.Abstractions;
@@ -59,6 +60,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly TtsQueue _ttsQueue;
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
+    private readonly ITrackMapTrajectoryStore? _trackMapTrajectoryStore;
     private readonly IEventBus<RaceEvent> _raceEventBus;
     private readonly RaceEventSpeechSubscriber _raceEventSpeechSubscriber;
     private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
@@ -204,6 +206,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="historyBrowser">The optional persisted history session browser.</param>
     /// <param name="postRaceReview">The optional post-race review page view model.</param>
     /// <param name="sessionComparison">The optional multi-session comparison page view model.</param>
+    /// <param name="trackMapTrajectoryStore">The optional in-memory track-map trajectory store.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -223,7 +226,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         HistorySessionBrowserViewModel? historyBrowser = null,
         PostRaceReviewViewModel? postRaceReview = null,
         SessionComparisonViewModel? sessionComparison = null,
-        CornerAnalysisViewModel? cornerAnalysis = null)
+        CornerAnalysisViewModel? cornerAnalysis = null,
+        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -237,6 +241,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
+        _trackMapTrajectoryStore = trackMapTrajectoryStore;
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
         SessionComparison = sessionComparison ?? CreateNoOpSessionComparison();
@@ -2378,7 +2383,23 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _storagePersistenceService.EnqueueLapSummary(lap);
             var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
             _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
+            RecordTrackMapTrajectory(lap.LapNumber, lapSamples);
         }
+    }
+
+    private void RecordTrackMapTrajectory(int lapNumber, IReadOnlyList<LapSample> lapSamples)
+    {
+        if (_trackMapTrajectoryStore is null || _activeSessionUid is null || lapSamples.Count == 0)
+        {
+            return;
+        }
+
+        var state = _sessionStateStore.CaptureState();
+        _trackMapTrajectoryStore.RecordCompletedLap(
+            _activeSessionUid.Value.ToString(CultureInfo.InvariantCulture),
+            state.TrackId,
+            lapNumber,
+            lapSamples);
     }
 
     private void TrackLatestEvent(string? eventCode)
