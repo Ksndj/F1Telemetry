@@ -1,0 +1,144 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="AppScrollBarTrackBrush" Color="#10233A" />
+    <SolidColorBrush x:Key="AppScrollBarTrackBorderBrush" Color="#1D3A5C" />
+    <SolidColorBrush x:Key="AppScrollBarThumbBrush" Color="#4F7FA6" />
+    <SolidColorBrush x:Key="AppScrollBarThumbHoverBrush" Color="#66A7D8" />
+    <SolidColorBrush x:Key="AppScrollBarThumbPressedBrush" Color="#7EC7F2" />
+    <SolidColorBrush x:Key="AppScrollBarThumbBorderBrush" Color="#8FD3F7" />
+
+    <Style x:Key="AppScrollBarRepeatButtonStyle" TargetType="{x:Type RepeatButton}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type RepeatButton}">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="AppScrollBarThumbStyle" TargetType="{x:Type Thumb}">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Thumb}">
+                    <Border x:Name="ThumbBorder"
+                            Margin="2"
+                            Background="{StaticResource AppScrollBarThumbBrush}"
+                            BorderBrush="{StaticResource AppScrollBarThumbBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder"
+                                    Property="Background"
+                                    Value="{StaticResource AppScrollBarThumbHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder"
+                                    Property="Background"
+                                    Value="{StaticResource AppScrollBarThumbPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="ThumbBorder" Property="Opacity" Value="0.45" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="AppVerticalScrollBarThumbStyle"
+           BasedOn="{StaticResource AppScrollBarThumbStyle}"
+           TargetType="{x:Type Thumb}">
+        <Setter Property="MinHeight" Value="36" />
+    </Style>
+
+    <Style x:Key="AppHorizontalScrollBarThumbStyle"
+           BasedOn="{StaticResource AppScrollBarThumbStyle}"
+           TargetType="{x:Type Thumb}">
+        <Setter Property="MinWidth" Value="36" />
+    </Style>
+
+    <ControlTemplate x:Key="AppVerticalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+        <Grid Width="{TemplateBinding Width}"
+              MinWidth="{TemplateBinding MinWidth}"
+              Background="Transparent">
+            <Border Margin="1"
+                    Background="{StaticResource AppScrollBarTrackBrush}"
+                    BorderBrush="{StaticResource AppScrollBarTrackBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6" />
+            <Track x:Name="PART_Track"
+                   IsDirectionReversed="True"
+                   Focusable="False">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageUpCommand}"
+                                  Style="{StaticResource AppScrollBarRepeatButtonStyle}" />
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource AppVerticalScrollBarThumbStyle}" />
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageDownCommand}"
+                                  Style="{StaticResource AppScrollBarRepeatButtonStyle}" />
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="AppHorizontalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
+        <Grid Height="{TemplateBinding Height}"
+              MinHeight="{TemplateBinding MinHeight}"
+              Background="Transparent">
+            <Border Margin="1"
+                    Background="{StaticResource AppScrollBarTrackBrush}"
+                    BorderBrush="{StaticResource AppScrollBarTrackBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="6" />
+            <Track x:Name="PART_Track"
+                   Focusable="False">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageLeftCommand}"
+                                  Style="{StaticResource AppScrollBarRepeatButtonStyle}" />
+                </Track.DecreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource AppHorizontalScrollBarThumbStyle}" />
+                </Track.Thumb>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="{x:Static ScrollBar.PageRightCommand}"
+                                  Style="{StaticResource AppScrollBarRepeatButtonStyle}" />
+                </Track.IncreaseRepeatButton>
+            </Track>
+        </Grid>
+    </ControlTemplate>
+
+    <Style TargetType="{x:Type ScrollBar}">
+        <Setter Property="Width" Value="12" />
+        <Setter Property="MinWidth" Value="12" />
+        <Setter Property="Height" Value="Auto" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False" />
+        <Setter Property="Stylus.IsFlicksEnabled" Value="False" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template" Value="{StaticResource AppVerticalScrollBarTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Height" Value="12" />
+                <Setter Property="MinHeight" Value="12" />
+                <Setter Property="Template" Value="{StaticResource AppHorizontalScrollBarTemplate}" />
+            </Trigger>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="12" />
+                <Setter Property="MinWidth" Value="12" />
+                <Setter Property="Height" Value="Auto" />
+                <Setter Property="MinHeight" Value="0" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+</ResourceDictionary>
