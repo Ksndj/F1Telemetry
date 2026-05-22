@@ -354,6 +354,8 @@ public sealed class MainWindowTests
 
         Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellTelemetryValueStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"42\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("连接状态", xaml, StringComparison.Ordinal);
         Assert.Contains("赛道", xaml, StringComparison.Ordinal);
         Assert.Contains("赛制", xaml, StringComparison.Ordinal);

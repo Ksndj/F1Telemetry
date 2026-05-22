@@ -99,6 +99,7 @@ public partial class App : Application
                 historyBrowser,
                 lapSampleRepository,
                 eventRepository: eventRepository,
+                raceEngineerReportRepository: raceEngineerReportRepository,
                 aiAnalysisService: aiAnalysisService,
                 settingsStore: appSettingsStore,
                 ttsMessageFactory: ttsMessageFactory,

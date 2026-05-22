@@ -176,11 +176,17 @@ public sealed class TrackMapBuilderTests
     {
         var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
 
-        Assert.Contains("CornerAnalysisMainScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisMainGrid", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerAnalysisMainScrollViewer", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Grid.IsSharedSizeScope=\"True\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SharedSizeGroup=\"CornerWarningColumn\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisHeader", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisFilterBar", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisRightDetails", xaml, StringComparison.Ordinal);
+        Assert.Contains("DetailMetrics", xaml, StringComparison.Ordinal);
+        Assert.Contains("DifferenceBarWidth", xaml, StringComparison.Ordinal);
         Assert.Contains("最高置信结果", xaml, StringComparison.Ordinal);
         Assert.Contains("参考图状态", xaml, StringComparison.Ordinal);
         Assert.Contains("数据质量提示", xaml, StringComparison.Ordinal);

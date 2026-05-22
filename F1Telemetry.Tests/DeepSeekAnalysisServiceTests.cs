@@ -64,6 +64,47 @@ public sealed class DeepSeekAnalysisServiceTests
     }
 
     /// <summary>
+    /// Verifies transient network failures are retried once before returning the parsed result.
+    /// </summary>
+    [Fact]
+    public async Task AnalyzeAsync_TransientNetworkFailure_RetriesAndParsesResult()
+    {
+        const string completionJson = """
+{
+  "choices": [
+    {
+      "message": {
+        "content": "{\"summary\":\"retry ok\",\"tyreAdvice\":\"stable\",\"fuelAdvice\":\"save\",\"trafficAdvice\":\"clear\",\"ttsText\":\"重试成功\"}"
+      }
+    }
+  ]
+}
+""";
+        var attempts = 0;
+        var client = new DeepSeekClient(new HttpClient(new StubHttpMessageHandler(_ =>
+        {
+            attempts++;
+            if (attempts == 1)
+            {
+                throw new HttpRequestException("temporary network failure");
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(completionJson, Encoding.UTF8, "application/json")
+            };
+        })));
+        var service = new DeepSeekAnalysisService(client, new PromptBuilder());
+
+        var result = await service.AnalyzeAsync(new AIAnalysisContext(), new AISettings { AiEnabled = true, ApiKey = "configured" });
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal("retry ok", result.Summary);
+        Assert.Equal("重试成功", result.TtsText);
+        Assert.Equal(2, attempts);
+    }
+
+    /// <summary>
     /// Verifies structured post-race reports keep detailed fields separate from short TTS.
     /// </summary>
     [Fact]

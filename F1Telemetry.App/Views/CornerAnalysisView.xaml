@@ -92,7 +92,7 @@
         </Style>
 
         <Style x:Key="CornerListItemStyle" TargetType="{x:Type ListBoxItem}">
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Margin" Value="0,0,0,2" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Background" Value="#0F2036" />
@@ -180,11 +180,13 @@
                 </Grid.ColumnDefinitions>
 
                 <Border Style="{StaticResource CardStyle}"
+                        MinHeight="86"
+                        Padding="12"
                         BorderBrush="#1D64A8">
                     <StackPanel>
                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="正损失合计" />
-                        <TextBlock Margin="0,8,0,0"
-                                   FontSize="24"
+                        <TextBlock Margin="0,5,0,0"
+                                   FontSize="21"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
                                    Text="{Binding CornerAnalysis.TotalTimeLossText}" />
@@ -196,6 +198,8 @@
 
                 <Border Grid.Column="2"
                         Style="{StaticResource CardStyle}"
+                        MinHeight="86"
+                        Padding="12"
                         Background="#171532"
                         BorderBrush="#4C3B7C">
                     <StackPanel>
@@ -211,12 +215,14 @@
 
                 <Border Grid.Column="4"
                         Style="{StaticResource CardStyle}"
+                        MinHeight="86"
+                        Padding="12"
                         Background="#0D2A24"
                         BorderBrush="#2E7D5B">
                     <StackPanel>
                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最高置信结果" />
-                        <TextBlock Margin="0,8,0,0"
-                                   FontSize="18"
+                        <TextBlock Margin="0,5,0,0"
+                                   FontSize="17"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
                                    Text="{Binding CornerAnalysis.BestConfidenceCornerText}"
@@ -229,16 +235,18 @@
 
                 <Border Grid.Column="6"
                         Style="{StaticResource CardStyle}"
+                        MinHeight="86"
+                        Padding="12"
                         Background="#2A2410"
                         BorderBrush="#826B25">
                     <StackPanel>
                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="参考图状态" />
-                        <TextBlock Margin="0,8,0,0"
-                                   FontSize="22"
+                        <TextBlock Margin="0,5,0,0"
+                                   FontSize="19"
                                    FontWeight="SemiBold"
                                    Foreground="#F8FAFC"
                                    Text="{Binding CornerAnalysis.DataQualityText}" />
-                        <TextBlock Margin="0,6,0,0"
+                        <TextBlock Margin="0,4,0,0"
                                    Foreground="#F6C453"
                                    Text="数据可靠性" />
                         <TextBlock Margin="0,4,0,0"
@@ -333,18 +341,16 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer x:Name="CornerAnalysisMainScrollViewer"
-                          Grid.Row="6"
-                          HorizontalScrollBarVisibility="Disabled"
-                          VerticalScrollBarVisibility="Auto">
-                <Grid>
+            <Grid x:Name="CornerAnalysisMainGrid"
+                  Grid.Row="6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="3*" />
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="14" />
-                    <ColumnDefinition Width="2*" />
+                    <ColumnDefinition Width="*" MinWidth="640" />
                 </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource PanelStyle}">
+                <Border Style="{StaticResource PanelStyle}"
+                        MaxWidth="920">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -367,7 +373,7 @@
                         <ScrollViewer Grid.Row="2"
                                       HorizontalScrollBarVisibility="Auto"
                                       VerticalScrollBarVisibility="Auto">
-                            <StackPanel MinWidth="760">
+                            <StackPanel Grid.IsSharedSizeScope="True">
                                 <Border Padding="12,8"
                                         CornerRadius="8"
                                         Background="#13243B"
@@ -375,14 +381,14 @@
                                         BorderThickness="1">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="44" />
-                                            <ColumnDefinition Width="116" />
-                                            <ColumnDefinition Width="84" />
-                                            <ColumnDefinition Width="150" />
-                                            <ColumnDefinition Width="78" />
-                                            <ColumnDefinition Width="90" />
-                                            <ColumnDefinition Width="76" />
-                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="44" SharedSizeGroup="CornerNumberColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="112" SharedSizeGroup="CornerNameColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="80" SharedSizeGroup="CornerMinimumColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="146" SharedSizeGroup="CornerSpeedColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="CornerBrakeColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="86" SharedSizeGroup="CornerDeltaColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="70" SharedSizeGroup="CornerConfidenceColumn" />
+                                            <ColumnDefinition Width="Auto" MinWidth="104" SharedSizeGroup="CornerWarningColumn" />
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Style="{StaticResource HeaderLabelStyle}" Text="弯角" />
                                         <TextBlock Grid.Column="1" Style="{StaticResource HeaderLabelStyle}" Text="名称" />
@@ -404,20 +410,21 @@
                                          ItemContainerStyle="{StaticResource CornerListItemStyle}"
                                          ItemsSource="{Binding CornerAnalysis.CornerRows}"
                                          SelectedItem="{Binding CornerAnalysis.SelectedCorner, Mode=TwoWay}"
+                                         HorizontalContentAlignment="Left"
                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                          ScrollViewer.VerticalScrollBarVisibility="Disabled">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate>
                                             <Grid MinHeight="44">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="44" />
-                                                    <ColumnDefinition Width="116" />
-                                                    <ColumnDefinition Width="84" />
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="78" />
-                                                    <ColumnDefinition Width="90" />
-                                                    <ColumnDefinition Width="76" />
-                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="44" SharedSizeGroup="CornerNumberColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="112" SharedSizeGroup="CornerNameColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="80" SharedSizeGroup="CornerMinimumColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="146" SharedSizeGroup="CornerSpeedColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="72" SharedSizeGroup="CornerBrakeColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="86" SharedSizeGroup="CornerDeltaColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="70" SharedSizeGroup="CornerConfidenceColumn" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="104" SharedSizeGroup="CornerWarningColumn" />
                                                 </Grid.ColumnDefinitions>
 
                                                 <Border Width="3"
@@ -491,8 +498,11 @@
                     </Grid>
                 </Border>
 
-                <Grid x:Name="CornerAnalysisRightDetails"
-                      Grid.Column="2">
+                <ScrollViewer x:Name="CornerAnalysisRightScrollViewer"
+                              Grid.Column="2"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="CornerAnalysisRightDetails">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="10" />
@@ -514,73 +524,85 @@
                                        FontWeight="SemiBold"
                                        Foreground="#F8FAFC"
                                        Text="{Binding CornerAnalysis.SelectedCorner.CornerText, StringFormat=弯角详情（{0}）}" />
-                            <Grid Margin="0,14,0,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="10" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+                            <ItemsControl Margin="0,12,0,0"
+                                          ItemsSource="{Binding CornerAnalysis.SelectedCorner.DetailMetrics}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <UniformGrid Columns="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border MinHeight="74"
+                                                Margin="0,0,8,8"
+                                                Padding="10"
+                                                CornerRadius="9"
+                                                Background="#10233A"
+                                                BorderBrush="#24476E"
+                                                BorderThickness="1">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="6" />
+                                                    <RowDefinition Height="Auto" />
+                                                    <RowDefinition Height="6" />
+                                                    <RowDefinition Height="Auto" />
+                                                </Grid.RowDefinitions>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource MetricLabelStyle}"
+                                                           Text="{Binding Title}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Foreground="{Binding DifferenceBrush}"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding DifferenceText}" />
+                                                <TextBlock Grid.Row="2"
+                                                           Foreground="#F8FAFC"
+                                                           FontSize="16"
+                                                           FontWeight="SemiBold"
+                                                           Text="{Binding CurrentText}" />
+                                                <TextBlock Grid.Row="2"
+                                                           Grid.Column="1"
+                                                           Foreground="#93A9C8"
+                                                           Text="{Binding ReferenceText}" />
+                                                <Grid Grid.Row="4"
+                                                      Grid.ColumnSpan="2"
+                                                      Height="5"
+                                                      Background="#0A1626">
+                                                    <Border Width="{Binding DifferenceBarWidth}"
+                                                            HorizontalAlignment="Left"
+                                                            CornerRadius="3"
+                                                            Background="{Binding DifferenceBrush}" />
+                                                </Grid>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Grid Margin="0,2,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="10" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="8" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-
-                                <Border Style="{StaticResource CardStyle}" Padding="12">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="入弯速度" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Style="{StaticResource MetricValueStyle}"
-                                                   Text="{Binding CornerAnalysis.SelectedCorner.EntrySpeedComparisonText}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最低速度" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Style="{StaticResource MetricValueStyle}"
-                                                   Text="{Binding CornerAnalysis.SelectedCorner.MinimumSpeedComparisonText}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="4" Style="{StaticResource CardStyle}" Padding="12">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="出弯速度" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Style="{StaticResource MetricValueStyle}"
-                                                   Text="{Binding CornerAnalysis.SelectedCorner.ExitSpeedComparisonText}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-
-                                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="12">
-                                    <StackPanel>
-                                        <TextBlock Style="{StaticResource MetricLabelStyle}" Text="最大刹车" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   Style="{StaticResource MetricValueStyle}"
-                                                   Text="{Binding CornerAnalysis.SelectedCorner.BrakeComparisonText}"
-                                                   TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource CardStyle}" Padding="12">
+                                <Border Style="{StaticResource CardStyle}" Padding="10">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="时间差" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   FontSize="15"
+                                        <TextBlock Margin="0,5,0,0"
+                                                   FontSize="16"
                                                    FontWeight="SemiBold"
                                                    Foreground="{Binding CornerAnalysis.SelectedCorner.TimeLossBrush}"
                                                    Text="{Binding CornerAnalysis.SelectedCorner.TimeLossText}"
                                                    ToolTip="{Binding CornerAnalysis.SelectedCorner.TimeDifferenceTooltipText}" />
                                     </StackPanel>
                                 </Border>
-                                <Border Grid.Row="2" Grid.Column="4" Style="{StaticResource CardStyle}" Padding="12">
+                                <Border Grid.Column="2" Style="{StaticResource CardStyle}" Padding="10">
                                     <StackPanel>
                                         <TextBlock Style="{StaticResource MetricLabelStyle}" Text="置信度" />
-                                        <TextBlock Margin="0,6,0,0"
-                                                   FontSize="15"
+                                        <TextBlock Margin="0,5,0,0"
+                                                   FontSize="16"
                                                    FontWeight="SemiBold"
                                                    Foreground="{Binding CornerAnalysis.SelectedCorner.ConfidenceBrush}"
                                                    Text="{Binding CornerAnalysis.SelectedCorner.ConfidenceText}" />
@@ -730,7 +752,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="10" />
-                                <RowDefinition Height="106" />
+                                <RowDefinition Height="96" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -764,7 +786,7 @@
                                     </Grid>
                                     <Viewbox Grid.Row="1"
                                              Margin="0,6,0,0"
-                                             Height="64"
+                                             Height="54"
                                              Stretch="Fill">
                                         <Viewbox.Style>
                                             <Style TargetType="{x:Type Viewbox}">
@@ -830,7 +852,7 @@
                                     </Grid>
                                     <Viewbox Grid.Row="1"
                                              Margin="0,6,0,0"
-                                             Height="64"
+                                             Height="54"
                                              Stretch="Fill">
                                         <Viewbox.Style>
                                             <Style TargetType="{x:Type Viewbox}">
@@ -896,7 +918,7 @@
                                     </Grid>
                                     <Viewbox Grid.Row="1"
                                              Margin="0,6,0,0"
-                                             Height="64"
+                                             Height="54"
                                              Stretch="Fill">
                                         <Viewbox.Style>
                                             <Style TargetType="{x:Type Viewbox}">
@@ -1022,8 +1044,8 @@
                         </Grid>
                     </Border>
                 </Grid>
-                </Grid>
-            </ScrollViewer>
+                </ScrollViewer>
+            </Grid>
 
             <Border Grid.Row="8"
                     Style="{StaticResource PanelStyle}"

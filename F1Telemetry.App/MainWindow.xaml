@@ -120,9 +120,9 @@
         </Style>
 
         <Style x:Key="ShellTelemetryCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="MinHeight" Value="44" />
-            <Setter Property="Padding" Value="14,9" />
-            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,8,6" />
             <Setter Property="CornerRadius" Value="8" />
             <Setter Property="Background" Value="#0D1B2E" />
             <Setter Property="BorderBrush" Value="#1B3354" />
@@ -134,6 +134,14 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="ShellTelemetryValueStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
     </Window.Resources>
     <Grid x:Name="WindowRoot"
@@ -356,8 +364,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="连接状态" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
                                        Text="{Binding ConnectionStateText}" />
                         </Grid>
                     </Border>
@@ -370,10 +377,8 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛道" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding TrackText}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding TrackText}" />
                         </Grid>
                     </Border>
                     <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
@@ -385,10 +390,8 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛制" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding SessionTypeText}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding SessionTypeText}" />
                         </Grid>
                     </Border>
                     <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
@@ -400,10 +403,8 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="比赛进度" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding LapText}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding LapText}" />
                         </Grid>
                     </Border>
                     <Border MinWidth="116" Style="{StaticResource ShellTelemetryCardStyle}">
@@ -415,10 +416,8 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="天气" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
-                                       Text="{Binding WeatherText}"
-                                       TextTrimming="CharacterEllipsis" />
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding WeatherText}" />
                         </Grid>
                     </Border>
                     <Border MinWidth="108" Style="{StaticResource ShellTelemetryCardStyle}">
@@ -430,8 +429,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="UDP PPS" />
                             <TextBlock Grid.Column="2"
-                                       Foreground="#F8FAFC"
-                                       FontWeight="SemiBold"
+                                       Style="{StaticResource ShellTelemetryValueStyle}"
                                        Text="{Binding PacketsPerSecond}" />
                         </Grid>
                     </Border>
@@ -441,17 +439,17 @@
                                        Style="{StaticResource ShellTelemetryLabelStyle}"
                                        Text="监听端口" />
                             <TextBox Width="118"
-                                     Height="32"
+                                     Height="30"
                                      Margin="0,0,10,0"
-                                     Padding="10,5"
+                                     Padding="10,4"
                                      Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <Button Width="96"
-                                    Height="32"
+                                    Height="30"
                                     Margin="0,0,8,0"
                                     Command="{Binding StartListeningCommand}"
                                     Content="开始监听" />
                             <Button Width="96"
-                                    Height="32"
+                                    Height="30"
                                     Command="{Binding StopListeningCommand}"
                                     Content="停止监听" />
                         </WrapPanel>

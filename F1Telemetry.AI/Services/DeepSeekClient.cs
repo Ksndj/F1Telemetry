@@ -10,6 +10,8 @@ namespace F1Telemetry.AI.Services;
 public sealed class DeepSeekClient
 {
     private const string ChatCompletionsPath = "/chat/completions";
+    private const int MaxRequestAttempts = 2;
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(250);
     private readonly HttpClient _httpClient;
 
     /// <summary>
@@ -31,20 +33,43 @@ public sealed class DeepSeekClient
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(settings);
 
-        using var requestMessage = new HttpRequestMessage(
-            HttpMethod.Post,
-            NormalizeBaseUrl(settings.BaseUrl) + ChatCompletionsPath);
-        requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
-        requestMessage.Content = JsonContent.Create(request);
+        var requestUri = NormalizeBaseUrl(settings.BaseUrl) + ChatCompletionsPath;
+        var timeout = TimeSpan.FromSeconds(settings.RequestTimeoutSeconds <= 0 ? 10 : settings.RequestTimeoutSeconds);
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(settings.RequestTimeoutSeconds <= 0 ? 10 : settings.RequestTimeoutSeconds));
+        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
+        {
+            using var requestMessage = new HttpRequestMessage(HttpMethod.Post, requestUri);
+            requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.ApiKey);
+            requestMessage.Content = JsonContent.Create(request);
 
-        using var response = await _httpClient.SendAsync(requestMessage, timeoutCts.Token);
-        response.EnsureSuccessStatusCode();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(timeout);
 
-        var completion = await response.Content.ReadFromJsonAsync<DeepSeekChatCompletionResponse>(cancellationToken: timeoutCts.Token);
-        return completion?.Choices.FirstOrDefault()?.Message?.Content ?? string.Empty;
+            try
+            {
+                using var response = await _httpClient.SendAsync(requestMessage, timeoutCts.Token);
+                if (IsTransientStatusCode(response.StatusCode) && attempt < MaxRequestAttempts)
+                {
+                    await Task.Delay(RetryDelay, cancellationToken);
+                    continue;
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                var completion = await response.Content.ReadFromJsonAsync<DeepSeekChatCompletionResponse>(cancellationToken: timeoutCts.Token);
+                return completion?.Choices.FirstOrDefault()?.Message?.Content ?? string.Empty;
+            }
+            catch (HttpRequestException) when (attempt < MaxRequestAttempts)
+            {
+                await Task.Delay(RetryDelay, cancellationToken);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && attempt < MaxRequestAttempts)
+            {
+                await Task.Delay(RetryDelay, cancellationToken);
+            }
+        }
+
+        throw new InvalidOperationException("AI request retry loop exited unexpectedly.");
     }
 
     /// <summary>
@@ -64,5 +89,11 @@ public sealed class DeepSeekClient
         }
 
         return normalized;
+    }
+
+    private static bool IsTransientStatusCode(System.Net.HttpStatusCode statusCode)
+    {
+        return statusCode == System.Net.HttpStatusCode.TooManyRequests ||
+               (int)statusCode >= 500;
     }
 }

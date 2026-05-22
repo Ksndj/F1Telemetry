@@ -9,6 +9,8 @@ namespace F1Telemetry.App.ViewModels;
 /// </summary>
 public sealed class CornerSummaryRowViewModel
 {
+    private const double MetricDifferenceMaxBarWidth = 74d;
+
     /// <summary>
     /// Gets the stable corner number when known.
     /// </summary>
@@ -158,6 +160,12 @@ public sealed class CornerSummaryRowViewModel
     /// Gets the maximum-brake current/reference comparison text.
     /// </summary>
     public string BrakeComparisonText { get; init; } = "缺少参考数据";
+
+    /// <summary>
+    /// Gets the compact detail metrics shown as current/reference difference bars.
+    /// </summary>
+    public IReadOnlyList<CornerMetricComparisonViewModel> DetailMetrics { get; init; } =
+        Array.Empty<CornerMetricComparisonViewModel>();
 
     /// <summary>
     /// Gets the current-lap speed chart path for the selected corner.
@@ -398,6 +406,13 @@ public sealed class CornerSummaryRowViewModel
             MinimumSpeedComparisonText = FormatSpeedComparison(summary.MinSpeedKph, referenceMinimumSpeedKph),
             ExitSpeedComparisonText = FormatSpeedComparison(summary.ExitSpeedKph, referenceExitSpeedKph),
             BrakeComparisonText = FormatPercentComparison(summary.MaxBrake is null ? null : summary.MaxBrake.Value * 100d, referenceMaxBrakePercent),
+            DetailMetrics =
+            [
+                BuildSpeedMetric("入弯", summary.EntrySpeedKph, referenceEntrySpeedKph),
+                BuildSpeedMetric("最低", summary.MinSpeedKph, referenceMinimumSpeedKph),
+                BuildSpeedMetric("出弯", summary.ExitSpeedKph, referenceExitSpeedKph),
+                BuildPercentMetric("刹车", summary.MaxBrake is null ? null : summary.MaxBrake.Value * 100d, referenceMaxBrakePercent)
+            ],
             SpeedCurrentPathData = speedCurrentPathData,
             SpeedReferencePathData = speedReferencePathData,
             SpeedChartStatusText = speedChartStatusText,
@@ -497,6 +512,57 @@ public sealed class CornerSummaryRowViewModel
         return speedKph is null ? "-" : $"{speedKph.Value:0} km/h";
     }
 
+    private static CornerMetricComparisonViewModel BuildSpeedMetric(string title, double? current, double? reference)
+    {
+        return BuildMetric(
+            title,
+            FormatSpeed(current),
+            FormatSpeed(reference),
+            current,
+            reference,
+            " km/h",
+            30d);
+    }
+
+    private static CornerMetricComparisonViewModel BuildPercentMetric(string title, double? current, double? reference)
+    {
+        return BuildMetric(
+            title,
+            FormatPercent(current),
+            FormatPercent(reference),
+            current,
+            reference,
+            "pp",
+            35d);
+    }
+
+    private static CornerMetricComparisonViewModel BuildMetric(
+        string title,
+        string currentText,
+        string referenceText,
+        double? current,
+        double? reference,
+        string differenceSuffix,
+        double fullScaleDifference)
+    {
+        var difference = current is null || reference is null ? (double?)null : current.Value - reference.Value;
+        var absoluteDifference = difference is null ? 0d : Math.Abs(difference.Value);
+        var barWidth = fullScaleDifference <= 0d
+            ? 0d
+            : Math.Min(MetricDifferenceMaxBarWidth, absoluteDifference / fullScaleDifference * MetricDifferenceMaxBarWidth);
+
+        return new CornerMetricComparisonViewModel
+        {
+            Title = title,
+            CurrentText = currentText,
+            ReferenceText = reference is null ? "缺参考" : referenceText,
+            DifferenceText = reference is null ? "缺参考" : FormatSignedNumber(difference, differenceSuffix),
+            DifferenceBrush = ResolveDifferenceBrush(difference),
+            DifferenceBarWidth = barWidth,
+            IsReferenceMissing = reference is null
+        };
+    }
+
     private static string FormatSpeedComparison(double? current, double? reference)
     {
         if (reference is null)
@@ -529,6 +595,21 @@ public sealed class CornerSummaryRowViewModel
         return value is null
             ? "-"
             : $"{value.Value:+0;-0;0}{suffix}";
+    }
+
+    private static string ResolveDifferenceBrush(double? value)
+    {
+        if (value is null)
+        {
+            return "#93A9C8";
+        }
+
+        return value.Value switch
+        {
+            > 0 => "#F87171",
+            < 0 => "#34D399",
+            _ => "#93A9C8"
+        };
     }
 
     private static string ResolveRowAccentBrush(int? timeLossInMs, bool hasWarnings)
