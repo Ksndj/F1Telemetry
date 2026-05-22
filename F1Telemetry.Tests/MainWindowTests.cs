@@ -344,6 +344,60 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// Verifies the top shell status area uses the compact telemetry dashboard structure.
+    /// </summary>
+    [Fact]
+    public void MainWindow_UsesCompactTelemetryStatusBarLayout()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+
+        Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellTelemetryValueStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"42\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("连接状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛道", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛制", xaml, StringComparison.Ordinal);
+        Assert.Contains("比赛进度", xaml, StringComparison.Ordinal);
+        Assert.Contains("天气", xaml, StringComparison.Ordinal);
+        Assert.Contains("UDP PPS", xaml, StringComparison.Ordinal);
+        Assert.Contains("监听端口", xaml, StringComparison.Ordinal);
+        Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that application resources provide the unified rounded scrollbar theme.
+    /// </summary>
+    [Fact]
+    public void AppResources_DefineRoundedGlobalScrollBarStyle()
+    {
+        var root = FindRepositoryRoot();
+        var appXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "App.xaml"));
+        var scrollbarXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Styles", "ScrollBarStyles.xaml"));
+
+        Assert.Contains("Styles/ScrollBarStyles.xaml", appXaml, StringComparison.Ordinal);
+        Assert.Contains("TargetType=\"{x:Type ScrollBar}\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppVerticalScrollBarTemplate", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppHorizontalScrollBarTemplate", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Orientation\" Value=\"Horizontal\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Orientation\" Value=\"Vertical\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("CornerRadius=\"6\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppScrollBarTrackBrush", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppScrollBarThumbBrush", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppScrollBarThumbHoverBrush", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("AppScrollBarThumbPressedBrush", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("#4F7FA6", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("#66A7D8", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("#7EC7F2", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight\" Value=\"36\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth\" Value=\"36\"", scrollbarXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("#FFFFFF", scrollbarXaml, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("SystemColors", scrollbarXaml, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Verifies that the legacy dashboard view can still load while migration continues.
     /// </summary>
     [Fact]

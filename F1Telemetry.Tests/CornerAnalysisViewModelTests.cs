@@ -349,6 +349,107 @@ public sealed class CornerAnalysisViewModelTests
     }
 
     /// <summary>
+    /// Verifies a selected-corner engineer advice generated in the last 15 days is reused without a second AI request.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WithFreshCornerCache_ReusesAdviceWithoutAiRequest()
+    {
+        var now = new DateTimeOffset(2026, 5, 22, 10, 0, 0, TimeSpan.Zero);
+        var repository = new RecordingRaceEngineerReportRepository();
+        var firstAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var firstViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache",
+            firstAiService,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now);
+
+        await firstViewModel.GenerateEngineerAdviceAsync();
+
+        var secondAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var secondViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache",
+            secondAiService,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now.AddDays(1));
+
+        await secondViewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal(1, firstAiService.RequestCount);
+        Assert.Equal(0, secondAiService.RequestCount);
+        Assert.Equal("已缓存", secondViewModel.EngineerAdviceButtonText);
+        Assert.Contains("15 天内缓存建议", secondViewModel.EngineerAdviceStatusText, StringComparison.Ordinal);
+        Assert.Contains("7 号弯", secondViewModel.EngineerPrimaryProblemText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies selected-corner engineer advice expires after 15 days.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WithExpiredCornerCache_RegeneratesAdvice()
+    {
+        var now = new DateTimeOffset(2026, 5, 22, 10, 0, 0, TimeSpan.Zero);
+        var repository = new RecordingRaceEngineerReportRepository();
+        var firstAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var firstViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache-expired",
+            firstAiService,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now);
+
+        await firstViewModel.GenerateEngineerAdviceAsync();
+
+        var secondAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var secondViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache-expired",
+            secondAiService,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now.AddDays(16));
+
+        await secondViewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal(1, firstAiService.RequestCount);
+        Assert.Equal(1, secondAiService.RequestCount);
+        Assert.Equal("已生成", secondViewModel.EngineerAdviceButtonText);
+    }
+
+    /// <summary>
+    /// Verifies changing the reference lap invalidates the selected-corner advice cache key.
+    /// </summary>
+    [Fact]
+    public async Task GenerateEngineerAdviceAsync_WhenReferenceLapChanges_RegeneratesAdvice()
+    {
+        var now = new DateTimeOffset(2026, 5, 22, 10, 0, 0, TimeSpan.Zero);
+        var repository = new RecordingRaceEngineerReportRepository();
+        var firstAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var firstViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache-reference",
+            firstAiService,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now);
+
+        await firstViewModel.GenerateEngineerAdviceAsync();
+
+        var secondAiService = new RecordingAiAnalysisService { Result = CreateSuccessfulAiResult() };
+        var secondViewModel = await CreateReadyAiAdviceViewModelAsync(
+            "session-ai-cache-reference",
+            secondAiService,
+            storedLaps:
+            [
+                CreateStoredLap("session-ai-cache-reference", 6, 90_000, "Medium"),
+                CreateStoredLap("session-ai-cache-reference", 7, 91_000, "Medium")
+            ],
+            selectedReferenceLapNumber: 6,
+            raceEngineerReportRepository: repository,
+            utcNowProvider: () => now.AddDays(1));
+
+        await secondViewModel.GenerateEngineerAdviceAsync();
+
+        Assert.Equal(1, firstAiService.RequestCount);
+        Assert.Equal(1, secondAiService.RequestCount);
+        Assert.Equal("已生成", secondViewModel.EngineerAdviceButtonText);
+    }
+
+    /// <summary>
     /// Verifies the AI button reports insufficient data when no rows are available.
     /// </summary>
     [Fact]
@@ -614,6 +715,14 @@ public sealed class CornerAnalysisViewModelTests
         Assert.False(string.IsNullOrWhiteSpace(row.ThrottleReferencePathData));
         Assert.Contains("T1 Test Corner", row.PositionIndicatorText, StringComparison.Ordinal);
         Assert.Contains("估算位置", row.PositionStatusText, StringComparison.Ordinal);
+        Assert.Contains("Test Corner", viewModel.BestConfidenceCornerText, StringComparison.Ordinal);
+        Assert.Contains(row.ConfidenceText, viewModel.BestConfidenceCornerText, StringComparison.Ordinal);
+        Assert.Equal(4, row.DetailMetrics.Count);
+        Assert.Contains(row.DetailMetrics, metric =>
+            metric.Title == "入弯" &&
+            metric.CurrentText.Contains("km/h", StringComparison.Ordinal) &&
+            metric.ReferenceText.Contains("km/h", StringComparison.Ordinal));
+        Assert.All(row.DetailMetrics, metric => Assert.InRange(metric.DifferenceBarWidth, 0d, 74d));
     }
 
     /// <summary>
@@ -839,10 +948,15 @@ public sealed class CornerAnalysisViewModelTests
     private static async Task<CornerAnalysisViewModel> CreateReadyAiAdviceViewModelAsync(
         string sessionId,
         RecordingAiAnalysisService aiService,
-        bool addCornerRow = true)
+        bool addCornerRow = true,
+        IReadOnlyList<StoredLap>? storedLaps = null,
+        int? selectedReferenceLapNumber = null,
+        IRaceEngineerReportRepository? raceEngineerReportRepository = null,
+        Func<DateTimeOffset>? utcNowProvider = null)
     {
         var historyBrowser = CreateHistoryBrowser(
             sessionId,
+            storedLaps ??
             [
                 CreateStoredLap(sessionId, 7, 91_000, "Medium")
             ]);
@@ -852,9 +966,16 @@ public sealed class CornerAnalysisViewModelTests
         var viewModel = new CornerAnalysisViewModel(
             historyBrowser,
             new RecordingLapSampleRepository(),
+            raceEngineerReportRepository: raceEngineerReportRepository,
             aiAnalysisService: aiService,
-            settingsStore: CreateEnabledAiSettingsStore());
+            settingsStore: CreateEnabledAiSettingsStore(),
+            utcNowProvider: utcNowProvider);
         viewModel.SelectedLap = historyBrowser.HistoryLaps.Single(lap => lap.LapNumber == 7);
+        if (selectedReferenceLapNumber is not null)
+        {
+            viewModel.SelectedReferenceLap = historyBrowser.HistoryLaps.Single(lap => lap.LapNumber == selectedReferenceLapNumber.Value);
+        }
+
         if (addCornerRow)
         {
             viewModel.CornerRows.Add(CreateTestCornerRow());
@@ -1218,6 +1339,46 @@ public sealed class CornerAnalysisViewModelTests
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
+        }
+    }
+
+    private sealed class RecordingRaceEngineerReportRepository : IRaceEngineerReportRepository
+    {
+        private readonly List<StoredRaceEngineerReport> _reports = new();
+
+        public IReadOnlyList<StoredRaceEngineerReport> Reports => _reports.ToArray();
+
+        public Task AddAsync(StoredRaceEngineerReport report, CancellationToken cancellationToken = default)
+        {
+            _reports.Add(report with { Id = _reports.Count + 1 });
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredRaceEngineerReport>> GetRecentAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredRaceEngineerReport>>(
+                _reports
+                    .Where(report => report.SessionId == sessionId)
+                    .OrderByDescending(report => report.CreatedAt)
+                    .Take(count)
+                    .ToArray());
+        }
+
+        public Task<IReadOnlyList<StoredRaceEngineerReport>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredRaceEngineerReport>>(
+                _reports
+                    .Where(report => report.SessionId == sessionId && report.LapNumber == lapNumber)
+                    .OrderByDescending(report => report.CreatedAt)
+                    .Take(count)
+                    .ToArray());
         }
     }
 

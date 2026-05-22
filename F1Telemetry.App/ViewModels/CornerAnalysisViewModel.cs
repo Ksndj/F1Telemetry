@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Windows.Input;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
@@ -36,8 +37,12 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private const double TrackMapCanvasWidth = 240d;
     private const double TrackMapCanvasHeight = 170d;
     private const int PositionIndicatorSegments = 10;
+    private const int EngineerAdviceCacheDays = 15;
+    private const string CornerEngineerAdviceReportType = "corner-analysis-advice";
+    private static readonly JsonSerializerOptions CacheJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly ILapSampleRepository _lapSampleRepository;
     private readonly IEventRepository? _eventRepository;
+    private readonly IRaceEngineerReportRepository? _raceEngineerReportRepository;
     private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
     private readonly CornerMetricsExtractor _cornerMetricsExtractor;
     private readonly TrackMapBuilder _trackMapBuilder;
@@ -46,6 +51,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     private readonly IAppSettingsStore? _settingsStore;
     private readonly TtsMessageFactory? _ttsMessageFactory;
     private readonly TtsQueue? _ttsQueue;
+    private readonly Func<DateTimeOffset> _utcNowProvider;
     private readonly RelayCommand _refreshCommand;
     private readonly RelayCommand _generateEngineerAdviceCommand;
     private LapSummaryItemViewModel? _selectedLap;
@@ -80,6 +86,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     /// <param name="historyBrowser">The shared history browser.</param>
     /// <param name="lapSampleRepository">The stored lap sample repository.</param>
     /// <param name="eventRepository">Optional event repository used to avoid flag-affected reference laps.</param>
+    /// <param name="raceEngineerReportRepository">Optional repository used to cache selected-corner engineer advice.</param>
     /// <param name="trackSegmentMapProvider">Optional segment map provider.</param>
     /// <param name="cornerMetricsExtractor">Optional metrics extractor.</param>
     /// <param name="aiAnalysisService">Optional AI analysis service for engineer advice.</param>
@@ -87,21 +94,25 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     /// <param name="ttsMessageFactory">Optional TTS message factory for AI advice speech.</param>
     /// <param name="ttsQueue">Optional TTS queue used to speak AI advice.</param>
     /// <param name="trackMapTrajectoryStore">Optional live Motion trajectory store used for track-map rendering.</param>
+    /// <param name="utcNowProvider">Optional clock provider used by cache expiry tests.</param>
     public CornerAnalysisViewModel(
         HistorySessionBrowserViewModel historyBrowser,
         ILapSampleRepository lapSampleRepository,
         IEventRepository? eventRepository = null,
+        IRaceEngineerReportRepository? raceEngineerReportRepository = null,
         ITrackSegmentMapProvider? trackSegmentMapProvider = null,
         CornerMetricsExtractor? cornerMetricsExtractor = null,
         IAIAnalysisService? aiAnalysisService = null,
         IAppSettingsStore? settingsStore = null,
         TtsMessageFactory? ttsMessageFactory = null,
         TtsQueue? ttsQueue = null,
-        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null)
+        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null,
+        Func<DateTimeOffset>? utcNowProvider = null)
     {
         HistoryBrowser = historyBrowser ?? throw new ArgumentNullException(nameof(historyBrowser));
         _lapSampleRepository = lapSampleRepository ?? throw new ArgumentNullException(nameof(lapSampleRepository));
         _eventRepository = eventRepository;
+        _raceEngineerReportRepository = raceEngineerReportRepository;
         _trackSegmentMapProvider = trackSegmentMapProvider ?? new StaticTrackSegmentMapProvider();
         _cornerMetricsExtractor = cornerMetricsExtractor ?? new CornerMetricsExtractor();
         _trackMapBuilder = new TrackMapBuilder();
@@ -110,6 +121,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         _settingsStore = settingsStore;
         _ttsMessageFactory = ttsMessageFactory;
         _ttsQueue = ttsQueue;
+        _utcNowProvider = utcNowProvider ?? (() => DateTimeOffset.UtcNow);
         CornerRows = new ObservableCollection<CornerSummaryRowViewModel>();
         EngineerSuggestions = new ObservableCollection<string>();
         _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoading && !IsEngineerAdviceLoading);
@@ -277,6 +289,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
     {
         CornerEngineerAdviceState.Loading => "AI分析中...",
         CornerEngineerAdviceState.Generated => "已生成",
+        CornerEngineerAdviceState.Cached => "已缓存",
         CornerEngineerAdviceState.InsufficientData => "数据不足",
         CornerEngineerAdviceState.Failed => "生成失败",
         _ => "AI建议"
@@ -703,6 +716,26 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             ?? "下一圈优先复核最弱弯角的刹车点和出弯油门。";
     }
 
+    private void SetEngineerAdviceCachedCards(
+        StoredRaceEngineerReport report,
+        CornerEngineerAdviceCachePayload payload)
+    {
+        EngineerSuggestions.Clear();
+        foreach (var suggestion in new[] { payload.DrivingAction, payload.NextLapFocus }
+                     .Where(value => !string.IsNullOrWhiteSpace(value) && value.Trim() != "-"))
+        {
+            EngineerSuggestions.Add(suggestion.Trim());
+        }
+
+        EngineerAdviceNoticeText = "已使用 15 天内缓存建议";
+        EngineerPrimaryProblemText = payload.PrimaryProblem;
+        EngineerDrivingActionText = payload.DrivingAction;
+        EngineerNextLapFocusText = payload.NextLapFocus;
+        AiAnnotationText = payload.AiAnnotation;
+        SetEngineerAdviceState(CornerEngineerAdviceState.Cached);
+        EngineerAdviceStatusText = $"已使用 15 天内缓存建议（{report.CreatedAt.ToLocalTime():yyyy-MM-dd HH:mm}）。";
+    }
+
     private async Task GenerateEngineerAdviceAsync(
         HistorySessionItemViewModel? session,
         LapSummaryItemViewModel? lap,
@@ -714,11 +747,17 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             return;
         }
 
-        if (session is null || lap is null || CornerRows.Count == 0)
+        var selectedCorner = SelectedCorner ?? CornerRows.FirstOrDefault();
+        if (session is null || lap is null || selectedCorner is null || CornerRows.Count == 0)
         {
             SetEngineerAdviceState(CornerEngineerAdviceState.InsufficientData);
             EngineerAdviceStatusText = "数据不足，无法生成建议。";
             SetEngineerAdviceInsufficientCards();
+            return;
+        }
+
+        if (await TryApplyCachedEngineerAdviceAsync(session, lap, selectedCorner, cancellationToken))
+        {
             return;
         }
 
@@ -784,6 +823,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
             AiAnnotationText = BuildAiAnnotationText(aiResult);
             SetEngineerAdviceGeneratedCards(aiResult, suggestions, hasLimitedData);
+            await StoreCachedEngineerAdviceAsync(session, lap, selectedCorner, aiResult, cancellationToken);
             SetEngineerAdviceState(CornerEngineerAdviceState.Generated);
             EngineerAdviceStatusText = suggestions.Length == 0
                 ? "已生成，但没有可显示的工程师建议。"
@@ -811,6 +851,121 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             IsEngineerAdviceLoading = false;
         }
+    }
+
+    private async Task<bool> TryApplyCachedEngineerAdviceAsync(
+        HistorySessionItemViewModel session,
+        LapSummaryItemViewModel lap,
+        CornerSummaryRowViewModel selectedCorner,
+        CancellationToken cancellationToken)
+    {
+        if (_raceEngineerReportRepository is null)
+        {
+            return false;
+        }
+
+        var cutoff = _utcNowProvider().AddDays(-EngineerAdviceCacheDays);
+        var reports = await _raceEngineerReportRepository.GetForLapAsync(
+            session.SessionId,
+            lap.LapNumber,
+            80,
+            cancellationToken);
+
+        foreach (var report in reports)
+        {
+            if (!report.IsSuccess ||
+                report.CreatedAt < cutoff ||
+                !string.Equals(report.ReportType, CornerEngineerAdviceReportType, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var payload = DeserializeCachePayload(report.DetailJson);
+            if (payload is null || !MatchesCachePayload(payload, selectedCorner))
+            {
+                continue;
+            }
+
+            SetEngineerAdviceCachedCards(report, payload);
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task StoreCachedEngineerAdviceAsync(
+        HistorySessionItemViewModel session,
+        LapSummaryItemViewModel lap,
+        CornerSummaryRowViewModel selectedCorner,
+        AIAnalysisResult aiResult,
+        CancellationToken cancellationToken)
+    {
+        if (_raceEngineerReportRepository is null)
+        {
+            return;
+        }
+
+        var payload = new CornerEngineerAdviceCachePayload
+        {
+            CornerNumber = selectedCorner.CornerNumber,
+            CornerName = selectedCorner.CornerNameText,
+            ReferenceLapNumber = ReferenceInfo.LapNumber,
+            ReferenceSource = ReferenceInfo.Source.ToString(),
+            PrimaryProblem = EngineerPrimaryProblemText,
+            DrivingAction = EngineerDrivingActionText,
+            NextLapFocus = EngineerNextLapFocusText,
+            AiAnnotation = AiAnnotationText
+        };
+
+        try
+        {
+            await _raceEngineerReportRepository.AddAsync(
+                new StoredRaceEngineerReport
+                {
+                    SessionId = session.SessionId,
+                    LapNumber = lap.LapNumber,
+                    ReportType = CornerEngineerAdviceReportType,
+                    Summary = EngineerPrimaryProblemText,
+                    SpokenText = ResolveEngineerAdviceSpeechText(aiResult),
+                    DetailJson = JsonSerializer.Serialize(payload, CacheJsonOptions),
+                    IsSuccess = true,
+                    ErrorMessage = "-",
+                    CreatedAt = _utcNowProvider()
+                },
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            // Advice generation succeeded; cache persistence must not turn it into a user-facing failure.
+        }
+    }
+
+    private static CornerEngineerAdviceCachePayload? DeserializeCachePayload(string? detailJson)
+    {
+        if (string.IsNullOrWhiteSpace(detailJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<CornerEngineerAdviceCachePayload>(detailJson, CacheJsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private bool MatchesCachePayload(
+        CornerEngineerAdviceCachePayload payload,
+        CornerSummaryRowViewModel selectedCorner)
+    {
+        var sameCorner = payload.CornerNumber == selectedCorner.CornerNumber &&
+                         string.Equals(payload.CornerName, selectedCorner.CornerNameText, StringComparison.Ordinal);
+        return sameCorner &&
+               payload.ReferenceLapNumber == ReferenceInfo.LapNumber &&
+               string.Equals(payload.ReferenceSource, ReferenceInfo.Source.ToString(), StringComparison.Ordinal);
     }
 
     private string BuildEngineerAdviceTtsStatus(
@@ -939,6 +1094,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         builder.AppendLine($"Positive time-loss total: {TotalTimeLossText}");
         builder.AppendLine($"Net time delta: {NetTimeDeltaText}");
         builder.AppendLine($"Weakest corner: {WeakestCornerText}");
+        builder.AppendLine($"Selected corner: {SelectedCorner?.CornerText ?? "-"}");
         builder.AppendLine("Rows:");
 
         foreach (var row in CornerRows)
@@ -1035,12 +1191,18 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             .OrderByDescending(row => row.PositiveTimeLossInMs)
             .ThenBy(row => row.CornerNumber ?? int.MaxValue)
             .FirstOrDefault();
+        var bestConfidenceCorner = rows
+            .OrderByDescending(row => ResolveConfidenceRank(row.ConfidenceText))
+            .ThenBy(row => row.CornerNumber ?? int.MaxValue)
+            .FirstOrDefault();
 
         AnalysisTimeText = DateTimeOffset.Now.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
         TotalTimeLossText = FormatPositiveSeconds(totalLoss);
         NetTimeDeltaText = FormatSignedSeconds(netTimeDelta);
         WeakestCornerText = weakestCorner is null ? "没有明显损失" : $"{weakestCorner.CornerText} · {FormatLossSeconds(weakestCorner.TimeLossInMs)}";
-        BestConfidenceCornerText = "-";
+        BestConfidenceCornerText = bestConfidenceCorner is null
+            ? "-"
+            : $"{bestConfidenceCorner.CornerText} · {bestConfidenceCorner.ConfidenceText}";
         DataQualityText = result.Confidence.ToString();
         DataQualityReasonText = BuildDataQualityReasonText(result, referenceInfo);
         ReferenceInfo = referenceInfo;
@@ -1050,6 +1212,13 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         {
             StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber} 弯角分析：{rows.Length} 个弯角，置信度 {result.Confidence}。";
         }
+    }
+
+    private static int ResolveConfidenceRank(string confidenceText)
+    {
+        return Enum.TryParse<ConfidenceLevel>(confidenceText, out var confidence)
+            ? (int)confidence
+            : 0;
     }
 
     private static string BuildDataQualityReasonText(CornerMetricsResult result, CornerReferenceInfo referenceInfo)
@@ -1798,11 +1967,31 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         }
     }
 
+    private sealed record CornerEngineerAdviceCachePayload
+    {
+        public int? CornerNumber { get; init; }
+
+        public string CornerName { get; init; } = "-";
+
+        public int? ReferenceLapNumber { get; init; }
+
+        public string ReferenceSource { get; init; } = ReferenceLapSource.None.ToString();
+
+        public string PrimaryProblem { get; init; } = "-";
+
+        public string DrivingAction { get; init; } = "-";
+
+        public string NextLapFocus { get; init; } = "-";
+
+        public string AiAnnotation { get; init; } = "-";
+    }
+
     private enum CornerEngineerAdviceState
     {
         Ready,
         Loading,
         Generated,
+        Cached,
         InsufficientData,
         Failed
     }
