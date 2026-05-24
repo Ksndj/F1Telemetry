@@ -156,10 +156,14 @@ public sealed class SessionComparisonViewModelTests
         [
             CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f, visualTyreCompound: 8)
         ];
-        var viewModel = CreateViewModel(sessionRepository, lapRepository, lapSampleRepository: lapSampleRepository);
+        var viewModel = CreateViewModel(
+            sessionRepository,
+            lapRepository,
+            lapSampleRepository: lapSampleRepository);
 
         await viewModel.RefreshAsync();
 
+        Assert.Equal(new[] { "session-a", "session-b" }, lapSampleRepository.QueriedSessions);
         Assert.True(viewModel.TyreWearComparisonPanel.HasData);
         Assert.Equal(
             [
@@ -488,6 +492,8 @@ public sealed class SessionComparisonViewModelTests
         public Dictionary<string, IReadOnlyList<StoredLapTyreWearTrendPoint>> TyreWearTrendBySession { get; } =
             new(StringComparer.Ordinal);
 
+        public List<string> QueriedSessions { get; } = [];
+
         public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -511,6 +517,7 @@ public sealed class SessionComparisonViewModelTests
             int count,
             CancellationToken cancellationToken = default)
         {
+            QueriedSessions.Add(sessionId);
             return Task.FromResult(
                 TyreWearTrendBySession.TryGetValue(sessionId, out var trend)
                     ? trend.Take(count).ToArray()

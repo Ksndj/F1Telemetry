@@ -66,7 +66,7 @@ public sealed class StoredLapSessionComparisonChartBuilder
     }
 
     /// <summary>
-    /// Builds the stored four-wheel average tyre-wear comparison panel.
+    /// Builds the tyre-wear comparison panel.
     /// </summary>
     /// <param name="sessions">The session tyre-wear inputs to plot.</param>
     public ChartPanelViewModel BuildTyreWearPanel(IReadOnlyList<SessionComparisonTyreWearChartInput> sessions)
@@ -88,14 +88,6 @@ public sealed class StoredLapSessionComparisonChartBuilder
         return series.Count == 0
             ? CreateTyreWearEmptyPanel()
             : CreatePanel("四轮平均胎磨对比", "圈号", "%", "所选会话暂无完整四轮胎磨数据", series);
-    }
-
-    /// <summary>
-    /// Builds the empty state for stored-lap tyre wear comparison.
-    /// </summary>
-    public ChartPanelViewModel BuildTyreWearUnavailablePanel()
-    {
-        return CreateTyreWearEmptyPanel();
     }
 
     private static ChartPanelViewModel BuildPanel<T>(

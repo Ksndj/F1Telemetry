@@ -21,7 +21,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
 
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
-    private readonly ILapSampleRepository _lapSampleRepository;
+    private readonly ILapSampleRepository? _lapSampleRepository;
     private readonly IHistorySessionDeletionConfirmationService _deletionConfirmationService;
     private readonly StoredLapSessionComparisonChartBuilder _chartBuilder;
     private readonly RelayCommand _refreshCommand;
@@ -43,7 +43,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     /// <param name="sessionRepository">The stored session repository.</param>
     /// <param name="lapRepository">The stored lap repository.</param>
     /// <param name="deletionConfirmationService">The optional delete confirmation service.</param>
-    /// <param name="lapSampleRepository">The optional lap sample repository used for tyre-wear comparison.</param>
+    /// <param name="lapSampleRepository">The optional stored lap-sample repository used for tyre-wear comparison.</param>
     public SessionComparisonViewModel(
         ISessionRepository sessionRepository,
         ILapRepository lapRepository,
@@ -52,7 +52,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     {
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
-        _lapSampleRepository = lapSampleRepository ?? new NoOpLapSampleRepository();
+        _lapSampleRepository = lapSampleRepository;
         _deletionConfirmationService = deletionConfirmationService ?? new MessageBoxHistorySessionDeletionConfirmationService();
         _chartBuilder = new StoredLapSessionComparisonChartBuilder();
         _refreshCommand = new RelayCommand(() => _ = RefreshAsync(), () => !IsLoadingSessions && !IsLoadingComparison && !IsDeletingSession);
@@ -69,7 +69,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         LapTimeComparisonPanel = _chartBuilder.BuildLapTimePanel(Array.Empty<SessionComparisonChartInput>());
         FuelComparisonPanel = _chartBuilder.BuildFuelPanel(Array.Empty<SessionComparisonChartInput>());
         ErsComparisonPanel = _chartBuilder.BuildErsPanel(Array.Empty<SessionComparisonChartInput>());
-        TyreWearComparisonPanel = _chartBuilder.BuildTyreWearUnavailablePanel();
+        TyreWearComparisonPanel = _chartBuilder.BuildTyreWearPanel(Array.Empty<SessionComparisonTyreWearChartInput>());
     }
 
     /// <summary>
@@ -206,7 +206,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     public ChartPanelViewModel ErsComparisonPanel { get; }
 
     /// <summary>
-    /// Gets the fixed unavailable tyre-wear comparison chart panel.
+    /// Gets the tyre-wear comparison chart panel.
     /// </summary>
     public ChartPanelViewModel TyreWearComparisonPanel { get; }
 
@@ -360,17 +360,14 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         var chartInputs = sessions
             .Select(session => new SessionComparisonChartInput(session.Item.ComparisonLabel, session.Laps))
             .ToArray();
+        var tyreWearChartInputs = sessions
+            .Select(session => new SessionComparisonTyreWearChartInput(session.Item.ComparisonLabel, session.TyreWearTrend))
+            .ToArray();
 
         LapTimeComparisonPanel.UpdateFrom(_chartBuilder.BuildLapTimePanel(chartInputs));
         FuelComparisonPanel.UpdateFrom(_chartBuilder.BuildFuelPanel(chartInputs));
         ErsComparisonPanel.UpdateFrom(_chartBuilder.BuildErsPanel(chartInputs));
-        TyreWearComparisonPanel.UpdateFrom(
-            _chartBuilder.BuildTyreWearPanel(
-                sessions
-                    .Select(session => new SessionComparisonTyreWearChartInput(
-                        session.Item.ComparisonLabel,
-                        session.TyreWearTrend))
-                    .ToArray()));
+        TyreWearComparisonPanel.UpdateFrom(_chartBuilder.BuildTyreWearPanel(tyreWearChartInputs));
 
         var lapCount = sessions.Sum(session => session.Laps.Count);
         if (lapCount == 0)
@@ -563,7 +560,9 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         CancellationToken cancellationToken)
     {
         var lapsTask = _lapRepository.GetRecentAsync(item.SessionId, MaxRecentLaps, cancellationToken);
-        var tyreWearTrendTask = _lapSampleRepository.GetTyreWearTrendAsync(item.SessionId, MaxRecentLaps, cancellationToken);
+        var tyreWearTrendTask = _lapSampleRepository is null
+            ? Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>())
+            : _lapSampleRepository.GetTyreWearTrendAsync(item.SessionId, MaxRecentLaps, cancellationToken);
         await Task.WhenAll(lapsTask, tyreWearTrendTask);
 
         return new SessionComparisonLoadedSession(
@@ -646,7 +645,7 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         LapTimeComparisonPanel.UpdateFrom(_chartBuilder.BuildLapTimePanel(Array.Empty<SessionComparisonChartInput>()));
         FuelComparisonPanel.UpdateFrom(_chartBuilder.BuildFuelPanel(Array.Empty<SessionComparisonChartInput>()));
         ErsComparisonPanel.UpdateFrom(_chartBuilder.BuildErsPanel(Array.Empty<SessionComparisonChartInput>()));
-        TyreWearComparisonPanel.UpdateFrom(_chartBuilder.BuildTyreWearUnavailablePanel());
+        TyreWearComparisonPanel.UpdateFrom(_chartBuilder.BuildTyreWearPanel(Array.Empty<SessionComparisonTyreWearChartInput>()));
     }
 
     private void UpdateSelectedSessions()
@@ -722,33 +721,4 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         SessionComparisonSessionItemViewModel Item,
         IReadOnlyList<StoredLap> Laps,
         IReadOnlyList<StoredLapTyreWearTrendPoint> TyreWearTrend);
-
-    private sealed class NoOpLapSampleRepository : ILapSampleRepository
-    {
-        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
-            string sessionId,
-            int lapNumber,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
-        }
-
-        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
-            string sessionId,
-            int count,
-            CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
-        }
-    }
 }
