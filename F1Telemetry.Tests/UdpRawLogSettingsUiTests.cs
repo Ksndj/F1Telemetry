@@ -43,6 +43,21 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies SettingsView exposes the steering-wheel voice AI hotkey controls.
+    /// </summary>
+    [Fact]
+    public void SettingsView_BindsVoiceAiHotkeyControls()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("VoiceAiEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiHotkeyOptions", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiHotkey", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiStatusText", xaml, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryFile(params string[] pathParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

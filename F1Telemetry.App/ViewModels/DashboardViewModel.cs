@@ -45,6 +45,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxOverviewEventSummaries = 4;
     private const int MaxOverviewEventSummaryChars = 40;
     private const int MaxPostRaceAiLaps = 15;
+    private const int VoiceAiRecognitionTimeoutSeconds = 8;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
     private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
@@ -66,6 +67,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RaceEventSpeechSubscriber _raceEventSpeechSubscriber;
     private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
+    private readonly VoiceAiQueryService _voiceAiQueryService;
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
@@ -157,6 +159,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private long _udpRawLogDroppedPacketCount;
     private int _udpRawLogQueueCapacity = 4096;
     private int _udpRawLogSettingsSaveVersion;
+    private bool _voiceAiEnabled;
+    private string _voiceAiHotkey = VoiceAiOptions.NoHotkey;
+    private string _voiceAiStatusText = "请选择方向盘映射按键";
+    private bool _isVoiceAiQueryRunning;
+    private int _voiceAiSettingsSaveVersion;
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
     private string _ttsVoiceStatusText = "正在读取 Windows 语音...";
@@ -209,6 +216,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="sessionComparison">The optional multi-session comparison page view model.</param>
     /// <param name="trackMapTrajectoryStore">The optional in-memory track-map trajectory store.</param>
     /// <param name="realtimeCornerAdviceService">The optional realtime corner advice service.</param>
+    /// <param name="voiceAiQueryService">The optional voice-to-AI query service.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -230,7 +238,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         SessionComparisonViewModel? sessionComparison = null,
         CornerAnalysisViewModel? cornerAnalysis = null,
         ITrackMapTrajectoryStore? trackMapTrajectoryStore = null,
-        RealtimeCornerAdviceService? realtimeCornerAdviceService = null)
+        RealtimeCornerAdviceService? realtimeCornerAdviceService = null,
+        VoiceAiQueryService? voiceAiQueryService = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -265,6 +274,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             () => _sessionStateStore.CaptureState().HasFinalClassification);
         _raceEventInsightBuffer = new RaceEventInsightBuffer(_raceEventBus);
         _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
+        _voiceAiQueryService = voiceAiQueryService ?? new VoiceAiQueryService(
+            new WindowsSpeechRecognitionService(),
+            _aiAnalysisService,
+            _ttsMessageFactory,
+            _ttsQueue);
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
         _trendChartBuilder = new TrendChartBuilder();
@@ -282,6 +296,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         LogEntries = new ObservableCollection<LogEntryViewModel>();
         OverviewEventSummaries = new ObservableCollection<LogEntryViewModel>();
         AvailableVoices = new ObservableCollection<string>();
+        VoiceAiHotkeyOptions = new ObservableCollection<string>(CreateVoiceAiHotkeyOptions());
         RaceWeekendTyreInventoryItems = CreateRaceWeekendTyreInventoryItems();
         PostRaceAiCompletionModes = new ObservableCollection<PostRaceAiCompletionModeOptionViewModel>(
         [
@@ -545,6 +560,29 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Handles a shell key press when it matches the configured voice AI hotkey.
+    /// </summary>
+    /// <param name="key">The WPF key reported by the shell.</param>
+    /// <returns><see langword="true"/> when the key was consumed.</returns>
+    public bool TryHandleVoiceAiHotkey(Key key)
+    {
+        if (_disposed || !VoiceAiEnabled || IsVoiceAiQueryRunning)
+        {
+            return false;
+        }
+
+        var keyName = NormalizeVoiceAiHotkey(key.ToString());
+        if (string.Equals(keyName, VoiceAiOptions.NoHotkey, StringComparison.Ordinal) ||
+            !string.Equals(keyName, VoiceAiHotkey, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        _ = RunVoiceAiQueryAsync();
+        return true;
+    }
+
+    /// <summary>
     /// Gets or sets a value indicating whether AI analysis is enabled.
     /// </summary>
     public bool AiEnabled
@@ -767,6 +805,62 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _udpRawLogLastErrorText;
         private set => SetProperty(ref _udpRawLogLastErrorText, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether microphone AI queries can be triggered by the bound key.
+    /// </summary>
+    public bool VoiceAiEnabled
+    {
+        get => _voiceAiEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiEnabled, value))
+            {
+                RefreshVoiceAiStatusText();
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the selectable key names for steering-wheel button mappings.
+    /// </summary>
+    public ObservableCollection<string> VoiceAiHotkeyOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the WPF key name that triggers microphone AI queries.
+    /// </summary>
+    public string VoiceAiHotkey
+    {
+        get => _voiceAiHotkey;
+        set
+        {
+            var normalized = NormalizeVoiceAiHotkey(value);
+            if (SetProperty(ref _voiceAiHotkey, normalized))
+            {
+                RefreshVoiceAiStatusText();
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the current microphone AI query status shown in Settings.
+    /// </summary>
+    public string VoiceAiStatusText
+    {
+        get => _voiceAiStatusText;
+        private set => SetProperty(ref _voiceAiStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a voice AI query is currently in progress.
+    /// </summary>
+    public bool IsVoiceAiQueryRunning
+    {
+        get => _isVoiceAiQueryRunning;
+        private set => SetProperty(ref _isVoiceAiQueryRunning, value);
     }
 
     /// <summary>
@@ -2420,6 +2514,74 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ = _realtimeCornerAdviceService.EvaluateCompletedLapAsync(request, _lifecycleCts.Token);
     }
 
+    private async Task RunVoiceAiQueryAsync()
+    {
+        if (IsVoiceAiQueryRunning)
+        {
+            return;
+        }
+
+        try
+        {
+            IsVoiceAiQueryRunning = true;
+            VoiceAiStatusText = "正在听取语音问题...";
+            EnqueueAiTtsLog("AI", $"语音 AI 已触发：按键 {VoiceAiHotkey}");
+
+            var result = await _voiceAiQueryService.AskAsync(
+                BuildVoiceAiQueryRequest(),
+                _lifecycleCts.Token);
+
+            if (!result.IsSuccess)
+            {
+                VoiceAiStatusText = result.ErrorMessage;
+                EnqueueAiTtsLog("AI", $"语音 AI 失败：{result.ErrorMessage}");
+                return;
+            }
+
+            VoiceAiStatusText = result.WasQueuedForSpeech
+                ? $"已回答：{result.SpeechText}"
+                : $"已生成回答，TTS 未启用：{result.SpeechText}";
+            EnqueueAiTtsLog("AI", $"语音问题：{result.RecognizedQuestion}");
+            EnqueueAiTtsLog("AI", $"语音回答：{result.SpeechText}");
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            VoiceAiStatusText = $"语音 AI 失败：{ex.Message}";
+            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+        }
+        finally
+        {
+            IsVoiceAiQueryRunning = false;
+        }
+    }
+
+    private VoiceAiQueryRequest BuildVoiceAiQueryRequest()
+    {
+        var sessionState = _sessionStateStore.CaptureState();
+        var context = BuildAiAnalysisContext(sessionState, sessionState.PlayerCar, _lapAnalyzer.CaptureLastLap());
+        return new VoiceAiQueryRequest
+        {
+            BaseContext = context,
+            AiSettings = BuildAiSettings(),
+            TtsOptions = BuildTtsOptions(),
+            AdviceKey = BuildVoiceAiAdviceKey(),
+            RecognitionTimeout = TimeSpan.FromSeconds(VoiceAiRecognitionTimeoutSeconds)
+        };
+    }
+
+    private string BuildVoiceAiAdviceKey()
+    {
+        var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "voice-ai:{0}:{1}",
+            sessionToken,
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
     private void RecordTrackMapTrajectory(int lapNumber, IReadOnlyList<LapSample> lapSamples)
     {
         if (_trackMapTrajectoryStore is null || _activeSessionUid is null || lapSamples.Count == 0)
@@ -2587,6 +2749,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _udpRawLogWriter.UpdateOptions(BuildUdpRawLogOptions(settings.UdpRawLog.Enabled, settings.UdpRawLog.DirectoryPath, settings.UdpRawLog.QueueCapacity));
             UdpRawLogEnabled = settings.UdpRawLog.Enabled;
             RefreshUdpRawLogStatus();
+            VoiceAiEnabled = settings.VoiceAi.Enabled;
+            VoiceAiHotkey = settings.VoiceAi.Hotkey;
+            RefreshVoiceAiStatusText();
             TtsEnabled = settings.Tts.TtsEnabled;
             var loadedVoiceName = settings.Tts.VoiceName;
             TtsVoiceName = ResolveTtsVoiceName(loadedVoiceName);
@@ -2906,6 +3071,52 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch (Exception ex)
         {
             EnqueueAiTtsLog("System", $"UDP Raw Log 设置保存失败：{ex.Message}");
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private void QueuePersistVoiceAiOptions()
+    {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
+        var saveVersion = Interlocked.Increment(ref _voiceAiSettingsSaveVersion);
+        var options = BuildVoiceAiOptions();
+        _ = PersistVoiceAiOptionsAsync(options, saveVersion);
+    }
+
+    private async Task PersistVoiceAiOptionsAsync(VoiceAiOptions options, int saveVersion)
+    {
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync();
+            gateHeld = true;
+            if (saveVersion < Volatile.Read(ref _voiceAiSettingsSaveVersion))
+            {
+                return;
+            }
+
+            await _appSettingsStore.SaveVoiceAiOptionsAsync(options, CancellationToken.None);
+            if (saveVersion == Volatile.Read(ref _voiceAiSettingsSaveVersion))
+            {
+                EnqueueAiTtsLog("System", "语音 AI 按键设置已保存。");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            EnqueueAiTtsLog("System", $"语音 AI 按键设置保存失败：{ex.Message}");
         }
         finally
         {
@@ -3266,7 +3477,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
     }
 
-    private AIAnalysisContext BuildAiAnalysisContext(SessionState sessionState, CarSnapshot? playerCar, LapSummary lastLap)
+    private AIAnalysisContext BuildAiAnalysisContext(SessionState sessionState, CarSnapshot? playerCar, LapSummary? lastLap)
     {
         var recentLaps = _lapAnalyzer.CaptureAllLaps()
             .Reverse()
@@ -3625,6 +3836,61 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             DirectoryPath = directoryPath,
             QueueCapacity = Math.Clamp(queueCapacity, 0, 100_000)
         };
+    }
+
+    private VoiceAiOptions BuildVoiceAiOptions()
+    {
+        return new VoiceAiOptions
+        {
+            Enabled = VoiceAiEnabled,
+            Hotkey = NormalizeVoiceAiHotkey(VoiceAiHotkey)
+        };
+    }
+
+    private static IReadOnlyList<string> CreateVoiceAiHotkeyOptions()
+    {
+        var keys = new List<string> { VoiceAiOptions.NoHotkey };
+        keys.AddRange(Enumerable.Range(13, 12).Select(number => $"F{number}"));
+        keys.AddRange(Enumerable.Range(1, 12).Select(number => $"F{number}"));
+        keys.AddRange(Enumerable.Range('A', 26).Select(value => ((char)value).ToString()));
+        keys.AddRange(Enumerable.Range(0, 10).Select(number => $"D{number}"));
+        keys.AddRange(
+        [
+            nameof(Key.Space),
+            nameof(Key.LeftCtrl),
+            nameof(Key.RightCtrl),
+            nameof(Key.LeftAlt),
+            nameof(Key.RightAlt),
+            nameof(Key.LeftShift),
+            nameof(Key.RightShift)
+        ]);
+        return keys;
+    }
+
+    private static string NormalizeVoiceAiHotkey(string? hotkey)
+    {
+        if (string.IsNullOrWhiteSpace(hotkey))
+        {
+            return VoiceAiOptions.NoHotkey;
+        }
+
+        var normalized = hotkey.Trim();
+        return Enum.TryParse<Key>(normalized, ignoreCase: true, out var key) && key != Key.None
+            ? key.ToString()
+            : VoiceAiOptions.NoHotkey;
+    }
+
+    private void RefreshVoiceAiStatusText()
+    {
+        if (!VoiceAiEnabled)
+        {
+            VoiceAiStatusText = "语音 AI 未启用";
+            return;
+        }
+
+        VoiceAiStatusText = string.Equals(VoiceAiHotkey, VoiceAiOptions.NoHotkey, StringComparison.Ordinal)
+            ? "请选择方向盘映射按键"
+            : $"已绑定 {VoiceAiHotkey}，按下后开始听取问题";
     }
 
     private void ApplyUdpRawLogOptions()

@@ -390,6 +390,11 @@ public sealed class AppShutdownTests
             return Task.CompletedTask;
         }
 
+        public Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -426,6 +431,11 @@ public sealed class AppShutdownTests
         }
 
         public Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
         }

@@ -80,6 +80,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
     }
 
     /// <inheritdoc />
+    public async Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        var existing = await LoadDocumentCoreAsync(cancellationToken);
+        await WriteDocumentAsync(existing with { VoiceAi = NormalizeVoiceAiOptions(options) }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -107,6 +116,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 Tts = ReadTtsSettings(root),
                 RaceWeekendTyrePlan = ReadRaceWeekendTyrePlan(root),
                 UdpRawLog = ReadUdpRawLogOptions(root),
+                VoiceAi = ReadVoiceAiOptions(root),
                 Udp = ReadUdpSettings(root)
             };
         }
@@ -292,6 +302,37 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             DirectoryPath = options.DirectoryPath?.Trim() ?? string.Empty,
             QueueCapacity = Math.Clamp(options.QueueCapacity, 0, 100_000)
+        };
+    }
+
+    private static VoiceAiOptions ReadVoiceAiOptions(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("voiceAi", out var voiceAiElement))
+        {
+            return new VoiceAiOptions();
+        }
+
+        try
+        {
+            return NormalizeVoiceAiOptions(
+                new VoiceAiOptions
+                {
+                    Enabled = ReadBool(voiceAiElement, "enabled"),
+                    Hotkey = ReadString(voiceAiElement, "hotkey", VoiceAiOptions.NoHotkey)
+                });
+        }
+        catch
+        {
+            return new VoiceAiOptions();
+        }
+    }
+
+    private static VoiceAiOptions NormalizeVoiceAiOptions(VoiceAiOptions options)
+    {
+        var hotkey = options.Hotkey?.Trim();
+        return options with
+        {
+            Hotkey = string.IsNullOrWhiteSpace(hotkey) ? VoiceAiOptions.NoHotkey : hotkey
         };
     }
 

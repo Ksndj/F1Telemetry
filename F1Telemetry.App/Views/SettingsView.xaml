@@ -194,6 +194,72 @@
                     Padding="20"
                     CornerRadius="18"
                     Background="#0F1B2E">
+                <StackPanel>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
+                               Text="方向盘语音 AI" />
+                    <TextBlock Margin="0,6,0,0"
+                               Foreground="#9AB0C9"
+                               Text="按键触发麦克风提问与 TTS 回答"
+                               TextWrapping="Wrap" />
+
+                    <Grid Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="260" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Foreground="#7FA5D8"
+                                   Text="功能开关" />
+                        <CheckBox Grid.Column="1"
+                                  Foreground="#D7E4F3"
+                                  Content="启用语音 AI"
+                                  IsChecked="{Binding VoiceAiEnabled, Mode=TwoWay}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,14,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="绑定按键" />
+                        <ComboBox Grid.Row="1"
+                                  Grid.Column="1"
+                                  Margin="0,14,12,0"
+                                  Padding="8,5"
+                                  ItemsSource="{Binding VoiceAiHotkeyOptions}"
+                                  SelectedItem="{Binding VoiceAiHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Margin="0,14,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding VoiceAiStatusText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="运行状态" />
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding VoiceAiStatusText}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />

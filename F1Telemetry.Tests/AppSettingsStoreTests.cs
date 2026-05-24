@@ -39,6 +39,8 @@ public sealed class AppSettingsStoreTests
         Assert.False(settings.UdpRawLog.Enabled);
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
+        Assert.False(settings.VoiceAi.Enabled);
+        Assert.Equal(VoiceAiOptions.NoHotkey, settings.VoiceAi.Hotkey);
         Assert.Equal(20777, settings.Udp.ListenPort);
     }
 
@@ -499,6 +501,55 @@ public sealed class AppSettingsStoreTests
         Assert.True(json.RootElement.GetProperty("ai").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("tts").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
+    }
+
+    /// <summary>
+    /// Verifies saving voice AI options preserves existing settings blocks and writes the hotkey.
+    /// </summary>
+    [Fact]
+    public async Task SaveVoiceAiOptionsAsync_PreservesExistingBlocksAndWritesHotkey()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "tts": {
+                "enabled": true,
+                "voiceName": "Voice A",
+                "volume": 80,
+                "rate": 1,
+                "cooldownSeconds": 9
+              },
+              "udp": {
+                "listenPort": 20778
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveVoiceAiOptionsAsync(new VoiceAiOptions { Enabled = true, Hotkey = "F13" });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.True(persisted.VoiceAi.Enabled);
+        Assert.Equal("F13", persisted.VoiceAi.Hotkey);
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.Tts.TtsEnabled);
+        Assert.Equal(20778, persisted.Udp.ListenPort);
+        Assert.True(json.RootElement.GetProperty("voiceAi").GetProperty("enabled").GetBoolean());
+        Assert.Equal("F13", json.RootElement.GetProperty("voiceAi").GetProperty("hotkey").GetString());
     }
 
     /// <summary>

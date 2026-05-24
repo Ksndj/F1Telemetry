@@ -18,6 +18,7 @@
         UseLayoutRounding="True"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown"
         StateChanged="Window_StateChanged"
         Closing="Window_Closing"
         Closed="Window_Closed">
