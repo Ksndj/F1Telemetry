@@ -25,6 +25,8 @@ public sealed class ReadmeUserGuideTests
             "UDP 接收",
             "实时概览",
             "AI 分析播报",
+            "语音输入 AI 问答",
+            "方向盘/手柄按钮",
             "单圈历史",
             "对手信息",
             "事件日志",
