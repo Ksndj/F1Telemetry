@@ -1,3 +1,4 @@
+using System.Globalization;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
@@ -136,12 +137,14 @@ public sealed class SessionComparisonViewModelTests
     [Fact]
     public async Task RefreshAsync_WithStoredWheelWear_LoadsTyreWearComparison()
     {
+        var sessionAStartedAt = DateTimeOffset.Parse("2026-04-19T10:00:00Z");
+        var sessionBStartedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z");
         var sessionRepository = new FakeSessionRepository
         {
             Sessions =
             [
-                CreateSession("session-a", 10, DateTimeOffset.Parse("2026-04-19T10:00:00Z")),
-                CreateSession("session-b", 10, DateTimeOffset.Parse("2026-04-18T10:00:00Z"))
+                CreateSession("session-a", 10, sessionAStartedAt),
+                CreateSession("session-b", 10, sessionBStartedAt)
             ]
         };
         var lapRepository = new FakeLapRepository();
@@ -167,8 +170,8 @@ public sealed class SessionComparisonViewModelTests
         Assert.True(viewModel.TyreWearComparisonPanel.HasData);
         Assert.Equal(
             [
-                "正赛 · 2026-04-19 18:00 · 红胎",
-                "正赛 · 2026-04-18 18:00 · 全雨胎"
+                $"正赛 · {FormatExpectedSessionTimestamp(sessionAStartedAt)} · 红胎",
+                $"正赛 · {FormatExpectedSessionTimestamp(sessionBStartedAt)} · 全雨胎"
             ],
             viewModel.TyreWearComparisonPanel.Series.Select(series => series.Name));
         Assert.Equal(13d, viewModel.TyreWearComparisonPanel.Series[0].Points[0].Y);
@@ -359,6 +362,11 @@ public sealed class SessionComparisonViewModelTests
             StartedAt = startedAt,
             EndedAt = startedAt.AddMinutes(45)
         };
+    }
+
+    private static string FormatExpectedSessionTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
     }
 
     private static StoredLap CreateLap(
