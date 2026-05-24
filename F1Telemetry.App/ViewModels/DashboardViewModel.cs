@@ -61,6 +61,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly WindowsVoiceCatalog _windowsVoiceCatalog;
     private readonly IStoragePersistenceService _storagePersistenceService;
     private readonly ITrackMapTrajectoryStore? _trackMapTrajectoryStore;
+    private readonly RealtimeCornerAdviceService _realtimeCornerAdviceService;
     private readonly IEventBus<RaceEvent> _raceEventBus;
     private readonly RaceEventSpeechSubscriber _raceEventSpeechSubscriber;
     private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
@@ -207,6 +208,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="postRaceReview">The optional post-race review page view model.</param>
     /// <param name="sessionComparison">The optional multi-session comparison page view model.</param>
     /// <param name="trackMapTrajectoryStore">The optional in-memory track-map trajectory store.</param>
+    /// <param name="realtimeCornerAdviceService">The optional realtime corner advice service.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -227,7 +229,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         PostRaceReviewViewModel? postRaceReview = null,
         SessionComparisonViewModel? sessionComparison = null,
         CornerAnalysisViewModel? cornerAnalysis = null,
-        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null)
+        ITrackMapTrajectoryStore? trackMapTrajectoryStore = null,
+        RealtimeCornerAdviceService? realtimeCornerAdviceService = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -242,6 +245,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _windowsVoiceCatalog = windowsVoiceCatalog ?? new WindowsVoiceCatalog();
         _storagePersistenceService = storagePersistenceService ?? throw new ArgumentNullException(nameof(storagePersistenceService));
         _trackMapTrajectoryStore = trackMapTrajectoryStore;
+        _realtimeCornerAdviceService = realtimeCornerAdviceService ?? new RealtimeCornerAdviceService(
+            _aiAnalysisService,
+            _ttsMessageFactory,
+            _ttsQueue,
+            logSink: EnqueueAiTtsLog);
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
         SessionComparison = sessionComparison ?? CreateNoOpSessionComparison();
@@ -1948,6 +1956,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
+                _realtimeCornerAdviceService.Reset();
                 _persistedLapQualityByKey.Clear();
                 _lastTrendRefreshLapNumber = null;
                 ResetChartPanels();
@@ -1992,6 +2001,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
+            _realtimeCornerAdviceService.Reset();
             _persistedLapQualityByKey.Clear();
             _lastTrendRefreshLapNumber = null;
             ResetChartPanels();
@@ -2049,6 +2059,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
         _lastStagedPostRaceAiKey = null;
+        _realtimeCornerAdviceService.Reset();
         _persistedLapQualityByKey.Clear();
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
@@ -2384,7 +2395,29 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
             _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
             RecordTrackMapTrajectory(lap.LapNumber, lapSamples);
+            TriggerRealtimeCornerAdvice(lap, lapSamples);
         }
+    }
+
+    private void TriggerRealtimeCornerAdvice(LapSummary lap, IReadOnlyList<LapSample> lapSamples)
+    {
+        if (lapSamples.Count == 0)
+        {
+            return;
+        }
+
+        var sessionState = _sessionStateStore.CaptureState();
+        var request = new RealtimeCornerAdviceRequest
+        {
+            SessionState = sessionState,
+            ActiveSessionUid = _activeSessionUid,
+            CompletedLap = lap,
+            LapSamples = lapSamples,
+            RecentCompletedLaps = _lapAnalyzer.CaptureRecentLaps(8),
+            AiSettings = BuildAiSettings(),
+            TtsOptions = BuildTtsOptions()
+        };
+        _ = _realtimeCornerAdviceService.EvaluateCompletedLapAsync(request, _lifecycleCts.Token);
     }
 
     private void RecordTrackMapTrajectory(int lapNumber, IReadOnlyList<LapSample> lapSamples)

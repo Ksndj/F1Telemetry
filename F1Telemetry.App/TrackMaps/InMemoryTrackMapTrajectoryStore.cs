@@ -1,4 +1,5 @@
 using F1Telemetry.Analytics.Laps;
+using F1Telemetry.Analytics.Tracks;
 
 namespace F1Telemetry.App.TrackMaps;
 
@@ -9,15 +10,20 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
 {
     private readonly object _syncRoot = new();
     private readonly TrackMapBuilder _builder;
+    private readonly ITrackSegmentMapProvider _trackSegmentMapProvider;
     private readonly Dictionary<TrackMapKey, TrackMapSnapshot> _snapshots = new();
 
     /// <summary>
     /// Initializes a new trajectory store.
     /// </summary>
     /// <param name="builder">The track-map builder.</param>
-    public InMemoryTrackMapTrajectoryStore(TrackMapBuilder? builder = null)
+    /// <param name="trackSegmentMapProvider">The segment-map provider used to resolve lap length for distance wrapping.</param>
+    public InMemoryTrackMapTrajectoryStore(
+        TrackMapBuilder? builder = null,
+        ITrackSegmentMapProvider? trackSegmentMapProvider = null)
     {
         _builder = builder ?? new TrackMapBuilder();
+        _trackSegmentMapProvider = trackSegmentMapProvider ?? new StaticTrackSegmentMapProvider();
     }
 
     /// <inheritdoc />
@@ -28,7 +34,8 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
             return;
         }
 
-        var snapshot = _builder.BuildSnapshot(sessionUid, trackId, lapNumber, samples);
+        var map = _trackSegmentMapProvider.GetMap(NormalizeTrackId(trackId));
+        var snapshot = _builder.BuildSnapshot(sessionUid, trackId, lapNumber, samples, map.LapLengthMeters);
         var key = new TrackMapKey(sessionUid, trackId, lapNumber);
         lock (_syncRoot)
         {
@@ -99,6 +106,13 @@ public sealed class InMemoryTrackMapTrajectoryStore : ITrackMapTrajectoryStore
                 .OrderByDescending(snapshot => snapshot.Points.Count)
                 .First();
         }
+    }
+
+    private static sbyte? NormalizeTrackId(int? trackId)
+    {
+        return trackId is >= sbyte.MinValue and <= sbyte.MaxValue
+            ? (sbyte)trackId.Value
+            : null;
     }
 
     private readonly record struct TrackMapKey(string SessionUid, int? TrackId, int LapNumber);

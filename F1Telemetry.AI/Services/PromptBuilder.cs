@@ -91,6 +91,12 @@ ERS must be written in MJ, never as a large integer joule value.
             builder.AppendLine($"Driving trend summary: {context.TelemetryAnalysisSummary.Trim()}");
         }
 
+        if (!string.IsNullOrWhiteSpace(context.RealtimeEngineerAdviceSummary))
+        {
+            builder.AppendLine($"Realtime engineer advice: {context.RealtimeEngineerAdviceSummary.Trim()}");
+            builder.AppendLine("For this realtime request, tts must be one short Chinese driving action and must not summarize the whole session.");
+        }
+
         if (!string.IsNullOrWhiteSpace(context.DamageSummary))
         {
             builder.AppendLine($"Damage summary: {context.DamageSummary.Trim()}");
