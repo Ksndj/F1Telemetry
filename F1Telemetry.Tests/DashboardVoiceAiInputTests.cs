@@ -39,7 +39,7 @@ public sealed class DashboardVoiceAiInputTests
             Assert.Equal(VoiceAiInputBindingKind.RawInputHidButton, harness.ViewModel.VoiceAiInputBinding.Kind);
             Assert.Equal("raw-device-1", harness.ViewModel.VoiceAiInputBinding.DeviceId);
             Assert.Equal(4, harness.ViewModel.VoiceAiInputBinding.ButtonIndex);
-            Assert.Contains("按钮 4", harness.ViewModel.VoiceAiBindingText, StringComparison.Ordinal);
+            Assert.Equal("方向盘/手柄设备 · 按钮 4", harness.ViewModel.VoiceAiBindingText);
             Assert.NotNull(harness.SettingsStore.LastVoiceAiOptions);
             Assert.Equal(4, harness.SettingsStore.LastVoiceAiOptions!.InputBinding.ButtonIndex);
         }
@@ -199,7 +199,7 @@ public sealed class DashboardVoiceAiInputTests
         return new VoiceAiButtonInput
         {
             DeviceId = "raw-device-1",
-            DeviceName = "Test Wheel",
+            DeviceName = @"\\?\HID#VID_346E&PID_0004#MOZA",
             ButtonIndex = 4,
             ButtonMask = 8,
             IsPressed = isPressed,

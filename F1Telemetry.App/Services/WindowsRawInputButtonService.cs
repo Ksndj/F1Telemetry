@@ -284,7 +284,7 @@ public sealed class WindowsRawInputButtonService : IDisposable
         ref uint size,
         uint headerSize);
 
-    [DllImport("user32.dll", SetLastError = true)]
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern uint GetRawInputDeviceInfo(
         IntPtr device,
         uint command,

@@ -369,16 +369,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
             return new VoiceAiInputBinding();
         }
 
-        var displayText = binding.DisplayText?.Trim();
-        if (string.IsNullOrWhiteSpace(displayText))
-        {
-            displayText = $"方向盘按钮 {binding.ButtonIndex}";
-        }
+        var displayText = binding.Kind == VoiceAiInputBindingKind.RawInputHidButton ||
+                          VoiceAiInputBinding.ShouldRegenerateDisplayText(binding.DisplayText)
+            ? VoiceAiInputBinding.FormatDisplayText(binding.ButtonIndex)
+            : binding.DisplayText.Trim();
 
         return binding with
         {
             DeviceId = binding.DeviceId?.Trim() ?? string.Empty,
-            DeviceName = binding.DeviceName?.Trim() ?? string.Empty,
+            DeviceName = VoiceAiInputBinding.SanitizeDeviceName(binding.DeviceName),
             DisplayText = displayText
         };
     }

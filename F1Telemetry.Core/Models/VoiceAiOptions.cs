@@ -84,6 +84,11 @@ public enum VoiceAiTalkMode
 public sealed record VoiceAiInputBinding
 {
     /// <summary>
+    /// Gets the generic display name used when Raw Input exposes only a HID path.
+    /// </summary>
+    public const string DefaultDeviceDisplayName = "方向盘/手柄设备";
+
+    /// <summary>
     /// Gets the input binding kind.
     /// </summary>
     public VoiceAiInputBindingKind Kind { get; init; } = VoiceAiInputBindingKind.None;
@@ -112,4 +117,61 @@ public sealed record VoiceAiInputBinding
     /// Gets the user-facing binding label.
     /// </summary>
     public string DisplayText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Formats a stable user-facing binding label.
+    /// </summary>
+    /// <param name="buttonIndex">The one-based button index.</param>
+    public static string FormatDisplayText(int buttonIndex)
+    {
+        return $"{DefaultDeviceDisplayName} · 按钮 {Math.Max(0, buttonIndex)}";
+    }
+
+    /// <summary>
+    /// Removes raw HID paths and unreadable text from the user-facing device name.
+    /// </summary>
+    /// <param name="deviceName">The raw device name or path.</param>
+    public static string SanitizeDeviceName(string? deviceName)
+    {
+        var normalized = deviceName?.Trim() ?? string.Empty;
+        return IsRawOrUnreadableText(normalized) ||
+               string.Equals(normalized, "Raw Input 设备", StringComparison.Ordinal)
+            ? DefaultDeviceDisplayName
+            : normalized;
+    }
+
+    /// <summary>
+    /// Returns whether a persisted display label should be regenerated.
+    /// </summary>
+    /// <param name="displayText">The stored display text.</param>
+    public static bool ShouldRegenerateDisplayText(string? displayText)
+    {
+        var normalized = displayText?.Trim() ?? string.Empty;
+        return IsRawOrUnreadableText(normalized) ||
+               normalized.Contains("Raw Input", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRawOrUnreadableText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 64)
+        {
+            return true;
+        }
+
+        if (value.Contains(@"\\?\", StringComparison.Ordinal) ||
+            value.Contains("#vid_", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("#pid_", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("hid#", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var replacementCount = value.Count(character => character == '\uFFFD' || character == '?');
+        if (replacementCount >= 2)
+        {
+            return true;
+        }
+
+        return value.Any(char.IsControl);
+    }
 }

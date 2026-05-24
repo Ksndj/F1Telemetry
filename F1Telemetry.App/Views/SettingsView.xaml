@@ -6,7 +6,7 @@
              mc:Ignorable="d"
              d:DesignHeight="720"
              d:DesignWidth="1100">
-    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
         <StackPanel>
             <Border Padding="20"
@@ -250,6 +250,7 @@
                                    VerticalAlignment="Center"
                                    Foreground="#D7E4F3"
                                    Text="{Binding VoiceAiBindingText}"
+                                   TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
@@ -315,6 +316,7 @@
                                    VerticalAlignment="Center"
                                    Foreground="#D7E4F3"
                                    Text="{Binding VoiceAiMicrophoneStatusText}"
+                                   TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="5"
@@ -327,6 +329,7 @@
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
                                    Text="{Binding VoiceAiStatusText}"
+                                   TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>

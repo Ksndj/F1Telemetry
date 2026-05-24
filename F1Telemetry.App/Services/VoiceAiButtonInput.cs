@@ -52,15 +52,14 @@ public sealed record VoiceAiButtonInput
     /// </summary>
     public VoiceAiInputBinding ToBinding()
     {
-        var displayName = string.IsNullOrWhiteSpace(DeviceName) ? "Raw Input 设备" : DeviceName.Trim();
         return new VoiceAiInputBinding
         {
             Kind = VoiceAiInputBindingKind.RawInputHidButton,
             DeviceId = DeviceId,
-            DeviceName = displayName,
+            DeviceName = VoiceAiInputBinding.SanitizeDeviceName(DeviceName),
             ButtonIndex = ButtonIndex,
             ButtonMask = ButtonMask,
-            DisplayText = $"{displayName} · 按钮 {ButtonIndex}"
+            DisplayText = VoiceAiInputBinding.FormatDisplayText(ButtonIndex)
         };
     }
 }

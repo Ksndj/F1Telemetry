@@ -2768,7 +2768,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
         catch (Exception ex)
         {
-            VoiceAiStatusText = $"麦克风启动失败：{ex.Message}";
+            VoiceAiStatusText = $"麦克风启动失败：{FormatVoiceAiMicrophoneError(ex)}";
             EnqueueAiTtsLog("AI", VoiceAiStatusText);
             DisposeVoiceAiRecordingSession();
         }
@@ -3673,7 +3673,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
         catch (Exception ex)
         {
-            VoiceAiMicrophoneStatusText = $"读取麦克风失败：{ex.Message}";
+            VoiceAiMicrophoneStatusText = $"读取麦克风失败：{FormatVoiceAiMicrophoneError(ex)}";
         }
     }
 
@@ -3703,12 +3703,19 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
         catch (Exception ex)
         {
-            VoiceAiMicrophoneStatusText = $"麦克风测试失败：{ex.Message}";
+            VoiceAiMicrophoneStatusText = $"麦克风测试失败：{FormatVoiceAiMicrophoneError(ex)}";
         }
         finally
         {
             IsVoiceAiMicrophoneTesting = false;
         }
+    }
+
+    private static string FormatVoiceAiMicrophoneError(Exception exception)
+    {
+        return exception is System.IO.FileNotFoundException or System.IO.FileLoadException or BadImageFormatException or TypeLoadException
+            ? "音频组件缺失或不可用，请重新安装新版应用"
+            : "设备不可用，请检查系统麦克风权限、设备占用或驱动状态";
     }
 
     private string ResolveVoiceAiMicrophoneDeviceName(string deviceId)
@@ -4470,16 +4477,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return new VoiceAiInputBinding();
         }
 
-        var displayText = binding.DisplayText?.Trim();
-        if (string.IsNullOrWhiteSpace(displayText))
-        {
-            displayText = $"方向盘按钮 {binding.ButtonIndex}";
-        }
+        var displayText = binding.Kind == VoiceAiInputBindingKind.RawInputHidButton ||
+                          VoiceAiInputBinding.ShouldRegenerateDisplayText(binding.DisplayText)
+            ? VoiceAiInputBinding.FormatDisplayText(binding.ButtonIndex)
+            : binding.DisplayText.Trim();
 
         return binding with
         {
             DeviceId = binding.DeviceId?.Trim() ?? string.Empty,
-            DeviceName = binding.DeviceName?.Trim() ?? string.Empty,
+            DeviceName = VoiceAiInputBinding.SanitizeDeviceName(binding.DeviceName),
             DisplayText = displayText
         };
     }
@@ -4489,7 +4495,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var binding = VoiceAiInputBinding;
         VoiceAiBindingText = binding.Kind == VoiceAiInputBindingKind.None
             ? "未绑定方向盘按钮"
-            : (string.IsNullOrWhiteSpace(binding.DisplayText) ? $"方向盘按钮 {binding.ButtonIndex}" : binding.DisplayText);
+            : (binding.Kind == VoiceAiInputBindingKind.RawInputHidButton ||
+               VoiceAiInputBinding.ShouldRegenerateDisplayText(binding.DisplayText)
+                ? VoiceAiInputBinding.FormatDisplayText(binding.ButtonIndex)
+                : binding.DisplayText);
     }
 
     private void RefreshVoiceAiStatusText()

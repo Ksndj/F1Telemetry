@@ -65,6 +65,8 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("VoiceAiMicrophoneTestLevel", xaml, StringComparison.Ordinal);
         Assert.Contains("VoiceAiMicrophoneStatusText", xaml, StringComparison.Ordinal);
         Assert.Contains("VoiceAiStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(params string[] pathParts)

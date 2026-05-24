@@ -568,7 +568,7 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(VoiceAiInputBindingKind.RawInputHidButton, persisted.VoiceAi.InputBinding.Kind);
         Assert.Equal(7, persisted.VoiceAi.InputBinding.ButtonIndex);
         Assert.Equal(64UL, persisted.VoiceAi.InputBinding.ButtonMask);
-        Assert.Equal("Logitech Wheel · 按钮 7", persisted.VoiceAi.InputBinding.DisplayText);
+        Assert.Equal("方向盘/手柄设备 · 按钮 7", persisted.VoiceAi.InputBinding.DisplayText);
         Assert.Equal(VoiceAiTalkMode.ToggleToTalk, persisted.VoiceAi.TalkMode);
         Assert.Equal("1", persisted.VoiceAi.MicrophoneDeviceId);
         Assert.Equal("USB Microphone", persisted.VoiceAi.MicrophoneDeviceName);
@@ -584,6 +584,42 @@ public sealed class AppSettingsStoreTests
         Assert.Equal("F13", voiceAiJson.GetProperty("hotkey").GetString());
         Assert.Equal((int)VoiceAiInputBindingKind.RawInputHidButton, voiceAiJson.GetProperty("inputBinding").GetProperty("kind").GetInt32());
         Assert.Equal(7, voiceAiJson.GetProperty("inputBinding").GetProperty("buttonIndex").GetInt32());
+        Assert.Equal("方向盘/手柄设备 · 按钮 7", voiceAiJson.GetProperty("inputBinding").GetProperty("displayText").GetString());
+    }
+
+    /// <summary>
+    /// Verifies legacy Raw Input labels that persisted HID paths or unreadable text are rebuilt for display.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_WithLegacyRawInputPathDisplayText_RebuildsReadableButtonLabel()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "voiceAi": {
+                "enabled": true,
+                "inputBinding": {
+                  "kind": "RawInputHidButton",
+                  "deviceId": "\\\\?\\HID#VID_346E&PID_0004#MOZA",
+                  "deviceName": "\\\\?\\HID#VID_346E&PID_0004#MOZA",
+                  "buttonIndex": 10,
+                  "buttonMask": 512,
+                  "displayText": "\\\\?\\HID#VID_346E&PID_0004#MOZA · 按钮 10"
+                }
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal("方向盘/手柄设备", settings.VoiceAi.InputBinding.DeviceName);
+        Assert.Equal("方向盘/手柄设备 · 按钮 10", settings.VoiceAi.InputBinding.DisplayText);
     }
 
     /// <summary>
