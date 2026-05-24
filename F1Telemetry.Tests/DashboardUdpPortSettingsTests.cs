@@ -442,6 +442,11 @@ public sealed class DashboardUdpPortSettingsTests
             return Task.CompletedTask;
         }
 
+        public Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
         {
             SavedUdpPorts.Add(settings);

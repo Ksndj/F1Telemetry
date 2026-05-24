@@ -43,6 +43,32 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies SettingsView exposes the steering-wheel voice AI input and microphone controls.
+    /// </summary>
+    [Fact]
+    public void SettingsView_BindsVoiceAiInputAndMicrophoneControls()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("VoiceAiEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("BindVoiceAiInputCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ClearVoiceAiInputCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiBindingText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiTalkModeOptions", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedVoiceAiTalkModeOption", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMicrophoneDevices", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMicrophoneDeviceId", xaml, StringComparison.Ordinal);
+        Assert.Contains("RefreshMicrophonesCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("TestMicrophoneCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMicrophoneTestLevel", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMicrophoneStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryFile(params string[] pathParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

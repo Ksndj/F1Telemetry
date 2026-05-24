@@ -39,6 +39,12 @@ public sealed class AppSettingsStoreTests
         Assert.False(settings.UdpRawLog.Enabled);
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
+        Assert.False(settings.VoiceAi.Enabled);
+        Assert.Equal(VoiceAiInputBindingKind.None, settings.VoiceAi.InputBinding.Kind);
+        Assert.Equal(VoiceAiTalkMode.HoldToTalk, settings.VoiceAi.TalkMode);
+        Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceId);
+        Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceName);
+        Assert.Equal(VoiceAiOptions.NoHotkey, settings.VoiceAi.Hotkey);
         Assert.Equal(20777, settings.Udp.ListenPort);
     }
 
@@ -499,6 +505,121 @@ public sealed class AppSettingsStoreTests
         Assert.True(json.RootElement.GetProperty("ai").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("tts").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
+    }
+
+    /// <summary>
+    /// Verifies saving voice AI options preserves existing settings blocks and writes the input binding.
+    /// </summary>
+    [Fact]
+    public async Task SaveVoiceAiOptionsAsync_PreservesExistingBlocksAndWritesInputBinding()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "tts": {
+                "enabled": true,
+                "voiceName": "Voice A",
+                "volume": 80,
+                "rate": 1,
+                "cooldownSeconds": 9
+              },
+              "udp": {
+                "listenPort": 20778
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveVoiceAiOptionsAsync(
+            new VoiceAiOptions
+            {
+                Enabled = true,
+                InputBinding = new VoiceAiInputBinding
+                {
+                    Kind = VoiceAiInputBindingKind.RawInputHidButton,
+                    DeviceId = @"\\?\hid#vid_046d&pid_c29b",
+                    DeviceName = "Logitech Wheel",
+                    ButtonIndex = 7,
+                    ButtonMask = 64,
+                    DisplayText = "Logitech Wheel · 按钮 7"
+                },
+                TalkMode = VoiceAiTalkMode.ToggleToTalk,
+                MicrophoneDeviceId = "1",
+                MicrophoneDeviceName = "USB Microphone",
+                Hotkey = "F13"
+            });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.True(persisted.VoiceAi.Enabled);
+        Assert.Equal(VoiceAiInputBindingKind.RawInputHidButton, persisted.VoiceAi.InputBinding.Kind);
+        Assert.Equal(7, persisted.VoiceAi.InputBinding.ButtonIndex);
+        Assert.Equal(64UL, persisted.VoiceAi.InputBinding.ButtonMask);
+        Assert.Equal("方向盘/手柄设备 · 按钮 7", persisted.VoiceAi.InputBinding.DisplayText);
+        Assert.Equal(VoiceAiTalkMode.ToggleToTalk, persisted.VoiceAi.TalkMode);
+        Assert.Equal("1", persisted.VoiceAi.MicrophoneDeviceId);
+        Assert.Equal("USB Microphone", persisted.VoiceAi.MicrophoneDeviceName);
+        Assert.Equal("F13", persisted.VoiceAi.Hotkey);
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.Tts.TtsEnabled);
+        Assert.Equal(20778, persisted.Udp.ListenPort);
+        var voiceAiJson = json.RootElement.GetProperty("voiceAi");
+        Assert.True(voiceAiJson.GetProperty("enabled").GetBoolean());
+        Assert.Equal((int)VoiceAiTalkMode.ToggleToTalk, voiceAiJson.GetProperty("talkMode").GetInt32());
+        Assert.Equal("1", voiceAiJson.GetProperty("microphoneDeviceId").GetString());
+        Assert.Equal("USB Microphone", voiceAiJson.GetProperty("microphoneDeviceName").GetString());
+        Assert.Equal("F13", voiceAiJson.GetProperty("hotkey").GetString());
+        Assert.Equal((int)VoiceAiInputBindingKind.RawInputHidButton, voiceAiJson.GetProperty("inputBinding").GetProperty("kind").GetInt32());
+        Assert.Equal(7, voiceAiJson.GetProperty("inputBinding").GetProperty("buttonIndex").GetInt32());
+        Assert.Equal("方向盘/手柄设备 · 按钮 7", voiceAiJson.GetProperty("inputBinding").GetProperty("displayText").GetString());
+    }
+
+    /// <summary>
+    /// Verifies legacy Raw Input labels that persisted HID paths or unreadable text are rebuilt for display.
+    /// </summary>
+    [Fact]
+    public async Task LoadAsync_WithLegacyRawInputPathDisplayText_RebuildsReadableButtonLabel()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "voiceAi": {
+                "enabled": true,
+                "inputBinding": {
+                  "kind": "RawInputHidButton",
+                  "deviceId": "\\\\?\\HID#VID_346E&PID_0004#MOZA",
+                  "deviceName": "\\\\?\\HID#VID_346E&PID_0004#MOZA",
+                  "buttonIndex": 10,
+                  "buttonMask": 512,
+                  "displayText": "\\\\?\\HID#VID_346E&PID_0004#MOZA · 按钮 10"
+                }
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        var settings = await store.LoadAsync();
+
+        Assert.Equal("方向盘/手柄设备", settings.VoiceAi.InputBinding.DeviceName);
+        Assert.Equal("方向盘/手柄设备 · 按钮 10", settings.VoiceAi.InputBinding.DisplayText);
     }
 
     /// <summary>

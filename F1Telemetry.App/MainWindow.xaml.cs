@@ -1,8 +1,11 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using F1Telemetry.App.Services;
+using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Windowing;
 
 namespace F1Telemetry.App;
@@ -12,7 +15,12 @@ namespace F1Telemetry.App;
 /// </summary>
 public partial class MainWindow : Window
 {
+    private readonly WindowsRawInputButtonService _voiceInputService = new();
     private Storyboard? _windowStateToastStoryboard;
+    private HwndSource? _voiceInputSource;
+    private DashboardViewModel? _voiceInputDashboard;
+    private bool _voiceInputReady;
+    private string _voiceInputStatus = "方向盘 Raw Input 等待窗口注册。";
     private bool _shutdownStarted;
     private bool _shutdownCompleted;
 
@@ -22,11 +30,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        DataContextChanged += Window_DataContextChanged;
     }
 
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyWindowStateVisuals(WindowState, animate: false);
+        InitializeVoiceAiInputHook();
     }
 
     private void Window_StateChanged(object sender, EventArgs e)
@@ -72,10 +82,61 @@ public partial class MainWindow : Window
 
     private void Window_Closed(object sender, EventArgs e)
     {
+        ReleaseVoiceAiInputHook();
         if (_shutdownCompleted)
         {
             Application.Current?.Shutdown();
         }
+    }
+
+    private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        _voiceInputDashboard = e.NewValue as DashboardViewModel;
+        _voiceInputDashboard?.UpdateVoiceAiRawInputStatus(_voiceInputStatus, _voiceInputReady);
+    }
+
+    private void InitializeVoiceAiInputHook()
+    {
+        if (_voiceInputSource is not null)
+        {
+            return;
+        }
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        _voiceInputSource = HwndSource.FromHwnd(handle);
+        _voiceInputSource?.AddHook(WndProc);
+        _voiceInputService.ButtonInput += VoiceInputService_ButtonInput;
+        _voiceInputReady = _voiceInputService.TryRegister(handle, out _voiceInputStatus);
+        _voiceInputDashboard?.UpdateVoiceAiRawInputStatus(_voiceInputStatus, _voiceInputReady);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (_voiceInputService.TryProcessMessage(msg, lParam))
+        {
+            handled = false;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void VoiceInputService_ButtonInput(object? sender, VoiceAiButtonInput input)
+    {
+        _voiceInputDashboard?.ObserveVoiceAiButtonInput(input);
+    }
+
+    private void ReleaseVoiceAiInputHook()
+    {
+        _voiceInputService.ButtonInput -= VoiceInputService_ButtonInput;
+        _voiceInputService.Dispose();
+        _voiceInputDashboard = null;
+        _voiceInputSource?.RemoveHook(WndProc);
+        _voiceInputSource = null;
     }
 
     private void CloseAfterShutdown()

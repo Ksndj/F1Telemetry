@@ -35,6 +35,11 @@ public interface IAppSettingsStore
     Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves the voice-to-AI query settings block while preserving other blocks.
+    /// </summary>
+    Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Saves the UDP listener settings block while preserving other blocks.
     /// </summary>
     Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default);

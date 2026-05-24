@@ -318,6 +318,11 @@ public sealed class DashboardPostRaceReviewTests
             return Task.CompletedTask;
         }
 
+        public Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
         public Task SaveUdpSettingsAsync(UdpSettings settings, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
