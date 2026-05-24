@@ -7,7 +7,7 @@ namespace F1Telemetry.App;
 /// </summary>
 public static class VersionInfo
 {
-    private const string FallbackVersion = "3.0.2";
+    private const string FallbackVersion = "3.0.3";
 
     /// <summary>
     /// Gets the GitHub Releases page used for manual update downloads.
