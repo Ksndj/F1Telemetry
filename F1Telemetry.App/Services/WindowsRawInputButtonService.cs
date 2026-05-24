@@ -10,15 +10,19 @@ public sealed class WindowsRawInputButtonService : IDisposable
 {
     private const int WmInput = 0x00FF;
     private const uint RidInput = 0x10000003;
+    private const uint RidiPreparsedData = 0x20000005;
     private const uint RidiDeviceName = 0x20000007;
     private const uint RidevInputSink = 0x00000100;
     private const uint RimTypeHid = 2;
+    private const int HidpStatusSuccess = 0x00110000;
     private const ushort UsagePageGenericDesktop = 0x01;
+    private const ushort UsagePageButton = 0x09;
     private const ushort UsageJoystick = 0x04;
     private const ushort UsageGamepad = 0x05;
     private const ushort UsageMultiAxisController = 0x08;
-    private readonly Dictionary<IntPtr, byte[]> _lastReportsByDevice = new();
+    private readonly RawInputButtonStateTracker _buttonStateTracker = new();
     private readonly Dictionary<IntPtr, string> _deviceNamesByHandle = new();
+    private readonly Dictionary<IntPtr, IntPtr> _preparsedDataByHandle = new();
     private bool _disposed;
 
     /// <summary>
@@ -97,9 +101,14 @@ public sealed class WindowsRawInputButtonService : IDisposable
                 return false;
             }
 
-            var report = new byte[byteCount];
-            Marshal.Copy(IntPtr.Add(buffer, headerSize + sizeof(uint) * 2), report, 0, byteCount);
-            EmitChangedButtons(header.Device, report);
+            var reportOffset = headerSize + sizeof(uint) * 2;
+            for (var reportIndex = 0; reportIndex < hidCount; reportIndex++)
+            {
+                var report = new byte[hidSize];
+                Marshal.Copy(IntPtr.Add(buffer, reportOffset + reportIndex * hidSize), report, 0, hidSize);
+                EmitChangedButtons(header.Device, report);
+            }
+
             return true;
         }
         finally
@@ -117,90 +126,117 @@ public sealed class WindowsRawInputButtonService : IDisposable
         }
 
         _disposed = true;
-        _lastReportsByDevice.Clear();
+        _buttonStateTracker.Clear();
         _deviceNamesByHandle.Clear();
+        foreach (var preparsedData in _preparsedDataByHandle.Values)
+        {
+            Marshal.FreeHGlobal(preparsedData);
+        }
+
+        _preparsedDataByHandle.Clear();
     }
 
     private void EmitChangedButtons(IntPtr deviceHandle, byte[] currentReport)
     {
-        var previousReport = _lastReportsByDevice.TryGetValue(deviceHandle, out var previous)
-            ? previous
-            : Array.Empty<byte>();
-        var maxLength = Math.Max(previousReport.Length, currentReport.Length);
-        var pressedBits = new List<int>();
-        var releasedBits = new List<int>();
-        var changedBitCount = 0;
-
-        for (var index = 0; index < maxLength; index++)
-        {
-            var previousByte = index < previousReport.Length ? previousReport[index] : (byte)0;
-            var currentByte = index < currentReport.Length ? currentReport[index] : (byte)0;
-            var changed = previousByte ^ currentByte;
-            if (changed == 0)
-            {
-                continue;
-            }
-
-            for (var bit = 0; bit < 8; bit++)
-            {
-                var mask = 1 << bit;
-                if ((changed & mask) == 0)
-                {
-                    continue;
-                }
-
-                changedBitCount++;
-                var bitIndex = index * 8 + bit;
-                if ((currentByte & mask) != 0)
-                {
-                    pressedBits.Add(bitIndex);
-                }
-                else
-                {
-                    releasedBits.Add(bitIndex);
-                }
-            }
-        }
-
-        _lastReportsByDevice[deviceHandle] = currentReport.ToArray();
-        if (changedBitCount == 0)
+        var deviceName = GetDeviceName(deviceHandle);
+        var deviceId = GetDeviceId(deviceHandle, deviceName);
+        var pressedButtonIndexes = GetPressedButtonIndexes(deviceHandle, currentReport);
+        if (pressedButtonIndexes is null)
         {
             return;
         }
 
-        var deviceName = GetDeviceName(deviceHandle);
-        foreach (var bitIndex in pressedBits)
+        foreach (var edge in _buttonStateTracker.Observe(deviceId, GetReportId(currentReport), pressedButtonIndexes))
         {
-            RaiseInput(deviceHandle, deviceName, bitIndex, isPressed: true, pressedBits.Count, changedBitCount);
-        }
-
-        foreach (var bitIndex in releasedBits)
-        {
-            RaiseInput(deviceHandle, deviceName, bitIndex, isPressed: false, pressedBits.Count, changedBitCount);
+            RaiseInput(deviceId, deviceName, edge);
         }
     }
 
     private void RaiseInput(
-        IntPtr deviceHandle,
+        string deviceId,
         string deviceName,
-        int bitIndex,
-        bool isPressed,
-        int pressedChangeCount,
-        int changedBitCount)
+        RawInputButtonEdge edge)
     {
         ButtonInput?.Invoke(
             this,
             new VoiceAiButtonInput
             {
-                DeviceId = GetDeviceId(deviceHandle, deviceName),
+                DeviceId = deviceId,
                 DeviceName = deviceName,
-                ButtonIndex = bitIndex + 1,
-                ButtonMask = bitIndex < 64 ? 1UL << bitIndex : 0,
-                IsPressed = isPressed,
-                PressedChangeCount = pressedChangeCount,
-                ChangedBitCount = changedBitCount,
+                ButtonIndex = edge.ButtonIndex,
+                ButtonMask = edge.ButtonIndex is > 0 and <= 64 ? 1UL << (edge.ButtonIndex - 1) : 0,
+                IsPressed = edge.IsPressed,
+                PressedChangeCount = edge.PressedChangeCount,
+                ChangedBitCount = edge.ChangedButtonCount,
                 ReceivedAt = DateTimeOffset.UtcNow
             });
+    }
+
+    private IReadOnlyList<int>? GetPressedButtonIndexes(IntPtr deviceHandle, byte[] report)
+    {
+        var preparsedData = GetPreparsedData(deviceHandle);
+        if (preparsedData == IntPtr.Zero ||
+            HidP_GetCaps(preparsedData, out var capabilities) != HidpStatusSuccess ||
+            capabilities.NumberInputDataIndices == 0)
+        {
+            return null;
+        }
+
+        var usageList = new ushort[Math.Clamp(capabilities.NumberInputDataIndices, (ushort)1, (ushort)1024)];
+        var usageLength = (uint)usageList.Length;
+        var status = HidP_GetUsages(
+            HidpReportType.Input,
+            UsagePageButton,
+            0,
+            usageList,
+            ref usageLength,
+            preparsedData,
+            report,
+            (uint)report.Length);
+        if (status != HidpStatusSuccess || usageLength == 0)
+        {
+            return status == HidpStatusSuccess ? [] : null;
+        }
+
+        return usageList
+            .Take((int)usageLength)
+            .Where(usage => usage > 0)
+            .Select(usage => (int)usage)
+            .Distinct()
+            .Order()
+            .ToArray();
+    }
+
+    private static int GetReportId(byte[] report)
+    {
+        return report.Length == 0 ? 0 : report[0];
+    }
+
+    private IntPtr GetPreparsedData(IntPtr deviceHandle)
+    {
+        if (_preparsedDataByHandle.TryGetValue(deviceHandle, out var cachedPreparsedData))
+        {
+            return cachedPreparsedData;
+        }
+
+        var size = 0u;
+        GetRawInputDeviceInfo(deviceHandle, RidiPreparsedData, IntPtr.Zero, ref size);
+        if (size == 0)
+        {
+            return IntPtr.Zero;
+        }
+
+        var preparsedData = Marshal.AllocHGlobal((int)size);
+        var readSize = size;
+        var result = GetRawInputDeviceInfo(deviceHandle, RidiPreparsedData, preparsedData, ref readSize);
+        if (result == uint.MaxValue)
+        {
+            Marshal.FreeHGlobal(preparsedData);
+            return IntPtr.Zero;
+        }
+
+        _preparsedDataByHandle[deviceHandle] = preparsedData;
+        return preparsedData;
     }
 
     private string GetDeviceName(IntPtr deviceHandle)
@@ -270,6 +306,37 @@ public sealed class WindowsRawInputButtonService : IDisposable
         public IntPtr WParam;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct HidpCaps
+    {
+        public ushort Usage;
+        public ushort UsagePage;
+        public ushort InputReportByteLength;
+        public ushort OutputReportByteLength;
+        public ushort FeatureReportByteLength;
+
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 17)]
+        public ushort[] Reserved;
+
+        public ushort NumberLinkCollectionNodes;
+        public ushort NumberInputButtonCaps;
+        public ushort NumberInputValueCaps;
+        public ushort NumberInputDataIndices;
+        public ushort NumberOutputButtonCaps;
+        public ushort NumberOutputValueCaps;
+        public ushort NumberOutputDataIndices;
+        public ushort NumberFeatureButtonCaps;
+        public ushort NumberFeatureValueCaps;
+        public ushort NumberFeatureDataIndices;
+    }
+
+    private enum HidpReportType
+    {
+        Input = 0,
+        Output = 1,
+        Feature = 2
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool RegisterRawInputDevices(
         RawInputDevice[] rawInputDevices,
@@ -290,4 +357,20 @@ public sealed class WindowsRawInputButtonService : IDisposable
         uint command,
         IntPtr data,
         ref uint size);
+
+    [DllImport("hid.dll")]
+    private static extern int HidP_GetCaps(
+        IntPtr preparsedData,
+        out HidpCaps capabilities);
+
+    [DllImport("hid.dll")]
+    private static extern int HidP_GetUsages(
+        HidpReportType reportType,
+        ushort usagePage,
+        ushort linkCollection,
+        [Out] ushort[] usageList,
+        ref uint usageLength,
+        IntPtr preparsedData,
+        byte[] report,
+        uint reportLength);
 }

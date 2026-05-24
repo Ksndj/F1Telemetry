@@ -34,7 +34,8 @@ public sealed class DashboardVoiceAiInputTests
         try
         {
             harness.ViewModel.BindVoiceAiInputCommand.Execute(null);
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: true, receivedAt: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(1)));
 
             Assert.Equal(VoiceAiInputBindingKind.RawInputHidButton, harness.ViewModel.VoiceAiInputBinding.Kind);
             Assert.Equal("raw-device-1", harness.ViewModel.VoiceAiInputBinding.DeviceId);
@@ -72,6 +73,54 @@ public sealed class DashboardVoiceAiInputTests
     }
 
     /// <summary>
+    /// Verifies the capture window ignores stale input while Raw Input settles.
+    /// </summary>
+    [Fact]
+    public void BindVoiceAiInputCommand_IgnoresInputBeforeArmed()
+    {
+        var harness = CreateHarness();
+        try
+        {
+            harness.ViewModel.BindVoiceAiInputCommand.Execute(null);
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
+
+            Assert.Equal(VoiceAiInputBindingKind.None, harness.ViewModel.VoiceAiInputBinding.Kind);
+            Assert.Equal("未绑定方向盘按钮", harness.ViewModel.VoiceAiBindingText);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the capture window rejects release and multi-button changes.
+    /// </summary>
+    [Fact]
+    public void BindVoiceAiInputCommand_RejectsReleaseAndMultipleChanges()
+    {
+        var harness = CreateHarness();
+        try
+        {
+            var armedAt = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(1);
+            harness.ViewModel.BindVoiceAiInputCommand.Execute(null);
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: false, receivedAt: armedAt));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(
+                    isPressed: true,
+                    receivedAt: armedAt + TimeSpan.FromMilliseconds(100),
+                    pressedChangeCount: 2,
+                    changedBitCount: 2));
+
+            Assert.Equal(VoiceAiInputBindingKind.None, harness.ViewModel.VoiceAiInputBinding.Kind);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Verifies hold-to-talk starts recording on press and submits the completed recording on release.
     /// </summary>
     [Fact]
@@ -80,10 +129,12 @@ public sealed class DashboardVoiceAiInputTests
         var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
         try
         {
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
             Assert.True(harness.ViewModel.IsVoiceAiRecording);
 
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: false));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: false, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
             PumpDispatcherUntil(() => harness.AiService.Contexts.Count == 1, TimeSpan.FromSeconds(2));
 
             Assert.False(harness.ViewModel.IsVoiceAiRecording);
@@ -97,21 +148,72 @@ public sealed class DashboardVoiceAiInputTests
     }
 
     /// <summary>
-    /// Verifies toggle-to-talk uses the next press to end and submit the recording.
+    /// Verifies duplicate hold-to-talk presses do not restart the recording session.
     /// </summary>
     [Fact]
-    public void ToggleToTalk_SubmitsRecordingOnSecondPress()
+    public void HoldToTalk_IgnoresDuplicatePress()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: true, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
+
+            Assert.True(harness.ViewModel.IsVoiceAiRecording);
+            Assert.Equal(1, harness.MicrophoneService.StartCount);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies toggle-to-talk uses the next released press to end and submit the recording.
+    /// </summary>
+    [Fact]
+    public void ToggleToTalk_SubmitsRecordingOnSecondPressAfterRelease()
     {
         var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.ToggleToTalk));
         try
         {
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
             Assert.True(harness.ViewModel.IsVoiceAiRecording);
 
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: false, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: true, receivedAt: startedAt + TimeSpan.FromMilliseconds(200)));
             PumpDispatcherUntil(() => harness.AiService.Contexts.Count == 1, TimeSpan.FromSeconds(2));
 
             Assert.False(harness.ViewModel.IsVoiceAiRecording);
+            Assert.Equal(1, harness.MicrophoneService.StartCount);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies toggle-to-talk requires a release before the second press can submit.
+    /// </summary>
+    [Fact]
+    public void ToggleToTalk_IgnoresRepeatedPressUntilRelease()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.ToggleToTalk));
+        try
+        {
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: true, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
+
+            Assert.True(harness.ViewModel.IsVoiceAiRecording);
+            Assert.Empty(harness.AiService.Contexts);
             Assert.Equal(1, harness.MicrophoneService.StartCount);
         }
         finally
@@ -136,8 +238,10 @@ public sealed class DashboardVoiceAiInputTests
 
         try
         {
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true));
-            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: false));
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: false, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
             PumpDispatcherUntil(
                 () => string.Equals(harness.ViewModel.VoiceAiStatusText, "未检测到语音输入", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(2));
@@ -194,7 +298,11 @@ public sealed class DashboardVoiceAiInputTests
         };
     }
 
-    private static VoiceAiButtonInput CreateButtonInput(bool isPressed)
+    private static VoiceAiButtonInput CreateButtonInput(
+        bool isPressed,
+        DateTimeOffset? receivedAt = null,
+        int? pressedChangeCount = null,
+        int changedBitCount = 1)
     {
         return new VoiceAiButtonInput
         {
@@ -203,9 +311,9 @@ public sealed class DashboardVoiceAiInputTests
             ButtonIndex = 4,
             ButtonMask = 8,
             IsPressed = isPressed,
-            PressedChangeCount = isPressed ? 1 : 0,
-            ChangedBitCount = 1,
-            ReceivedAt = DateTimeOffset.UtcNow
+            PressedChangeCount = pressedChangeCount ?? (isPressed ? 1 : 0),
+            ChangedBitCount = changedBitCount,
+            ReceivedAt = receivedAt ?? DateTimeOffset.UtcNow
         };
     }
 

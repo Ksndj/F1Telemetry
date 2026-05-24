@@ -49,6 +49,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int VoiceAiMaxRecordingSeconds = 20;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
+    private static readonly TimeSpan VoiceAiBindingCaptureArmingDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
     private readonly IUdpListener _udpListener;
     private readonly IPacketDispatcher<PacketId, PacketHeader> _packetDispatcher;
@@ -83,6 +84,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly object _pendingEventLogsLock = new();
     private readonly object _pendingAiTtsLogsLock = new();
     private readonly object _pendingAiAnalysisLogsLock = new();
+    private readonly Dictionary<string, VoiceAiButtonRuntimeState> _voiceAiButtonStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _settingsGate = new(1, 1);
     private readonly RelayCommand _startListeningCommand;
     private readonly RelayCommand _stopListeningCommand;
@@ -185,6 +187,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private IVoiceRecordingSession? _voiceAiRecordingSession;
     private CancellationTokenSource? _voiceAiRecordingTimeoutCts;
     private CancellationTokenSource? _voiceAiBindingCaptureCts;
+    private DateTimeOffset _voiceAiBindingCaptureArmedAt = DateTimeOffset.MinValue;
+    private bool _voiceAiToggleWaitingForRelease;
     private int _voiceAiSettingsSaveVersion;
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
@@ -610,18 +614,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        var acceptedInput = TryAcceptVoiceAiButtonEdge(input);
+        if (acceptedInput is null)
+        {
+            return;
+        }
+
         if (VoiceAiBindingCaptureActive)
         {
-            TryCaptureVoiceAiInputBinding(input);
+            TryCaptureVoiceAiInputBinding(acceptedInput);
             return;
         }
 
-        if (!VoiceAiEnabled || !VoiceAiInputMatchesBinding(input))
+        if (!VoiceAiEnabled || !VoiceAiInputMatchesBinding(acceptedInput))
         {
             return;
         }
 
-        if (input.IsPressed)
+        if (acceptedInput.IsPressed)
         {
             HandleBoundVoiceAiButtonPressed();
         }
@@ -629,6 +639,29 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             HandleBoundVoiceAiButtonReleased();
         }
+    }
+
+    private VoiceAiButtonInput? TryAcceptVoiceAiButtonEdge(VoiceAiButtonInput input)
+    {
+        if (input.ButtonIndex <= 0 || string.IsNullOrWhiteSpace(input.DeviceId))
+        {
+            return null;
+        }
+
+        var key = BuildVoiceAiButtonStateKey(input);
+        if (!_voiceAiButtonStates.TryGetValue(key, out var previousState))
+        {
+            _voiceAiButtonStates[key] = new VoiceAiButtonRuntimeState(input.IsPressed, input.ReceivedAt);
+            return input.IsPressed ? input : null;
+        }
+
+        if (previousState.IsPressed == input.IsPressed)
+        {
+            return null;
+        }
+
+        _voiceAiButtonStates[key] = new VoiceAiButtonRuntimeState(input.IsPressed, input.ReceivedAt);
+        return input;
     }
 
     /// <summary>
@@ -903,6 +936,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             if (SetProperty(ref _voiceAiInputBinding, NormalizeVoiceAiInputBinding(value)))
             {
+                ResetVoiceAiButtonRuntimeState();
                 RefreshVoiceAiBindingText();
                 RefreshVoiceAiStatusText();
                 QueuePersistVoiceAiOptions();
@@ -960,6 +994,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             var normalized = Enum.IsDefined(typeof(VoiceAiTalkMode), value) ? value : VoiceAiTalkMode.HoldToTalk;
             if (SetProperty(ref _voiceAiTalkMode, normalized))
             {
+                _voiceAiToggleWaitingForRelease = false;
                 var selectedOption = VoiceAiTalkModeOptions.FirstOrDefault(option => option.Mode == normalized)
                                      ?? VoiceAiTalkModeOptions.FirstOrDefault();
                 if (!Equals(_selectedVoiceAiTalkModeOption, selectedOption))
@@ -2900,7 +2935,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void StartVoiceAiInputBindingCapture()
     {
         CancelVoiceAiBindingCapture();
+        ResetVoiceAiButtonRuntimeState();
         VoiceAiBindingCaptureActive = true;
+        _voiceAiBindingCaptureArmedAt = DateTimeOffset.UtcNow + VoiceAiBindingCaptureArmingDelay;
         VoiceAiStatusText = _voiceAiRawInputReady
             ? $"请在 {VoiceAiBindingCaptureSeconds} 秒内按下方向盘按钮"
             : $"{_voiceAiRawInputStatusText} 请检查方向盘驱动、游戏控制器模式或管理员权限。";
@@ -2912,18 +2949,25 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void ClearVoiceAiInputBinding()
     {
         CancelVoiceAiBindingCapture();
+        ResetVoiceAiButtonRuntimeState();
         VoiceAiInputBinding = new VoiceAiInputBinding();
         VoiceAiStatusText = "已清除方向盘按钮绑定";
     }
 
     private void TryCaptureVoiceAiInputBinding(VoiceAiButtonInput input)
     {
+        if (input.ReceivedAt < _voiceAiBindingCaptureArmedAt)
+        {
+            VoiceAiStatusText = "正在等待方向盘输入稳定，请松开后再按目标按钮";
+            return;
+        }
+
         if (!input.IsPressed)
         {
             return;
         }
 
-        if (input.PressedChangeCount != 1 || input.ChangedBitCount > 8)
+        if (input.PressedChangeCount != 1 || input.ChangedBitCount != 1)
         {
             VoiceAiStatusText = "检测到多个输入变化，请松开后只按一个方向盘按钮";
             return;
@@ -2948,6 +2992,19 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                (binding.ButtonMask == 0 || input.ButtonMask == 0 || binding.ButtonMask == input.ButtonMask);
     }
 
+    private void ResetVoiceAiButtonRuntimeState()
+    {
+        _voiceAiButtonStates.Clear();
+        _voiceAiToggleWaitingForRelease = false;
+    }
+
+    private static string BuildVoiceAiButtonStateKey(VoiceAiButtonInput input)
+    {
+        return $"{input.DeviceId.Trim()}\u001F{input.ButtonIndex.ToString(CultureInfo.InvariantCulture)}";
+    }
+
+    private readonly record struct VoiceAiButtonRuntimeState(bool IsPressed, DateTimeOffset ChangedAt);
+
     private void HandleBoundVoiceAiButtonPressed()
     {
         if (IsVoiceAiQueryRunning || _isStoppingVoiceAiRecording)
@@ -2956,9 +3013,23 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        if (VoiceAiTalkMode == VoiceAiTalkMode.ToggleToTalk && IsVoiceAiRecording)
+        if (VoiceAiTalkMode == VoiceAiTalkMode.ToggleToTalk)
         {
-            _ = StopVoiceAiRecordingAndAskAsync();
+            if (_voiceAiToggleWaitingForRelease)
+            {
+                return;
+            }
+
+            _voiceAiToggleWaitingForRelease = true;
+            if (IsVoiceAiRecording)
+            {
+                _ = StopVoiceAiRecordingAndAskAsync();
+            }
+            else
+            {
+                _ = StartVoiceAiRecordingAsync();
+            }
+
             return;
         }
 
@@ -2970,6 +3041,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void HandleBoundVoiceAiButtonReleased()
     {
+        if (VoiceAiTalkMode == VoiceAiTalkMode.ToggleToTalk)
+        {
+            _voiceAiToggleWaitingForRelease = false;
+            return;
+        }
+
         if (VoiceAiTalkMode != VoiceAiTalkMode.HoldToTalk || !IsVoiceAiRecording)
         {
             return;
@@ -3057,6 +3134,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _voiceAiBindingCaptureCts?.Dispose();
             _voiceAiBindingCaptureCts = null;
             VoiceAiBindingCaptureActive = false;
+            _voiceAiBindingCaptureArmedAt = DateTimeOffset.MinValue;
         }
     }
 
