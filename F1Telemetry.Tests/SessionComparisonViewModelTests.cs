@@ -131,6 +131,45 @@ public sealed class SessionComparisonViewModelTests
     }
 
     /// <summary>
+    /// Verifies stored four-wheel tyre wear samples are loaded for the selected comparison sessions.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithStoredWheelWear_LoadsTyreWearComparison()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions =
+            [
+                CreateSession("session-a", 10, DateTimeOffset.Parse("2026-04-19T10:00:00Z")),
+                CreateSession("session-b", 10, DateTimeOffset.Parse("2026-04-18T10:00:00Z"))
+            ]
+        };
+        var lapRepository = new FakeLapRepository();
+        lapRepository.LapsBySession["session-a"] = [CreateLap("session-a", 1, lapTimeInMs: 90_000)];
+        lapRepository.LapsBySession["session-b"] = [CreateLap("session-b", 1, lapTimeInMs: 91_000)];
+        var lapSampleRepository = new FakeLapSampleRepository();
+        lapSampleRepository.TyreWearTrendBySession["session-a"] =
+        [
+            CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f)
+        ];
+        lapSampleRepository.TyreWearTrendBySession["session-b"] =
+        [
+            CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f)
+        ];
+        var viewModel = CreateViewModel(
+            sessionRepository,
+            lapRepository,
+            lapSampleRepository: lapSampleRepository);
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(new[] { "session-a", "session-b" }, lapSampleRepository.QueriedSessions);
+        Assert.True(viewModel.TyreWearComparisonPanel.HasData);
+        Assert.Equal(new[] { 13d }, viewModel.TyreWearComparisonPanel.Series[0].Points.Select(point => point.Y));
+        Assert.Equal(new[] { 11d }, viewModel.TyreWearComparisonPanel.Series[1].Points.Select(point => point.Y));
+    }
+
+    /// <summary>
     /// Verifies the candidate session list exposes a paged projection.
     /// </summary>
     [Fact]
@@ -293,12 +332,14 @@ public sealed class SessionComparisonViewModelTests
     private static SessionComparisonViewModel CreateViewModel(
         FakeSessionRepository? sessionRepository = null,
         FakeLapRepository? lapRepository = null,
-        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null)
+        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null,
+        FakeLapSampleRepository? lapSampleRepository = null)
     {
         return new SessionComparisonViewModel(
             sessionRepository ?? new FakeSessionRepository(),
             lapRepository ?? new FakeLapRepository(),
-            deletionConfirmationService);
+            deletionConfirmationService,
+            lapSampleRepository);
     }
 
     private static StoredSession CreateSession(string id, int? trackId, DateTimeOffset startedAt)
@@ -332,6 +373,25 @@ public sealed class SessionComparisonViewModelTests
             FuelUsedLitres = fuelUsedLitres,
             ErsUsed = ersUsed,
             CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
+        };
+    }
+
+    private static StoredLapTyreWearTrendPoint CreateTyreWearPoint(
+        int lapNumber,
+        float rearLeft,
+        float rearRight,
+        float frontLeft,
+        float frontRight)
+    {
+        return new StoredLapTyreWearTrendPoint
+        {
+            LapNumber = lapNumber,
+            SampleIndex = lapNumber,
+            SampledAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            RearLeft = rearLeft,
+            RearRight = rearRight,
+            FrontLeft = frontLeft,
+            FrontRight = frontRight
         };
     }
 
@@ -414,6 +474,44 @@ public sealed class SessionComparisonViewModelTests
                 LapsBySession.TryGetValue(sessionId, out var laps)
                     ? laps.Take(count).ToArray()
                     : (IReadOnlyList<StoredLap>)Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class FakeLapSampleRepository : ILapSampleRepository
+    {
+        public Dictionary<string, IReadOnlyList<StoredLapTyreWearTrendPoint>> TyreWearTrendBySession { get; } =
+            new(StringComparer.Ordinal);
+
+        public List<string> QueriedSessions { get; } = [];
+
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            QueriedSessions.Add(sessionId);
+            return Task.FromResult(
+                TyreWearTrendBySession.TryGetValue(sessionId, out var trend)
+                    ? trend.Take(count).ToArray()
+                    : (IReadOnlyList<StoredLapTyreWearTrendPoint>)Array.Empty<StoredLapTyreWearTrendPoint>());
         }
     }
 
