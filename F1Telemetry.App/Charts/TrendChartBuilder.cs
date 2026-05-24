@@ -64,39 +64,43 @@ public sealed class TrendChartBuilder
             return CreateEmptyPanel("多圈四轮磨损趋势", "圈号", "%", "等待轮胎磨损数据");
         }
 
+        var series = new List<ChartSeriesModel>(capacity: 4);
+        AddTyreWearSeries(series, "后左", orderedLaps, wheelSet => wheelSet.RearLeft);
+        AddTyreWearSeries(series, "后右", orderedLaps, wheelSet => wheelSet.RearRight);
+        AddTyreWearSeries(series, "前左", orderedLaps, wheelSet => wheelSet.FrontLeft);
+        AddTyreWearSeries(series, "前右", orderedLaps, wheelSet => wheelSet.FrontRight);
+
         return new ChartPanelViewModel(
             title: "多圈四轮磨损趋势",
             xAxisLabel: "圈号",
             yAxisLabel: "%",
             emptyMessage: "等待轮胎磨损数据",
             isEmpty: false,
-            series:
-            [
-                BuildTyreWearSeries("后左", Brushes.Orange, orderedLaps, wheelSet => wheelSet.RearLeft),
-                BuildTyreWearSeries("后右", Brushes.HotPink, orderedLaps, wheelSet => wheelSet.RearRight),
-                BuildTyreWearSeries("前左", Brushes.DeepSkyBlue, orderedLaps, wheelSet => wheelSet.FrontLeft),
-                BuildTyreWearSeries("前右", Brushes.LimeGreen, orderedLaps, wheelSet => wheelSet.FrontRight)
-            ]);
+            series: series);
     }
 
-    private static ChartSeriesModel BuildTyreWearSeries(
-        string name,
-        Brush strokeBrush,
+    private static void AddTyreWearSeries(
+        ICollection<ChartSeriesModel> series,
+        string wheelName,
         IReadOnlyList<LapSummary> laps,
         Func<F1Telemetry.Udp.Packets.WheelSet<float>, float> selector)
     {
-        return new ChartSeriesModel
+        foreach (var run in TyreCompoundSeriesBuilder.BuildContiguousRuns(
+                     laps,
+                     lap => lap.LapNumber,
+                     lap => TyreCompoundChartPalette.FromRawCompoundText(SelectLapTyreText(lap)),
+                     lap => selector(lap.TyreWearDeltaPerWheel!),
+                     style => $"{style.Label} {wheelName}"))
         {
-            Name = name,
-            StrokeBrush = strokeBrush,
-            Points = laps
-                .Select(lap => new ChartPointModel
-                {
-                    X = lap.LapNumber,
-                    Y = selector(lap.TyreWearDeltaPerWheel!)
-                })
-                .ToArray()
-        };
+            series.Add(run);
+        }
+    }
+
+    private static string SelectLapTyreText(LapSummary lap)
+    {
+        return string.IsNullOrWhiteSpace(lap.EndTyre) || lap.EndTyre == "-"
+            ? lap.StartTyre
+            : lap.EndTyre;
     }
 
     private static ChartPanelViewModel CreateEmptyPanel(

@@ -359,8 +359,8 @@ public sealed class PostRaceReviewViewModelTests
             {
                 ["session-a"] =
                 [
-                    CreateTyreWearTrendPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
-                    CreateTyreWearTrendPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f)
+                    CreateTyreWearTrendPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f, visualTyreCompound: 16),
+                    CreateTyreWearTrendPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f, visualTyreCompound: 16)
                 ]
             }
         };
@@ -369,7 +369,7 @@ public sealed class PostRaceReviewViewModelTests
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.TyreWearTrendPanel.HasData);
-        Assert.Equal(new[] { "后左", "后右", "前左", "前右" }, viewModel.TyreWearTrendPanel.Series.Select(series => series.Name));
+        Assert.Equal(new[] { "红胎 后左", "红胎 后右", "红胎 前左", "红胎 前右" }, viewModel.TyreWearTrendPanel.Series.Select(series => series.Name));
         Assert.Contains("已生成 2 圈四轮胎磨趋势", viewModel.TyreWearStatusText, StringComparison.Ordinal);
     }
 
@@ -611,7 +611,9 @@ public sealed class PostRaceReviewViewModelTests
         float rearLeft,
         float rearRight,
         float frontLeft,
-        float frontRight)
+        float frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
     {
         return new StoredLapTyreWearTrendPoint
         {
@@ -621,7 +623,9 @@ public sealed class PostRaceReviewViewModelTests
             RearLeft = rearLeft,
             RearRight = rearRight,
             FrontLeft = frontLeft,
-            FrontRight = frontRight
+            FrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound
         };
     }
 

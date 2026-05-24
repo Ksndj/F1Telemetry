@@ -42,8 +42,8 @@ public sealed class SessionComparisonViewModel : ViewModelBase
     /// </summary>
     /// <param name="sessionRepository">The stored session repository.</param>
     /// <param name="lapRepository">The stored lap repository.</param>
-    /// <param name="deletionConfirmationService">The deletion confirmation service.</param>
-    /// <param name="lapSampleRepository">The optional stored lap-sample repository.</param>
+    /// <param name="deletionConfirmationService">The optional delete confirmation service.</param>
+    /// <param name="lapSampleRepository">The optional stored lap-sample repository used for tyre-wear comparison.</param>
     public SessionComparisonViewModel(
         ISessionRepository sessionRepository,
         ILapRepository lapRepository,
@@ -563,7 +563,6 @@ public sealed class SessionComparisonViewModel : ViewModelBase
         var tyreWearTrendTask = _lapSampleRepository is null
             ? Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>())
             : _lapSampleRepository.GetTyreWearTrendAsync(item.SessionId, MaxRecentLaps, cancellationToken);
-
         await Task.WhenAll(lapsTask, tyreWearTrendTask);
 
         return new SessionComparisonLoadedSession(

@@ -1,5 +1,6 @@
 using F1Telemetry.App.Charts;
 using F1Telemetry.Storage.Models;
+using System.Windows.Media;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -96,10 +97,10 @@ public sealed class SessionComparisonChartBuilderTests
     }
 
     /// <summary>
-    /// Verifies stored four-wheel tyre wear renders as one average series per compared session.
+    /// Verifies stored four-wheel tyre wear renders average series using official compound colors.
     /// </summary>
     [Fact]
-    public void BuildTyreWearPanel_WithStoredWheelWear_ReturnsAverageSeries()
+    public void BuildTyreWearPanel_WithStoredWheelWear_UsesCompoundColoredAverageSeries()
     {
         var builder = new StoredLapSessionComparisonChartBuilder();
         var inputs = new[]
@@ -107,22 +108,41 @@ public sealed class SessionComparisonChartBuilderTests
             new SessionComparisonTyreWearChartInput(
                 "Race A",
                 [
-                    CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f),
-                    CreateTyreWearPoint(2, rearLeft: 20f, rearRight: 22f, frontLeft: 24f, frontRight: 26f)
+                    CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f, visualTyreCompound: 16),
+                    CreateTyreWearPoint(2, rearLeft: 20f, rearRight: 22f, frontLeft: 24f, frontRight: 26f, visualTyreCompound: 17)
                 ]),
             new SessionComparisonTyreWearChartInput(
                 "Race B",
                 [
-                    CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f)
+                    CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f, visualTyreCompound: 8)
                 ])
         };
 
         var panel = builder.BuildTyreWearPanel(inputs);
 
         Assert.True(panel.HasData);
-        Assert.Equal(new[] { "Race A", "Race B" }, panel.Series.Select(series => series.Name));
-        Assert.Equal(new[] { 13d, 23d }, panel.Series[0].Points.Select(point => point.Y));
-        Assert.Equal(11d, panel.Series[1].Points[0].Y);
+        Assert.Equal("四轮平均胎磨对比", panel.Title);
+        Assert.Equal(new[] { "Race A · 红胎", "Race A · 黄胎", "Race B · 全雨胎" }, panel.Series.Select(series => series.Name));
+        Assert.Equal(13d, panel.Series[0].Points[0].Y);
+        Assert.Equal(23d, panel.Series[1].Points[0].Y);
+        Assert.Equal(Color.FromRgb(0xE1, 0x06, 0x00), GetSolidColor(panel.Series[0].StrokeBrush));
+        Assert.Equal(Color.FromRgb(0xFF, 0xD1, 0x2E), GetSolidColor(panel.Series[1].StrokeBrush));
+        Assert.Equal(Color.FromRgb(0x00, 0x9F, 0xE3), GetSolidColor(panel.Series[2].StrokeBrush));
+    }
+
+    /// <summary>
+    /// Verifies tyre wear comparison keeps an explicit empty state when no stored samples exist.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearPanel_WithoutStoredWheelWear_ReturnsEmptyState()
+    {
+        var builder = new StoredLapSessionComparisonChartBuilder();
+
+        var panel = builder.BuildTyreWearPanel([]);
+
+        Assert.False(panel.HasData);
+        Assert.Empty(panel.Series);
+        Assert.Contains("无法生成胎磨对比", panel.EmptyStateText, StringComparison.Ordinal);
     }
 
     private static StoredLap CreateLap(
@@ -150,7 +170,9 @@ public sealed class SessionComparisonChartBuilderTests
         float rearLeft,
         float rearRight,
         float frontLeft,
-        float frontRight)
+        float frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
     {
         return new StoredLapTyreWearTrendPoint
         {
@@ -160,7 +182,14 @@ public sealed class SessionComparisonChartBuilderTests
             RearLeft = rearLeft,
             RearRight = rearRight,
             FrontLeft = frontLeft,
-            FrontRight = frontRight
+            FrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound
         };
+    }
+
+    private static Color GetSolidColor(Brush brush)
+    {
+        return Assert.IsType<SolidColorBrush>(brush).Color;
     }
 }

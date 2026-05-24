@@ -1,3 +1,4 @@
+using System.Globalization;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
@@ -136,12 +137,14 @@ public sealed class SessionComparisonViewModelTests
     [Fact]
     public async Task RefreshAsync_WithStoredWheelWear_LoadsTyreWearComparison()
     {
+        var sessionAStartedAt = DateTimeOffset.Parse("2026-04-19T10:00:00Z");
+        var sessionBStartedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z");
         var sessionRepository = new FakeSessionRepository
         {
             Sessions =
             [
-                CreateSession("session-a", 10, DateTimeOffset.Parse("2026-04-19T10:00:00Z")),
-                CreateSession("session-b", 10, DateTimeOffset.Parse("2026-04-18T10:00:00Z"))
+                CreateSession("session-a", 10, sessionAStartedAt),
+                CreateSession("session-b", 10, sessionBStartedAt)
             ]
         };
         var lapRepository = new FakeLapRepository();
@@ -150,11 +153,11 @@ public sealed class SessionComparisonViewModelTests
         var lapSampleRepository = new FakeLapSampleRepository();
         lapSampleRepository.TyreWearTrendBySession["session-a"] =
         [
-            CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f)
+            CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f, visualTyreCompound: 16)
         ];
         lapSampleRepository.TyreWearTrendBySession["session-b"] =
         [
-            CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f)
+            CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f, visualTyreCompound: 8)
         ];
         var viewModel = CreateViewModel(
             sessionRepository,
@@ -165,8 +168,14 @@ public sealed class SessionComparisonViewModelTests
 
         Assert.Equal(new[] { "session-a", "session-b" }, lapSampleRepository.QueriedSessions);
         Assert.True(viewModel.TyreWearComparisonPanel.HasData);
-        Assert.Equal(new[] { 13d }, viewModel.TyreWearComparisonPanel.Series[0].Points.Select(point => point.Y));
-        Assert.Equal(new[] { 11d }, viewModel.TyreWearComparisonPanel.Series[1].Points.Select(point => point.Y));
+        Assert.Equal(
+            [
+                $"正赛 · {FormatExpectedSessionTimestamp(sessionAStartedAt)} · 红胎",
+                $"正赛 · {FormatExpectedSessionTimestamp(sessionBStartedAt)} · 全雨胎"
+            ],
+            viewModel.TyreWearComparisonPanel.Series.Select(series => series.Name));
+        Assert.Equal(13d, viewModel.TyreWearComparisonPanel.Series[0].Points[0].Y);
+        Assert.Equal(11d, viewModel.TyreWearComparisonPanel.Series[1].Points[0].Y);
     }
 
     /// <summary>
@@ -355,6 +364,11 @@ public sealed class SessionComparisonViewModelTests
         };
     }
 
+    private static string FormatExpectedSessionTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    }
+
     private static StoredLap CreateLap(
         string sessionId,
         int lapNumber,
@@ -381,7 +395,9 @@ public sealed class SessionComparisonViewModelTests
         float rearLeft,
         float rearRight,
         float frontLeft,
-        float frontRight)
+        float frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
     {
         return new StoredLapTyreWearTrendPoint
         {
@@ -391,7 +407,9 @@ public sealed class SessionComparisonViewModelTests
             RearLeft = rearLeft,
             RearRight = rearRight,
             FrontLeft = frontLeft,
-            FrontRight = frontRight
+            FrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound
         };
     }
 

@@ -39,4 +39,14 @@ public sealed record StoredLapTyreWearTrendPoint
     /// Gets the rear-right tyre wear percentage.
     /// </summary>
     public float RearRight { get; init; }
+
+    /// <summary>
+    /// Gets the raw visual tyre compound identifier selected for this sample.
+    /// </summary>
+    public int? VisualTyreCompound { get; init; }
+
+    /// <summary>
+    /// Gets the raw actual tyre compound identifier selected for this sample.
+    /// </summary>
+    public int? ActualTyreCompound { get; init; }
 }

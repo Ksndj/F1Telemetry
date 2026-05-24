@@ -66,27 +66,23 @@ public sealed class StoredLapSessionComparisonChartBuilder
     }
 
     /// <summary>
-    /// Builds the stored four-wheel average tyre-wear comparison panel.
+    /// Builds the tyre-wear comparison panel.
     /// </summary>
     /// <param name="sessions">The session tyre-wear inputs to plot.</param>
     public ChartPanelViewModel BuildTyreWearPanel(IReadOnlyList<SessionComparisonTyreWearChartInput> sessions)
     {
         var series = new List<ChartSeriesModel>();
-        for (var index = 0; index < sessions.Count; index++)
+        foreach (var session in sessions)
         {
-            var points = BuildAverageTyreWearPoints(sessions[index].Trend);
-            if (points.Count == 0)
+            foreach (var run in TyreCompoundSeriesBuilder.BuildContiguousRuns(
+                         OrderTyreWearTrend(session.Trend),
+                         point => point.LapNumber,
+                         point => TyreCompoundChartPalette.FromCodes(point.VisualTyreCompound, point.ActualTyreCompound),
+                         CalculateAverageTyreWear,
+                         style => $"{session.SessionLabel} · {style.Label}"))
             {
-                continue;
+                series.Add(run);
             }
-
-            series.Add(
-                new ChartSeriesModel
-                {
-                    Name = sessions[index].SessionLabel,
-                    StrokeBrush = SeriesBrushes[index % SeriesBrushes.Length],
-                    Points = points
-                });
         }
 
         return series.Count == 0
@@ -151,19 +147,19 @@ public sealed class StoredLapSessionComparisonChartBuilder
             .ToArray();
     }
 
-    private static IReadOnlyList<ChartPointModel> BuildAverageTyreWearPoints(
+    private static IReadOnlyList<StoredLapTyreWearTrendPoint> OrderTyreWearTrend(
         IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
     {
         return trend
             .OrderBy(point => point.LapNumber)
             .ThenBy(point => point.SampleIndex)
-            .Select(point => new ChartPointModel
-            {
-                X = point.LapNumber,
-                Y = (point.RearLeft + point.RearRight + point.FrontLeft + point.FrontRight) / 4d
-            })
-            .Where(point => double.IsFinite(point.X) && double.IsFinite(point.Y))
+            .ThenBy(point => point.SampledAt)
             .ToArray();
+    }
+
+    private static double CalculateAverageTyreWear(StoredLapTyreWearTrendPoint point)
+    {
+        return (point.RearLeft + point.RearRight + point.FrontLeft + point.FrontRight) / 4d;
     }
 
     private static ChartPanelViewModel CreateTyreWearEmptyPanel()

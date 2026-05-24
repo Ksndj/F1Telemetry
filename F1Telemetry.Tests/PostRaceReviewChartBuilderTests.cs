@@ -1,5 +1,6 @@
 using F1Telemetry.App.Charts;
 using F1Telemetry.Storage.Models;
+using System.Windows.Media;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -75,15 +76,37 @@ public sealed class PostRaceReviewChartBuilderTests
 
         var panel = builder.BuildTyreWearTrendPanel(
         [
-            CreateTyreWearPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
-            CreateTyreWearPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f)
+            CreateTyreWearPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f, visualTyreCompound: 16),
+            CreateTyreWearPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f, visualTyreCompound: 16)
         ]);
 
         Assert.True(panel.HasData);
-        Assert.Equal(new[] { "后左", "后右", "前左", "前右" }, panel.Series.Select(series => series.Name));
+        Assert.Equal(new[] { "红胎 后左", "红胎 后右", "红胎 前左", "红胎 前右" }, panel.Series.Select(series => series.Name));
         Assert.Equal(new[] { 1d, 2d }, panel.Series[0].Points.Select(point => point.X));
         Assert.Equal(12.1d, panel.Series[0].Points[0].Y, precision: 1);
         Assert.Equal(13.1d, panel.Series[0].Points[1].Y, precision: 1);
+        Assert.All(panel.Series, series => Assert.Equal(Color.FromRgb(0xE1, 0x06, 0x00), GetSolidColor(series.StrokeBrush)));
+    }
+
+    /// <summary>
+    /// Verifies stored tyre wear trend splits visible line runs when compound changes.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearTrendPanel_WithMixedCompounds_SplitsRunsByCompound()
+    {
+        var builder = new StoredLapPostRaceChartBuilder();
+
+        var panel = builder.BuildTyreWearTrendPanel(
+        [
+            CreateTyreWearPoint(1, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f, visualTyreCompound: 16),
+            CreateTyreWearPoint(2, rearLeft: 13.1f, rearRight: 13.2f, frontLeft: 12.1f, frontRight: 12.2f, visualTyreCompound: 17)
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.Contains(panel.Series, series => series.Name == "红胎 后左");
+        Assert.Contains(panel.Series, series => series.Name == "黄胎 后左");
+        Assert.Equal(Color.FromRgb(0xE1, 0x06, 0x00), GetSolidColor(panel.Series.First(series => series.Name == "红胎 后左").StrokeBrush));
+        Assert.Equal(Color.FromRgb(0xFF, 0xD1, 0x2E), GetSolidColor(panel.Series.First(series => series.Name == "黄胎 后左").StrokeBrush));
     }
 
     /// <summary>
@@ -127,7 +150,9 @@ public sealed class PostRaceReviewChartBuilderTests
         float rearLeft,
         float rearRight,
         float frontLeft,
-        float frontRight)
+        float frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
     {
         return new StoredLapTyreWearTrendPoint
         {
@@ -137,7 +162,14 @@ public sealed class PostRaceReviewChartBuilderTests
             RearLeft = rearLeft,
             RearRight = rearRight,
             FrontLeft = frontLeft,
-            FrontRight = frontRight
+            FrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound
         };
+    }
+
+    private static Color GetSolidColor(Brush brush)
+    {
+        return Assert.IsType<SolidColorBrush>(brush).Color;
     }
 }
