@@ -109,6 +109,11 @@ public sealed record AIAnalysisContext
     public string TelemetryAnalysisSummary { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets a realtime engineer-advice instruction when the AI request is for live driving speech.
+    /// </summary>
+    public string RealtimeEngineerAdviceSummary { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the compact player-car damage summary derived from CarDamage state.
     /// </summary>
     public string DamageSummary { get; init; } = string.Empty;

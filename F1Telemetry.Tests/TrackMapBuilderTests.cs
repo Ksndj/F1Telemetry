@@ -126,6 +126,60 @@ public sealed class TrackMapBuilderTests
     }
 
     /// <summary>
+    /// Verifies negative lap distances wrap before snapshot sorting and wrapped overlay selection.
+    /// </summary>
+    [Fact]
+    public void BuildSnapshotAndOverlay_WithWrappedLapDistance_NormalizesHighlightPoints()
+    {
+        var builder = new TrackMapBuilder();
+        var snapshot = builder.BuildSnapshot("uid-1", 11, 2, CreateWrappedTrackSamples(), lapLengthMeters: 1_000f);
+        var segment = new TrackSegment
+        {
+            SegmentId = "start-finish",
+            Name = "Start Finish",
+            SegmentType = TrackSegmentType.CornerComplex,
+            CornerNumber = 99,
+            StartDistanceMeters = 900f,
+            EndDistanceMeters = 80f
+        };
+
+        var overlay = builder.BuildOverlay(snapshot, segment, "T99 Start Finish", true, 1_000f);
+
+        Assert.True(snapshot.Points.All(point => point.LapDistance is >= 0f and < 1_000f));
+        Assert.Contains(snapshot.Points, point => Math.Abs(point.LapDistance - 920f) < 0.001f);
+        Assert.NotEmpty(overlay.HighlightPoints);
+        Assert.All(overlay.HighlightPoints, point => Assert.True(point.LapDistance >= 900f || point.LapDistance <= 80f));
+        Assert.NotNull(overlay.MarkerX);
+        Assert.NotNull(overlay.MarkerY);
+    }
+
+    /// <summary>
+    /// Verifies sparse wrapped overlay fallback keeps points ordered across the start-finish boundary.
+    /// </summary>
+    [Fact]
+    public void BuildOverlay_WithSparseWrappedFallback_OrdersPointsRelativeToSegment()
+    {
+        var builder = new TrackMapBuilder();
+        var snapshot = builder.BuildSnapshot("uid-1", 11, 2, CreateWrappedTrackSamples(), lapLengthMeters: 1_000f);
+        var segment = new TrackSegment
+        {
+            SegmentId = "start-finish",
+            Name = "Start Finish",
+            SegmentType = TrackSegmentType.CornerComplex,
+            CornerNumber = 99,
+            StartDistanceMeters = 970f,
+            EndDistanceMeters = 10f
+        };
+
+        var overlay = builder.BuildOverlay(snapshot, segment, "T99 Start Finish", true, 1_000f);
+
+        Assert.True(overlay.HighlightPoints.Count >= 3);
+        Assert.Equal(980f, overlay.HighlightPoints[0].LapDistance);
+        Assert.Equal(20f, overlay.HighlightPoints[1].LapDistance);
+        Assert.Equal(940f, overlay.HighlightPoints[2].LapDistance);
+    }
+
+    /// <summary>
     /// Verifies missing corner ranges keep the map visible but show an explicit empty state.
     /// </summary>
     [Fact]
@@ -252,6 +306,34 @@ public sealed class TrackMapBuilderTests
                 IsValid = true
             })
             .ToArray();
+    }
+
+    private static IReadOnlyList<LapSample> CreateWrappedTrackSamples()
+    {
+        return new[]
+        {
+            CreateTrackSample(-80f, 0, 0),
+            CreateTrackSample(-20f, 10, 0),
+            CreateTrackSample(20f, 20, 0),
+            CreateTrackSample(60f, 30, 0),
+            CreateTrackSample(120f, 40, 0),
+            CreateTrackSample(400f, 40, 20),
+            CreateTrackSample(700f, 20, 20),
+            CreateTrackSample(940f, 0, 20),
+            CreateTrackSample(980f, 0, 10)
+        };
+    }
+
+    private static LapSample CreateTrackSample(float lapDistance, float x, float z)
+    {
+        return new LapSample
+        {
+            LapNumber = 2,
+            LapDistance = lapDistance,
+            WorldPositionX = x,
+            WorldPositionZ = z,
+            IsValid = true
+        };
     }
 
     private static string FindRepositoryFile(params string[] segments)

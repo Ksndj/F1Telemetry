@@ -112,6 +112,35 @@ public sealed class CornerMetricsExtractorTests
         Assert.Contains(DataQualityWarning.EstimatedTrackMap, result.Warnings);
     }
 
+    /// <summary>
+    /// Verifies negative lap distances wrap by lap length before corner assignment and ordering.
+    /// </summary>
+    [Fact]
+    public void Extract_WrappedNegativeLapDistance_AssignsAndOrdersWithinCorner()
+    {
+        var extractor = new CornerMetricsExtractor();
+        var map = CreateWrappedMap();
+
+        var result = extractor.Extract(
+            map,
+            new[]
+            {
+                CreateSample(-80f, 9_000, 210, 0.05, 0.60, 0.20f),
+                CreateSample(950f, 9_200, 180, 0.10, 0.80, 0.40f),
+                CreateSample(-20f, 9_400, 150, 0.20, 0.55, -0.60f),
+                CreateSample(20f, 9_600, 95, 0.35, 0.20, -0.70f),
+                CreateSample(80f, 9_800, 170, 0.75, 0.02, -0.10f),
+                CreateSample(300f, 10_200, 260, 0.95, 0.00, 0.01f)
+            });
+
+        var corner = Assert.Single(result.Corners);
+        Assert.Equal(210d, corner.EntrySpeedKph);
+        Assert.Equal(95d, corner.MinSpeedKph);
+        Assert.Equal(170d, corner.ExitSpeedKph);
+        Assert.Equal(800, corner.SegmentTimeInMs);
+        Assert.Equal(80f, corner.ThrottleReapplyDistanceMeters);
+    }
+
     private static TrackSegmentMap CreateEstimatedMap()
     {
         var segment = new TrackSegment
@@ -132,6 +161,33 @@ public sealed class CornerMetricsExtractorTests
             TrackName = "Test Circuit",
             Status = TrackSegmentMapStatus.Estimated,
             StatusReason = "Estimated test map.",
+            LapLengthMeters = 1_000f,
+            Segments = new[] { segment },
+            Confidence = ConfidenceLevel.Low,
+            Warnings = new[] { DataQualityWarning.EstimatedTrackMap }
+        };
+    }
+
+    private static TrackSegmentMap CreateWrappedMap()
+    {
+        var segment = new TrackSegment
+        {
+            SegmentId = "wrapped-corner",
+            Name = "Start Finish Complex",
+            SegmentType = TrackSegmentType.CornerComplex,
+            CornerNumber = 99,
+            StartDistanceMeters = 900f,
+            EndDistanceMeters = 100f,
+            Confidence = ConfidenceLevel.Low,
+            Warnings = new[] { DataQualityWarning.EstimatedTrackMap }
+        };
+
+        return new TrackSegmentMap
+        {
+            TrackId = 99,
+            TrackName = "Wrapped Circuit",
+            Status = TrackSegmentMapStatus.Estimated,
+            StatusReason = "Estimated wrapped test map.",
             LapLengthMeters = 1_000f,
             Segments = new[] { segment },
             Confidence = ConfidenceLevel.Low,

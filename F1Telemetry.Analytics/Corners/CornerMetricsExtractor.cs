@@ -49,7 +49,7 @@ public sealed class CornerMetricsExtractor
             return CreateResult(trackMap, Array.Empty<CornerSummary>(), resultWarnings);
         }
 
-        var orderedSamples = GetSamplesWithDistance(lapSamples, resultWarnings);
+        var orderedSamples = GetSamplesWithDistance(lapSamples, resultWarnings, trackMap.LapLengthMeters);
         if (orderedSamples.Length == 0)
         {
             resultWarnings.Add(DataQualityWarning.MissingSamples);
@@ -58,7 +58,7 @@ public sealed class CornerMetricsExtractor
 
         var referenceWarnings = new HashSet<DataQualityWarning>();
         var orderedReferenceSamples = hasReference
-            ? GetSamplesWithDistance(referenceLapSamples!, referenceWarnings)
+            ? GetSamplesWithDistance(referenceLapSamples!, referenceWarnings, trackMap.LapLengthMeters)
             : Array.Empty<LapSample>();
 
         if (hasReference && orderedReferenceSamples.Length == 0)
@@ -71,11 +71,17 @@ public sealed class CornerMetricsExtractor
         {
             var segmentSamples = orderedSamples
                 .Where(sample => segment.ContainsDistance(sample.LapDistance!.Value))
-                .OrderBy(sample => sample.LapDistance)
+                .OrderBy(sample => LapDistanceNormalizer.ToSegmentRelativeDistance(
+                    sample.LapDistance!.Value,
+                    segment,
+                    trackMap.LapLengthMeters))
                 .ToArray();
             var referenceSegmentSamples = orderedReferenceSamples
                 .Where(sample => segment.ContainsDistance(sample.LapDistance!.Value))
-                .OrderBy(sample => sample.LapDistance)
+                .OrderBy(sample => LapDistanceNormalizer.ToSegmentRelativeDistance(
+                    sample.LapDistance!.Value,
+                    segment,
+                    trackMap.LapLengthMeters))
                 .ToArray();
 
             var summary = BuildSummary(segment, segmentSamples, referenceSegmentSamples, hasReference, trackMap.Warnings);
@@ -187,7 +193,8 @@ public sealed class CornerMetricsExtractor
 
     private static LapSample[] GetSamplesWithDistance(
         IReadOnlyList<LapSample> samples,
-        HashSet<DataQualityWarning> warnings)
+        HashSet<DataQualityWarning> warnings,
+        float? lapLengthMeters)
     {
         if (samples.Any(sample => sample.LapDistance is null))
         {
@@ -196,6 +203,10 @@ public sealed class CornerMetricsExtractor
 
         return samples
             .Where(sample => sample.LapDistance is not null)
+            .Select(sample => sample with
+            {
+                LapDistance = LapDistanceNormalizer.Normalize(sample.LapDistance!.Value, lapLengthMeters)
+            })
             .OrderBy(sample => sample.LapDistance)
             .ToArray();
     }

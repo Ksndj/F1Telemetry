@@ -573,7 +573,7 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
             var result = _cornerMetricsExtractor.Extract(map, lapSamples, referenceSamples);
             foreach (var summary in result.Corners)
             {
-                var referenceMetrics = BuildReferenceCornerMetrics(summary.Segment, referenceSamples);
+                var referenceMetrics = BuildReferenceCornerMetrics(summary.Segment, referenceSamples, map.LapLengthMeters);
                 var visualEvidence = BuildVisualEvidence(summary.Segment, map, lapSamples, referenceSamples, trackMapSnapshot);
                 var row = CornerSummaryRowViewModel.FromSummary(
                     summary,
@@ -608,7 +608,10 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
             EmptyStateText = CornerRows.Count == 0 ? "没有可显示的弯角摘要。" : string.Empty;
             UpdateDashboardSummaries(result, session, lapNumber.Value, referenceSelection.Info);
-            StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber.Value} 弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
+            var sourceText = result.Warnings.Contains(DataQualityWarning.EstimatedTrackMap)
+                ? "自动识别/估算"
+                : "赛道";
+            StatusText = $"已生成 {session.TrackText} {session.SessionTypeText} Lap {lapNumber.Value} {sourceText}弯角分析：{CornerRows.Count} 个弯角，置信度 {result.Confidence}。";
             if (CornerRows.Count > 0)
             {
                 SetEngineerAdviceState(CornerEngineerAdviceState.Ready);
@@ -1299,10 +1302,10 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
         IReadOnlyList<LapSample>? referenceSamples,
         TrackMapSnapshot trackMapSnapshot)
     {
-        var currentSegmentSamples = SelectSegmentSamples(segment, currentSamples);
+        var currentSegmentSamples = SelectSegmentSamples(segment, currentSamples, map.LapLengthMeters);
         var referenceSegmentSamples = referenceSamples is null
             ? Array.Empty<LapSample>()
-            : SelectSegmentSamples(segment, referenceSamples);
+            : SelectSegmentSamples(segment, referenceSamples, map.LapLengthMeters);
 
         return new CornerVisualEvidence(
             BuildMetricChartEvidence(currentSegmentSamples, referenceSegmentSamples, referenceSamples is not null, sample => sample.SpeedKph),
@@ -1314,11 +1317,17 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
     private static IReadOnlyList<LapSample> SelectSegmentSamples(
         TrackSegment segment,
-        IReadOnlyList<LapSample> samples)
+        IReadOnlyList<LapSample> samples,
+        float? lapLengthMeters)
     {
         return samples
-            .Where(sample => sample.LapDistance is not null && segment.ContainsDistance(sample.LapDistance.Value))
-            .OrderBy(sample => sample.LapDistance)
+            .Where(sample => sample.LapDistance is not null &&
+                segment.ContainsDistance(LapDistanceNormalizer.Normalize(sample.LapDistance.Value, lapLengthMeters)))
+            .Select(sample => sample with
+            {
+                LapDistance = LapDistanceNormalizer.Normalize(sample.LapDistance!.Value, lapLengthMeters)
+            })
+            .OrderBy(sample => LapDistanceNormalizer.ToSegmentRelativeDistance(sample.LapDistance!.Value, segment, lapLengthMeters))
             .ToArray();
     }
 
@@ -1533,17 +1542,15 @@ public sealed class CornerAnalysisViewModel : ViewModelBase
 
     private static ReferenceCornerMetrics? BuildReferenceCornerMetrics(
         TrackSegment segment,
-        IReadOnlyList<LapSample>? referenceSamples)
+        IReadOnlyList<LapSample>? referenceSamples,
+        float? lapLengthMeters)
     {
         if (referenceSamples is null || referenceSamples.Count == 0)
         {
             return null;
         }
 
-        var segmentSamples = referenceSamples
-            .Where(sample => sample.LapDistance is not null && segment.ContainsDistance(sample.LapDistance.Value))
-            .OrderBy(sample => sample.LapDistance)
-            .ToArray();
+        var segmentSamples = SelectSegmentSamples(segment, referenceSamples, lapLengthMeters).ToArray();
         if (segmentSamples.Length == 0)
         {
             return null;

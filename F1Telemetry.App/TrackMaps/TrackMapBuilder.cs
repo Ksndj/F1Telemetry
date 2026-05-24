@@ -29,12 +29,14 @@ public sealed class TrackMapBuilder
     /// <param name="trackId">The track id when known.</param>
     /// <param name="lapNumber">The lap number represented by the samples.</param>
     /// <param name="samples">The candidate lap samples.</param>
+    /// <param name="lapLengthMeters">The lap length used to normalize wrapped lap distances.</param>
     /// <returns>A drawable track map or an explicit empty-state snapshot.</returns>
     public TrackMapSnapshot BuildSnapshot(
         string sessionUid,
         int? trackId,
         int lapNumber,
-        IEnumerable<LapSample> samples)
+        IEnumerable<LapSample> samples,
+        float? lapLengthMeters = null)
     {
         ArgumentNullException.ThrowIfNull(samples);
         var rawPoints = samples
@@ -45,7 +47,7 @@ public sealed class TrackMapBuilder
                 && float.IsFinite(sample.WorldPositionX.Value)
                 && float.IsFinite(sample.WorldPositionZ.Value))
             .Select(sample => new RawTrackPoint(
-                sample.LapDistance!.Value,
+                LapDistanceNormalizer.Normalize(sample.LapDistance!.Value, lapLengthMeters),
                 sample.WorldPositionX!.Value,
                 sample.WorldPositionZ!.Value))
             .OrderBy(point => point.LapDistance)
@@ -160,19 +162,19 @@ public sealed class TrackMapBuilder
 
         var highlightPoints = snapshot.Points
             .Where(point => segment.ContainsDistance(point.LapDistance))
-            .OrderBy(point => point.LapDistance)
+            .OrderBy(point => LapDistanceNormalizer.ToSegmentRelativeDistance(point.LapDistance, segment, lapLengthMeters))
             .ToArray();
 
         if (highlightPoints.Length == 0)
         {
-            highlightPoints = SelectNearestPoints(snapshot.Points, CalculateMidpoint(segment, lapLengthMeters), 1);
+            highlightPoints = SelectNearestPoints(snapshot.Points, CalculateMidpoint(segment, lapLengthMeters), 1, segment, lapLengthMeters);
         }
         else if (highlightPoints.Length == 1)
         {
-            highlightPoints = SelectNearestPoints(snapshot.Points, highlightPoints[0].LapDistance, 3);
+            highlightPoints = SelectNearestPoints(snapshot.Points, highlightPoints[0].LapDistance, 3, segment, lapLengthMeters);
         }
 
-        var markerPoint = SelectNearestPoint(highlightPoints, CalculateMidpoint(segment, lapLengthMeters));
+        var markerPoint = SelectNearestPoint(highlightPoints, CalculateMidpoint(segment, lapLengthMeters), lapLengthMeters);
         return new CornerTrackMapOverlay
         {
             CornerName = cornerName,
@@ -271,20 +273,32 @@ public sealed class TrackMapBuilder
         return output;
     }
 
-    private static TrackMapPoint? SelectNearestPoint(IReadOnlyList<TrackMapPoint> points, float targetDistance)
+    private static TrackMapPoint? SelectNearestPoint(
+        IReadOnlyList<TrackMapPoint> points,
+        float targetDistance,
+        float? lapLengthMeters)
     {
         return points.Count == 0
             ? null
-            : points.MinBy(point => Math.Abs(point.LapDistance - targetDistance));
+            : points.MinBy(point => LapDistanceNormalizer.CircularDistance(point.LapDistance, targetDistance, lapLengthMeters));
     }
 
-    private static TrackMapPoint[] SelectNearestPoints(IReadOnlyList<TrackMapPoint> points, float targetDistance, int count)
+    private static TrackMapPoint[] SelectNearestPoints(
+        IReadOnlyList<TrackMapPoint> points,
+        float targetDistance,
+        int count,
+        TrackSegment? segment,
+        float? lapLengthMeters)
     {
-        return points
-            .OrderBy(point => Math.Abs(point.LapDistance - targetDistance))
+        var selected = points
+            .OrderBy(point => LapDistanceNormalizer.CircularDistance(point.LapDistance, targetDistance, lapLengthMeters))
             .Take(count)
-            .OrderBy(point => point.LapDistance)
             .ToArray();
+        return segment is null
+            ? selected.OrderBy(point => point.LapDistance).ToArray()
+            : selected
+                .OrderBy(point => LapDistanceNormalizer.ToSegmentRelativeDistance(point.LapDistance, segment, lapLengthMeters))
+                .ToArray();
     }
 
     private static float CalculateMidpoint(TrackSegment segment, float? lapLengthMeters)
