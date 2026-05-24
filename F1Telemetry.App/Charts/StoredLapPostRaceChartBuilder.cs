@@ -118,20 +118,17 @@ public sealed class StoredLapPostRaceChartBuilder
     /// <param name="trend">The per-lap tyre wear points to plot.</param>
     public ChartPanelViewModel BuildTyreWearTrendPanel(IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
     {
-        var rearLeft = BuildTyreWearPoints(trend, point => point.RearLeft);
-        var rearRight = BuildTyreWearPoints(trend, point => point.RearRight);
-        var frontLeft = BuildTyreWearPoints(trend, point => point.FrontLeft);
-        var frontRight = BuildTyreWearPoints(trend, point => point.FrontRight);
-        if (rearLeft.Count == 0 && rearRight.Count == 0 && frontLeft.Count == 0 && frontRight.Count == 0)
+        var orderedTrend = OrderTyreWearTrend(trend);
+        if (orderedTrend.Count == 0)
         {
             return BuildTyreWearEmptyPanel();
         }
 
         var series = new List<ChartSeriesModel>(capacity: 4);
-        AddSeries(series, "后左", Brushes.OrangeRed, rearLeft);
-        AddSeries(series, "后右", Brushes.Gold, rearRight);
-        AddSeries(series, "前左", Brushes.DeepSkyBlue, frontLeft);
-        AddSeries(series, "前右", Brushes.LimeGreen, frontRight);
+        AddTyreWearSeries(series, "后左", orderedTrend, point => point.RearLeft);
+        AddTyreWearSeries(series, "后右", orderedTrend, point => point.RearRight);
+        AddTyreWearSeries(series, "前左", orderedTrend, point => point.FrontLeft);
+        AddTyreWearSeries(series, "前右", orderedTrend, point => point.FrontRight);
 
         return CreatePanel("四轮胎磨趋势", "圈号", "%", "该会话暂无完整四轮胎磨样本", series);
     }
@@ -202,17 +199,30 @@ public sealed class StoredLapPostRaceChartBuilder
             .ToArray();
     }
 
-    private static IReadOnlyList<ChartPointModel> BuildTyreWearPoints(
+    private static void AddTyreWearSeries(
+        ICollection<ChartSeriesModel> series,
+        string wheelName,
         IReadOnlyList<StoredLapTyreWearTrendPoint> trend,
         Func<StoredLapTyreWearTrendPoint, float> selector)
     {
+        foreach (var run in TyreCompoundSeriesBuilder.BuildContiguousRuns(
+                     trend,
+                     point => point.LapNumber,
+                     point => TyreCompoundChartPalette.FromCodes(point.VisualTyreCompound, point.ActualTyreCompound),
+                     point => selector(point),
+                     style => $"{style.Label} {wheelName}"))
+        {
+            series.Add(run);
+        }
+    }
+
+    private static IReadOnlyList<StoredLapTyreWearTrendPoint> OrderTyreWearTrend(
+        IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
         return trend
-            .Select(point => new ChartPointModel
-            {
-                X = point.LapNumber,
-                Y = selector(point)
-            })
-            .Where(point => double.IsFinite(point.X) && double.IsFinite(point.Y))
+            .OrderBy(point => point.LapNumber)
+            .ThenBy(point => point.SampleIndex)
+            .ThenBy(point => point.SampledAt)
             .ToArray();
     }
 

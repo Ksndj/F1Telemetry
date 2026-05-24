@@ -66,15 +66,36 @@ public sealed class StoredLapSessionComparisonChartBuilder
     }
 
     /// <summary>
-    /// Builds the fixed unavailable state for stored-lap tyre wear comparison.
+    /// Builds the stored four-wheel average tyre-wear comparison panel.
+    /// </summary>
+    /// <param name="sessions">The session tyre-wear inputs to plot.</param>
+    public ChartPanelViewModel BuildTyreWearPanel(IReadOnlyList<SessionComparisonTyreWearChartInput> sessions)
+    {
+        var series = new List<ChartSeriesModel>();
+        foreach (var session in sessions)
+        {
+            foreach (var run in TyreCompoundSeriesBuilder.BuildContiguousRuns(
+                         OrderTyreWearTrend(session.Trend),
+                         point => point.LapNumber,
+                         point => TyreCompoundChartPalette.FromCodes(point.VisualTyreCompound, point.ActualTyreCompound),
+                         CalculateAverageTyreWear,
+                         style => $"{session.SessionLabel} · {style.Label}"))
+            {
+                series.Add(run);
+            }
+        }
+
+        return series.Count == 0
+            ? CreateTyreWearEmptyPanel()
+            : CreatePanel("四轮平均胎磨对比", "圈号", "%", "所选会话暂无完整四轮胎磨数据", series);
+    }
+
+    /// <summary>
+    /// Builds the empty state for stored-lap tyre wear comparison.
     /// </summary>
     public ChartPanelViewModel BuildTyreWearUnavailablePanel()
     {
-        return CreateEmptyPanel(
-            "四轮胎磨对比",
-            "圈号",
-            "%",
-            "历史单圈未保存四轮胎磨数据，无法生成胎磨对比");
+        return CreateTyreWearEmptyPanel();
     }
 
     private static ChartPanelViewModel BuildPanel<T>(
@@ -134,6 +155,26 @@ public sealed class StoredLapSessionComparisonChartBuilder
             .ToArray();
     }
 
+    private static IReadOnlyList<StoredLapTyreWearTrendPoint> OrderTyreWearTrend(
+        IReadOnlyList<StoredLapTyreWearTrendPoint> trend)
+    {
+        return trend
+            .OrderBy(point => point.LapNumber)
+            .ThenBy(point => point.SampleIndex)
+            .ThenBy(point => point.SampledAt)
+            .ToArray();
+    }
+
+    private static double CalculateAverageTyreWear(StoredLapTyreWearTrendPoint point)
+    {
+        return (point.RearLeft + point.RearRight + point.FrontLeft + point.FrontRight) / 4d;
+    }
+
+    private static ChartPanelViewModel CreateTyreWearEmptyPanel()
+    {
+        return CreateEmptyPanel("四轮平均胎磨对比", "圈号", "%", "所选会话暂无完整四轮胎磨数据，无法生成胎磨对比");
+    }
+
     private static ChartPanelViewModel CreatePanel(
         string title,
         string xAxisLabel,
@@ -174,3 +215,12 @@ public sealed class StoredLapSessionComparisonChartBuilder
 public sealed record SessionComparisonChartInput(
     string SessionLabel,
     IReadOnlyList<StoredLap> Laps);
+
+/// <summary>
+/// Represents one selected session and its ordered tyre-wear trend points for comparison charts.
+/// </summary>
+/// <param name="SessionLabel">The chart legend label.</param>
+/// <param name="Trend">The ordered four-wheel tyre-wear trend points for the session.</param>
+public sealed record SessionComparisonTyreWearChartInput(
+    string SessionLabel,
+    IReadOnlyList<StoredLapTyreWearTrendPoint> Trend);

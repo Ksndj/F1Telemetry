@@ -139,10 +139,10 @@ public sealed class LapSampleRepositoryTests
 
         await repository.AddRangeAsync(
             [
-                CreateSample("session-tyres", lapNumber: 1, sampleIndex: 1, rearLeft: 10.1f, rearRight: 10.2f, frontLeft: 9.1f, frontRight: 9.2f),
-                CreateSample("session-tyres", lapNumber: 1, sampleIndex: 3, rearLeft: 11.1f, rearRight: 11.2f, frontLeft: 10.1f, frontRight: 10.2f),
+                CreateSample("session-tyres", lapNumber: 1, sampleIndex: 1, rearLeft: 10.1f, rearRight: 10.2f, frontLeft: 9.1f, frontRight: 9.2f, visualTyreCompound: 16),
+                CreateSample("session-tyres", lapNumber: 1, sampleIndex: 3, rearLeft: 11.1f, rearRight: 11.2f, frontLeft: 10.1f, frontRight: 10.2f, visualTyreCompound: 17),
                 CreateSample("session-tyres", lapNumber: 2, sampleIndex: 1, rearLeft: null, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
-                CreateSample("session-tyres", lapNumber: 2, sampleIndex: 2, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f),
+                CreateSample("session-tyres", lapNumber: 2, sampleIndex: 2, rearLeft: 12.1f, rearRight: 12.2f, frontLeft: 11.1f, frontRight: 11.2f, visualTyreCompound: 8),
                 CreateSample("other-session", lapNumber: 1, sampleIndex: 9, rearLeft: 99f, rearRight: 99f, frontLeft: 99f, frontRight: 99f)
             ]);
 
@@ -152,7 +152,9 @@ public sealed class LapSampleRepositoryTests
         Assert.Equal(new[] { 1, 2 }, trend.Select(point => point.LapNumber));
         Assert.Equal(3, trend[0].SampleIndex);
         Assert.Equal(11.1f, trend[0].RearLeft);
+        Assert.Equal(17, trend[0].VisualTyreCompound);
         Assert.Equal(12.2f, trend[1].RearRight);
+        Assert.Equal(8, trend[1].VisualTyreCompound);
     }
 
     /// <summary>
@@ -237,7 +239,9 @@ public sealed class LapSampleRepositoryTests
         float? rearLeft,
         float? rearRight,
         float? frontLeft,
-        float? frontRight)
+        float? frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
     {
         return new StoredLapSample
         {
@@ -250,6 +254,8 @@ public sealed class LapSampleRepositoryTests
             TyreWearRearRight = rearRight,
             TyreWearFrontLeft = frontLeft,
             TyreWearFrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound,
             IsValid = true,
             CreatedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddSeconds(sampleIndex)
         };

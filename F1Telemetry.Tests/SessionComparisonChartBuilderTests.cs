@@ -1,5 +1,6 @@
 using F1Telemetry.App.Charts;
 using F1Telemetry.Storage.Models;
+using System.Windows.Media;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -96,14 +97,48 @@ public sealed class SessionComparisonChartBuilderTests
     }
 
     /// <summary>
-    /// Verifies tyre wear comparison is explicitly unavailable.
+    /// Verifies stored four-wheel tyre wear renders average series using official compound colors.
     /// </summary>
     [Fact]
-    public void BuildTyreWearUnavailablePanel_DoesNotFakeStoredTyreWear()
+    public void BuildTyreWearPanel_WithStoredWheelWear_UsesCompoundColoredAverageSeries()
+    {
+        var builder = new StoredLapSessionComparisonChartBuilder();
+        var inputs = new[]
+        {
+            new SessionComparisonTyreWearChartInput(
+                "Race A",
+                [
+                    CreateTyreWearPoint(1, rearLeft: 10f, rearRight: 12f, frontLeft: 14f, frontRight: 16f, visualTyreCompound: 16),
+                    CreateTyreWearPoint(2, rearLeft: 20f, rearRight: 22f, frontLeft: 24f, frontRight: 26f, visualTyreCompound: 17)
+                ]),
+            new SessionComparisonTyreWearChartInput(
+                "Race B",
+                [
+                    CreateTyreWearPoint(1, rearLeft: 8f, rearRight: 10f, frontLeft: 12f, frontRight: 14f, visualTyreCompound: 8)
+                ])
+        };
+
+        var panel = builder.BuildTyreWearPanel(inputs);
+
+        Assert.True(panel.HasData);
+        Assert.Equal("四轮平均胎磨对比", panel.Title);
+        Assert.Equal(new[] { "Race A · 红胎", "Race A · 黄胎", "Race B · 全雨胎" }, panel.Series.Select(series => series.Name));
+        Assert.Equal(13d, panel.Series[0].Points[0].Y);
+        Assert.Equal(23d, panel.Series[1].Points[0].Y);
+        Assert.Equal(Color.FromRgb(0xE1, 0x06, 0x00), GetSolidColor(panel.Series[0].StrokeBrush));
+        Assert.Equal(Color.FromRgb(0xFF, 0xD1, 0x2E), GetSolidColor(panel.Series[1].StrokeBrush));
+        Assert.Equal(Color.FromRgb(0x00, 0x9F, 0xE3), GetSolidColor(panel.Series[2].StrokeBrush));
+    }
+
+    /// <summary>
+    /// Verifies tyre wear comparison keeps an explicit empty state when no stored samples exist.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearPanel_WithoutStoredWheelWear_ReturnsEmptyState()
     {
         var builder = new StoredLapSessionComparisonChartBuilder();
 
-        var panel = builder.BuildTyreWearUnavailablePanel();
+        var panel = builder.BuildTyreWearPanel([]);
 
         Assert.False(panel.HasData);
         Assert.Empty(panel.Series);
@@ -128,5 +163,33 @@ public sealed class SessionComparisonChartBuilderTests
             ErsUsed = ersUsed,
             CreatedAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber)
         };
+    }
+
+    private static StoredLapTyreWearTrendPoint CreateTyreWearPoint(
+        int lapNumber,
+        float rearLeft,
+        float rearRight,
+        float frontLeft,
+        float frontRight,
+        int? visualTyreCompound = null,
+        int? actualTyreCompound = null)
+    {
+        return new StoredLapTyreWearTrendPoint
+        {
+            LapNumber = lapNumber,
+            SampleIndex = lapNumber,
+            SampledAt = DateTimeOffset.Parse("2026-04-18T10:00:00Z").AddMinutes(lapNumber),
+            RearLeft = rearLeft,
+            RearRight = rearRight,
+            FrontLeft = frontLeft,
+            FrontRight = frontRight,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound
+        };
+    }
+
+    private static Color GetSolidColor(Brush brush)
+    {
+        return Assert.IsType<SolidColorBrush>(brush).Color;
     }
 }

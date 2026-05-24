@@ -55,7 +55,11 @@ public partial class App : Application
         var raceEngineerReportRepository = new RaceEngineerReportRepository(databaseService);
         var deletionConfirmationService = new MessageBoxHistorySessionDeletionConfirmationService();
         var historyBrowser = new HistorySessionBrowserViewModel(sessionRepository, lapRepository, deletionConfirmationService);
-        var sessionComparison = new SessionComparisonViewModel(sessionRepository, lapRepository, deletionConfirmationService);
+        var sessionComparison = new SessionComparisonViewModel(
+            sessionRepository,
+            lapRepository,
+            deletionConfirmationService,
+            lapSampleRepository);
         var storagePersistenceService = new StoragePersistenceService(
             sessionRepository,
             lapRepository,

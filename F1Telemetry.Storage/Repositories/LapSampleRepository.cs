@@ -241,7 +241,9 @@ public sealed class LapSampleRepository : ILapSampleRepository
                                tyre_wear_front_left,
                                tyre_wear_front_right,
                                tyre_wear_rear_left,
-                               tyre_wear_rear_right
+                               tyre_wear_rear_right,
+                               visual_tyre_compound,
+                               actual_tyre_compound
                         FROM (
                             SELECT lap_number,
                                    sample_index,
@@ -250,6 +252,8 @@ public sealed class LapSampleRepository : ILapSampleRepository
                                    tyre_wear_front_right,
                                    tyre_wear_rear_left,
                                    tyre_wear_rear_right,
+                                   visual_tyre_compound,
+                                   actual_tyre_compound,
                                    ROW_NUMBER() OVER (
                                        PARTITION BY lap_number
                                        ORDER BY sample_index DESC, sampled_at DESC, id DESC) AS row_number
@@ -282,7 +286,9 @@ public sealed class LapSampleRepository : ILapSampleRepository
                             FrontLeft = reader.GetFloat(3),
                             FrontRight = reader.GetFloat(4),
                             RearLeft = reader.GetFloat(5),
-                            RearRight = reader.GetFloat(6)
+                            RearRight = reader.GetFloat(6),
+                            VisualTyreCompound = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                            ActualTyreCompound = reader.IsDBNull(8) ? null : reader.GetInt32(8)
                         });
                 }
 

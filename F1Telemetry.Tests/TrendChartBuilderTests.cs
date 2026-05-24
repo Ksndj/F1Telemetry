@@ -1,6 +1,7 @@
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Charts;
 using F1Telemetry.Udp.Packets;
+using System.Windows.Media;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -146,6 +147,37 @@ public sealed class TrendChartBuilderTests
     }
 
     /// <summary>
+    /// Verifies live lap tyre wear trend uses the official compound color from lap tyre labels.
+    /// </summary>
+    [Fact]
+    public void BuildTyreWearTrendPanel_WithCompoundLabels_UsesOfficialCompoundColors()
+    {
+        var builder = new TrendChartBuilder();
+
+        var panel = builder.BuildTyreWearTrendPanel(
+        [
+            new LapSummary
+            {
+                LapNumber = 7,
+                EndTyre = "V16 / A19",
+                TyreWearDeltaPerWheel = new WheelSet<float>(0.4f, 0.5f, 0.7f, 0.8f)
+            },
+            new LapSummary
+            {
+                LapNumber = 8,
+                EndTyre = "V8 / A8",
+                TyreWearDeltaPerWheel = new WheelSet<float>(0.6f, 0.7f, 0.9f, 1.0f)
+            }
+        ]);
+
+        Assert.True(panel.HasData);
+        Assert.Contains(panel.Series, series => series.Name == "红胎 后左");
+        Assert.Contains(panel.Series, series => series.Name == "全雨胎 后左");
+        Assert.Equal(Color.FromRgb(0xE1, 0x06, 0x00), GetSolidColor(panel.Series.First(series => series.Name == "红胎 后左").StrokeBrush));
+        Assert.Equal(Color.FromRgb(0x00, 0x9F, 0xE3), GetSolidColor(panel.Series.First(series => series.Name == "全雨胎 后左").StrokeBrush));
+    }
+
+    /// <summary>
     /// Verifies that missing completed fuel laps reports the fuel-specific empty state.
     /// </summary>
     [Fact]
@@ -162,5 +194,10 @@ public sealed class TrendChartBuilderTests
         Assert.True(panel.IsEmpty);
         Assert.Equal("完成至少一圈后显示", panel.EmptyStateText);
         Assert.Empty(panel.Series);
+    }
+
+    private static Color GetSolidColor(Brush brush)
+    {
+        return Assert.IsType<SolidColorBrush>(brush).Color;
     }
 }
