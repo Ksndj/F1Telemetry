@@ -4,21 +4,24 @@ using Xunit;
 namespace F1Telemetry.Tests;
 
 /// <summary>
-/// Verifies the README stays focused on user-facing setup and current capabilities.
+/// Verifies the README stays focused on the project introduction and current capabilities.
 /// </summary>
 public sealed class ReadmeUserGuideTests
 {
     /// <summary>
-    /// Verifies the README covers the public usage guide required by V1.1.
+    /// Verifies the README covers the project introduction and current capabilities.
     /// </summary>
     [Fact]
-    public void Readme_IncludesUserFacingCapabilitiesAndConfiguration()
+    public void Readme_IncludesProjectIntroductionAndCurrentCapabilities()
     {
         var readme = File.ReadAllText(FindRepositoryFile("README.md"));
 
         foreach (var requiredText in new[]
         {
             "F1 25 Windows 遥测助手",
+            "项目介绍",
+            "项目现有功能",
+            "3.0.4",
             "UDP 接收",
             "实时概览",
             "AI 分析播报",
@@ -28,17 +31,27 @@ public sealed class ReadmeUserGuideTests
             "AI 分析",
             "Windows TTS",
             "SQLite 持久化",
-            "20777",
             "DeepSeek",
-            "DPAPI",
-            "V1.1",
-            "actual dry compound",
-            "V1.1.1",
             "V3"
         })
         {
             Assert.Contains(requiredText, readme, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    /// <summary>
+    /// Verifies roadmap and setup sections stay out of the compact README.
+    /// </summary>
+    [Fact]
+    public void Readme_DoesNotIncludeRoadmapOrSetupSections()
+    {
+        var readme = File.ReadAllText(FindRepositoryFile("README.md"));
+
+        Assert.DoesNotContain("版本路线图", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("建议里程碑", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("运行环境", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("基本使用", readme, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("AI 配置", readme, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
