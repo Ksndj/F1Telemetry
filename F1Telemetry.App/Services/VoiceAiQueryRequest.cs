@@ -1,4 +1,5 @@
 using F1Telemetry.AI.Models;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Models;
 
 namespace F1Telemetry.App.Services;
@@ -29,7 +30,7 @@ public sealed record VoiceAiQueryRequest
     public string AdviceKey { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets the maximum microphone listening window.
+    /// Gets the completed microphone recording to recognize.
     /// </summary>
-    public TimeSpan RecognitionTimeout { get; init; } = TimeSpan.FromSeconds(8);
+    public VoiceRecordingResult Recording { get; init; } = new();
 }

@@ -40,6 +40,10 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
         Assert.False(settings.VoiceAi.Enabled);
+        Assert.Equal(VoiceAiInputBindingKind.None, settings.VoiceAi.InputBinding.Kind);
+        Assert.Equal(VoiceAiTalkMode.HoldToTalk, settings.VoiceAi.TalkMode);
+        Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceId);
+        Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceName);
         Assert.Equal(VoiceAiOptions.NoHotkey, settings.VoiceAi.Hotkey);
         Assert.Equal(20777, settings.Udp.ListenPort);
     }
@@ -504,10 +508,10 @@ public sealed class AppSettingsStoreTests
     }
 
     /// <summary>
-    /// Verifies saving voice AI options preserves existing settings blocks and writes the hotkey.
+    /// Verifies saving voice AI options preserves existing settings blocks and writes the input binding.
     /// </summary>
     [Fact]
-    public async Task SaveVoiceAiOptionsAsync_PreservesExistingBlocksAndWritesHotkey()
+    public async Task SaveVoiceAiOptionsAsync_PreservesExistingBlocksAndWritesInputBinding()
     {
         var root = CreateRootPath();
         Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
@@ -538,18 +542,48 @@ public sealed class AppSettingsStoreTests
 
         IAppSettingsStore store = new AppSettingsStore(root);
 
-        await store.SaveVoiceAiOptionsAsync(new VoiceAiOptions { Enabled = true, Hotkey = "F13" });
+        await store.SaveVoiceAiOptionsAsync(
+            new VoiceAiOptions
+            {
+                Enabled = true,
+                InputBinding = new VoiceAiInputBinding
+                {
+                    Kind = VoiceAiInputBindingKind.RawInputHidButton,
+                    DeviceId = @"\\?\hid#vid_046d&pid_c29b",
+                    DeviceName = "Logitech Wheel",
+                    ButtonIndex = 7,
+                    ButtonMask = 64,
+                    DisplayText = "Logitech Wheel · 按钮 7"
+                },
+                TalkMode = VoiceAiTalkMode.ToggleToTalk,
+                MicrophoneDeviceId = "1",
+                MicrophoneDeviceName = "USB Microphone",
+                Hotkey = "F13"
+            });
 
         var persisted = await store.LoadAsync();
         using var json = await ReadPersistedJsonAsync(root);
 
         Assert.True(persisted.VoiceAi.Enabled);
+        Assert.Equal(VoiceAiInputBindingKind.RawInputHidButton, persisted.VoiceAi.InputBinding.Kind);
+        Assert.Equal(7, persisted.VoiceAi.InputBinding.ButtonIndex);
+        Assert.Equal(64UL, persisted.VoiceAi.InputBinding.ButtonMask);
+        Assert.Equal("Logitech Wheel · 按钮 7", persisted.VoiceAi.InputBinding.DisplayText);
+        Assert.Equal(VoiceAiTalkMode.ToggleToTalk, persisted.VoiceAi.TalkMode);
+        Assert.Equal("1", persisted.VoiceAi.MicrophoneDeviceId);
+        Assert.Equal("USB Microphone", persisted.VoiceAi.MicrophoneDeviceName);
         Assert.Equal("F13", persisted.VoiceAi.Hotkey);
         Assert.Equal("configured", persisted.Ai.ApiKey);
         Assert.True(persisted.Tts.TtsEnabled);
         Assert.Equal(20778, persisted.Udp.ListenPort);
-        Assert.True(json.RootElement.GetProperty("voiceAi").GetProperty("enabled").GetBoolean());
-        Assert.Equal("F13", json.RootElement.GetProperty("voiceAi").GetProperty("hotkey").GetString());
+        var voiceAiJson = json.RootElement.GetProperty("voiceAi");
+        Assert.True(voiceAiJson.GetProperty("enabled").GetBoolean());
+        Assert.Equal((int)VoiceAiTalkMode.ToggleToTalk, voiceAiJson.GetProperty("talkMode").GetInt32());
+        Assert.Equal("1", voiceAiJson.GetProperty("microphoneDeviceId").GetString());
+        Assert.Equal("USB Microphone", voiceAiJson.GetProperty("microphoneDeviceName").GetString());
+        Assert.Equal("F13", voiceAiJson.GetProperty("hotkey").GetString());
+        Assert.Equal((int)VoiceAiInputBindingKind.RawInputHidButton, voiceAiJson.GetProperty("inputBinding").GetProperty("kind").GetInt32());
+        Assert.Equal(7, voiceAiJson.GetProperty("inputBinding").GetProperty("buttonIndex").GetInt32());
     }
 
     /// <summary>

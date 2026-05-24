@@ -1,38 +1,40 @@
-using System.Globalization;
-using System.Runtime.Versioning;
 using System.Speech.Recognition;
 using F1Telemetry.Core.Interfaces;
+using F1Telemetry.Core.Models;
 
 namespace F1Telemetry.TTS.Services;
 
 /// <summary>
-/// Uses the default Windows speech recognizer and microphone for one-shot dictation.
+/// Uses Windows speech recognition to transcribe recorded microphone audio.
 /// </summary>
-[SupportedOSPlatform("windows")]
 public sealed class WindowsSpeechRecognitionService : ISpeechRecognitionService
 {
     /// <inheritdoc />
-    public Task<string> RecognizeOnceAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    public Task<string> RecognizeAsync(
+        VoiceRecordingResult recording,
+        CancellationToken cancellationToken = default)
     {
-        if (timeout <= TimeSpan.Zero)
+        ArgumentNullException.ThrowIfNull(recording);
+
+        if (recording.WaveBytes.Length == 0 || !recording.HasInput)
         {
             return Task.FromResult(string.Empty);
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.Run(() => RecognizeCore(timeout, cancellationToken), cancellationToken);
+        return Task.Run(() => RecognizeCore(recording.WaveBytes, cancellationToken), cancellationToken);
     }
 
-    private static string RecognizeCore(TimeSpan timeout, CancellationToken cancellationToken)
+    private static string RecognizeCore(byte[] waveBytes, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
-            using var recognizer = CreateRecognizer();
+            using var recognizer = new SpeechRecognitionEngine();
             recognizer.LoadGrammar(new DictationGrammar());
-            recognizer.SetInputToDefaultAudioDevice();
-            var result = recognizer.Recognize(timeout);
+            using var stream = new MemoryStream(waveBytes);
+            recognizer.SetInputToWaveStream(stream);
+            var result = recognizer.Recognize();
             cancellationToken.ThrowIfCancellationRequested();
             return result?.Text.Trim() ?? string.Empty;
         }
@@ -43,18 +45,6 @@ public sealed class WindowsSpeechRecognitionService : ISpeechRecognitionService
         catch (Exception ex)
         {
             throw new InvalidOperationException("Windows speech recognition is unavailable.", ex);
-        }
-    }
-
-    private static SpeechRecognitionEngine CreateRecognizer()
-    {
-        try
-        {
-            return new SpeechRecognitionEngine(CultureInfo.CurrentCulture);
-        }
-        catch
-        {
-            return new SpeechRecognitionEngine();
         }
     }
 }

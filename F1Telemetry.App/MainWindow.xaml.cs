@@ -1,11 +1,10 @@
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Windowing;
 
@@ -16,12 +15,12 @@ namespace F1Telemetry.App;
 /// </summary>
 public partial class MainWindow : Window
 {
-    private const int WmHotkey = 0x0312;
-    private const int VoiceAiHotkeyId = 0x4641;
+    private readonly WindowsRawInputButtonService _voiceInputService = new();
     private Storyboard? _windowStateToastStoryboard;
-    private HwndSource? _hotkeySource;
-    private DashboardViewModel? _hotkeyDashboard;
-    private bool _isVoiceAiHotkeyRegistered;
+    private HwndSource? _voiceInputSource;
+    private DashboardViewModel? _voiceInputDashboard;
+    private bool _voiceInputReady;
+    private string _voiceInputStatus = "方向盘 Raw Input 等待窗口注册。";
     private bool _shutdownStarted;
     private bool _shutdownCompleted;
 
@@ -37,17 +36,7 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyWindowStateVisuals(WindowState, animate: false);
-        InitializeVoiceAiHotkeyHook();
-        RefreshVoiceAiHotkeyRegistration();
-    }
-
-    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
-    {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (DataContext is DashboardViewModel dashboard && dashboard.TryHandleVoiceAiHotkey(key))
-        {
-            e.Handled = true;
-        }
+        InitializeVoiceAiInputHook();
     }
 
     private void Window_StateChanged(object sender, EventArgs e)
@@ -93,7 +82,7 @@ public partial class MainWindow : Window
 
     private void Window_Closed(object sender, EventArgs e)
     {
-        ReleaseVoiceAiHotkeyHook();
+        ReleaseVoiceAiInputHook();
         if (_shutdownCompleted)
         {
             Application.Current?.Shutdown();
@@ -102,32 +91,13 @@ public partial class MainWindow : Window
 
     private void Window_DataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (_hotkeyDashboard is not null)
-        {
-            _hotkeyDashboard.PropertyChanged -= Dashboard_PropertyChanged;
-        }
-
-        _hotkeyDashboard = e.NewValue as DashboardViewModel;
-        if (_hotkeyDashboard is not null)
-        {
-            _hotkeyDashboard.PropertyChanged += Dashboard_PropertyChanged;
-        }
-
-        RefreshVoiceAiHotkeyRegistration();
+        _voiceInputDashboard = e.NewValue as DashboardViewModel;
+        _voiceInputDashboard?.UpdateVoiceAiRawInputStatus(_voiceInputStatus, _voiceInputReady);
     }
 
-    private void Dashboard_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void InitializeVoiceAiInputHook()
     {
-        if (string.Equals(e.PropertyName, nameof(DashboardViewModel.VoiceAiEnabled), StringComparison.Ordinal) ||
-            string.Equals(e.PropertyName, nameof(DashboardViewModel.VoiceAiHotkey), StringComparison.Ordinal))
-        {
-            RefreshVoiceAiHotkeyRegistration();
-        }
-    }
-
-    private void InitializeVoiceAiHotkeyHook()
-    {
-        if (_hotkeySource is not null)
+        if (_voiceInputSource is not null)
         {
             return;
         }
@@ -138,81 +108,35 @@ public partial class MainWindow : Window
             return;
         }
 
-        _hotkeySource = HwndSource.FromHwnd(handle);
-        _hotkeySource?.AddHook(WndProc);
-    }
-
-    private void ReleaseVoiceAiHotkeyHook()
-    {
-        UnregisterVoiceAiHotkey();
-        if (_hotkeyDashboard is not null)
-        {
-            _hotkeyDashboard.PropertyChanged -= Dashboard_PropertyChanged;
-            _hotkeyDashboard = null;
-        }
-
-        _hotkeySource?.RemoveHook(WndProc);
-        _hotkeySource = null;
-    }
-
-    private void RefreshVoiceAiHotkeyRegistration()
-    {
-        UnregisterVoiceAiHotkey();
-        if (_hotkeySource is null ||
-            _hotkeyDashboard is null ||
-            !_hotkeyDashboard.VoiceAiEnabled ||
-            !TryParseVoiceAiHotkey(_hotkeyDashboard.VoiceAiHotkey, out var key) ||
-            !IsGlobalVoiceAiHotkeyCandidate(key))
-        {
-            return;
-        }
-
-        var virtualKey = KeyInterop.VirtualKeyFromKey(key);
-        if (virtualKey == 0)
-        {
-            return;
-        }
-
-        _isVoiceAiHotkeyRegistered = RegisterHotKey(
-            _hotkeySource.Handle,
-            VoiceAiHotkeyId,
-            fsModifiers: 0,
-            vk: (uint)virtualKey);
-    }
-
-    private void UnregisterVoiceAiHotkey()
-    {
-        if (!_isVoiceAiHotkeyRegistered || _hotkeySource is null)
-        {
-            _isVoiceAiHotkeyRegistered = false;
-            return;
-        }
-
-        UnregisterHotKey(_hotkeySource.Handle, VoiceAiHotkeyId);
-        _isVoiceAiHotkeyRegistered = false;
+        _voiceInputSource = HwndSource.FromHwnd(handle);
+        _voiceInputSource?.AddHook(WndProc);
+        _voiceInputService.ButtonInput += VoiceInputService_ButtonInput;
+        _voiceInputReady = _voiceInputService.TryRegister(handle, out _voiceInputStatus);
+        _voiceInputDashboard?.UpdateVoiceAiRawInputStatus(_voiceInputStatus, _voiceInputReady);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmHotkey &&
-            wParam.ToInt32() == VoiceAiHotkeyId &&
-            _hotkeyDashboard is not null &&
-            TryParseVoiceAiHotkey(_hotkeyDashboard.VoiceAiHotkey, out var key))
+        if (_voiceInputService.TryProcessMessage(msg, lParam))
         {
-            handled = _hotkeyDashboard.TryHandleVoiceAiHotkey(key);
+            handled = false;
         }
 
         return IntPtr.Zero;
     }
 
-    private static bool TryParseVoiceAiHotkey(string? hotkey, out Key key)
+    private void VoiceInputService_ButtonInput(object? sender, VoiceAiButtonInput input)
     {
-        return Enum.TryParse(hotkey, ignoreCase: true, out key) && key != Key.None;
+        _voiceInputDashboard?.ObserveVoiceAiButtonInput(input);
     }
 
-    private static bool IsGlobalVoiceAiHotkeyCandidate(Key key)
+    private void ReleaseVoiceAiInputHook()
     {
-        return key >= Key.F13 && key <= Key.F24;
+        _voiceInputService.ButtonInput -= VoiceInputService_ButtonInput;
+        _voiceInputService.Dispose();
+        _voiceInputDashboard = null;
+        _voiceInputSource?.RemoveHook(WndProc);
+        _voiceInputSource = null;
     }
 
     private void CloseAfterShutdown()
@@ -326,10 +250,4 @@ public partial class MainWindow : Window
         Storyboard.SetTargetProperty(animation, new PropertyPath(property));
         return animation;
     }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 }

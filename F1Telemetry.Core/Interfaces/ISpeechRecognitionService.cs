@@ -1,14 +1,16 @@
+using F1Telemetry.Core.Models;
+
 namespace F1Telemetry.Core.Interfaces;
 
 /// <summary>
-/// Captures one short speech utterance from the user's microphone and returns recognized text.
+/// Recognizes speech from captured microphone audio.
 /// </summary>
 public interface ISpeechRecognitionService
 {
     /// <summary>
-    /// Recognizes a single microphone utterance within the provided timeout.
+    /// Recognizes a single microphone utterance from recorded wave audio.
     /// </summary>
-    /// <param name="timeout">The maximum listening window.</param>
+    /// <param name="recording">The completed microphone recording.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task<string> RecognizeOnceAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
+    Task<string> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default);
 }

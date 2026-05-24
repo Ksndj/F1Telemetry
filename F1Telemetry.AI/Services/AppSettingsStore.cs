@@ -318,6 +318,10 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 new VoiceAiOptions
                 {
                     Enabled = ReadBool(voiceAiElement, "enabled"),
+                    InputBinding = ReadVoiceAiInputBinding(voiceAiElement),
+                    TalkMode = ReadEnum(voiceAiElement, "talkMode", VoiceAiTalkMode.HoldToTalk),
+                    MicrophoneDeviceId = ReadString(voiceAiElement, "microphoneDeviceId"),
+                    MicrophoneDeviceName = ReadString(voiceAiElement, "microphoneDeviceName"),
                     Hotkey = ReadString(voiceAiElement, "hotkey", VoiceAiOptions.NoHotkey)
                 });
         }
@@ -327,12 +331,55 @@ public sealed class AppSettingsStore : IAppSettingsStore
         }
     }
 
+    private static VoiceAiInputBinding ReadVoiceAiInputBinding(JsonElement voiceAiElement)
+    {
+        if (!voiceAiElement.TryGetProperty("inputBinding", out var bindingElement))
+        {
+            return new VoiceAiInputBinding();
+        }
+
+        return NormalizeVoiceAiInputBinding(
+            new VoiceAiInputBinding
+            {
+                Kind = ReadEnum(bindingElement, "kind", VoiceAiInputBindingKind.None),
+                DeviceId = ReadString(bindingElement, "deviceId"),
+                DeviceName = ReadString(bindingElement, "deviceName"),
+                ButtonIndex = Math.Max(0, ReadInt(bindingElement, "buttonIndex", 0)),
+                ButtonMask = ReadUInt64(bindingElement, "buttonMask", 0),
+                DisplayText = ReadString(bindingElement, "displayText")
+            });
+    }
+
     private static VoiceAiOptions NormalizeVoiceAiOptions(VoiceAiOptions options)
     {
         var hotkey = options.Hotkey?.Trim();
         return options with
         {
+            InputBinding = NormalizeVoiceAiInputBinding(options.InputBinding),
+            MicrophoneDeviceId = options.MicrophoneDeviceId?.Trim() ?? string.Empty,
+            MicrophoneDeviceName = options.MicrophoneDeviceName?.Trim() ?? string.Empty,
             Hotkey = string.IsNullOrWhiteSpace(hotkey) ? VoiceAiOptions.NoHotkey : hotkey
+        };
+    }
+
+    private static VoiceAiInputBinding NormalizeVoiceAiInputBinding(VoiceAiInputBinding binding)
+    {
+        if (binding.Kind == VoiceAiInputBindingKind.None || binding.ButtonIndex <= 0)
+        {
+            return new VoiceAiInputBinding();
+        }
+
+        var displayText = binding.DisplayText?.Trim();
+        if (string.IsNullOrWhiteSpace(displayText))
+        {
+            displayText = $"方向盘按钮 {binding.ButtonIndex}";
+        }
+
+        return binding with
+        {
+            DeviceId = binding.DeviceId?.Trim() ?? string.Empty,
+            DeviceName = binding.DeviceName?.Trim() ?? string.Empty,
+            DisplayText = displayText
         };
     }
 
@@ -513,6 +560,42 @@ public sealed class AppSettingsStore : IAppSettingsStore
             (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False))
         {
             return property.GetBoolean();
+        }
+
+        return defaultValue;
+    }
+
+    private static ulong ReadUInt64(JsonElement element, string propertyName, ulong defaultValue)
+    {
+        if (element.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.Number &&
+            property.TryGetUInt64(out var value))
+        {
+            return value;
+        }
+
+        return defaultValue;
+    }
+
+    private static TEnum ReadEnum<TEnum>(JsonElement element, string propertyName, TEnum defaultValue)
+        where TEnum : struct, Enum
+    {
+        if (!element.TryGetProperty(propertyName, out var property))
+        {
+            return defaultValue;
+        }
+
+        if (property.ValueKind == JsonValueKind.String &&
+            Enum.TryParse<TEnum>(property.GetString(), ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        if (property.ValueKind == JsonValueKind.Number &&
+            property.TryGetInt32(out var numeric) &&
+            Enum.IsDefined(typeof(TEnum), numeric))
+        {
+            return (TEnum)Enum.ToObject(typeof(TEnum), numeric);
         }
 
         return defaultValue;

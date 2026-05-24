@@ -3,6 +3,7 @@ using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.App.Services;
 using F1Telemetry.Core.Interfaces;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Models;
 using F1Telemetry.TTS.Services;
 using Xunit;
@@ -75,7 +76,14 @@ public sealed class VoiceAiQueryServiceTests
                 TtsEnabled = true,
                 CooldownSeconds = 1
             },
-            AdviceKey = "voice-ai:test"
+            AdviceKey = "voice-ai:test",
+            Recording = new VoiceRecordingResult
+            {
+                HasInput = true,
+                WaveBytes = [1, 2, 3, 4],
+                PeakLevel = 0.4d,
+                Duration = TimeSpan.FromSeconds(1)
+            }
         };
     }
 
@@ -88,7 +96,7 @@ public sealed class VoiceAiQueryServiceTests
             _recognizedText = recognizedText;
         }
 
-        public Task<string> RecognizeOnceAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        public Task<string> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_recognizedText);
         }

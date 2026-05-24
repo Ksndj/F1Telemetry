@@ -207,10 +207,13 @@
                     <Grid Margin="0,16,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150" />
-                            <ColumnDefinition Width="260" />
+                            <ColumnDefinition Width="320" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
@@ -226,26 +229,99 @@
                         <TextBlock Grid.Row="1"
                                    Margin="0,14,0,0"
                                    Foreground="#7FA5D8"
-                                   Text="绑定按键" />
-                        <ComboBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Margin="0,14,12,0"
-                                  Padding="8,5"
-                                  ItemsSource="{Binding VoiceAiHotkeyOptions}"
-                                  SelectedItem="{Binding VoiceAiHotkey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                   Text="方向盘按钮" />
+                        <StackPanel Grid.Row="1"
+                                    Grid.Column="1"
+                                    Margin="0,14,12,0"
+                                    Orientation="Horizontal">
+                            <Button MinWidth="96"
+                                    Padding="12,7"
+                                    Command="{Binding BindVoiceAiInputCommand}"
+                                    Content="绑定按钮" />
+                            <Button MinWidth="72"
+                                    Margin="8,0,0,0"
+                                    Padding="12,7"
+                                    Command="{Binding ClearVoiceAiInputCommand}"
+                                    Content="清除" />
+                        </StackPanel>
                         <TextBlock Grid.Row="1"
                                    Grid.Column="2"
                                    Margin="0,14,0,0"
                                    VerticalAlignment="Center"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding VoiceAiStatusText}"
+                                   Text="{Binding VoiceAiBindingText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
-                                   Text="运行状态" />
+                                   Text="说话模式" />
+                        <ComboBox Grid.Row="2"
+                                  Grid.Column="1"
+                                  Margin="0,12,12,0"
+                                  Padding="8,5"
+                                  DisplayMemberPath="DisplayName"
+                                  ItemsSource="{Binding VoiceAiTalkModeOptions}"
+                                  SelectedItem="{Binding SelectedVoiceAiTalkModeOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Grid.Row="2"
+                                   Grid.Column="2"
+                                   Margin="0,12,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#9AB0C9"
+                                   Text="{Binding SelectedVoiceAiTalkModeOption.Description}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="3"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="麦克风" />
+                        <StackPanel Grid.Row="3"
+                                    Grid.Column="1"
+                                    Grid.ColumnSpan="2"
+                                    Margin="0,12,0,0"
+                                    Orientation="Horizontal">
+                            <ComboBox Width="320"
+                                      Padding="8,5"
+                                      DisplayMemberPath="DisplayName"
+                                      ItemsSource="{Binding VoiceAiMicrophoneDevices}"
+                                      SelectedValue="{Binding VoiceAiMicrophoneDeviceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      SelectedValuePath="DeviceId" />
+                            <Button MinWidth="72"
+                                    Margin="8,0,0,0"
+                                    Padding="12,7"
+                                    Command="{Binding RefreshMicrophonesCommand}"
+                                    Content="刷新" />
+                            <Button MinWidth="96"
+                                    Margin="8,0,0,0"
+                                    Padding="12,7"
+                                    Command="{Binding TestMicrophoneCommand}"
+                                    Content="测试" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="4"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="输入电平" />
+                        <ProgressBar Grid.Row="4"
+                                     Grid.Column="1"
+                                     Margin="0,14,12,0"
+                                     Height="12"
+                                     Maximum="1"
+                                     Minimum="0"
+                                     Value="{Binding VoiceAiMicrophoneTestLevel, Mode=OneWay}" />
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="2"
+                                   Margin="0,12,0,0"
+                                   VerticalAlignment="Center"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding VoiceAiMicrophoneStatusText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="5"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="运行状态" />
+                        <TextBlock Grid.Row="5"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0"

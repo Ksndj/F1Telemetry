@@ -59,9 +59,12 @@ public sealed class VoiceAiQueryService
         string question;
         try
         {
-            question = await _speechRecognitionService.RecognizeOnceAsync(
-                request.RecognitionTimeout,
-                cancellationToken);
+            if (!request.Recording.HasInput || request.Recording.WaveBytes.Length == 0)
+            {
+                return CreateFailure("未检测到语音输入");
+            }
+
+            question = await _speechRecognitionService.RecognizeAsync(request.Recording, cancellationToken);
         }
         catch (OperationCanceledException)
         {

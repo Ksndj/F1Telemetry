@@ -45,7 +45,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxOverviewEventSummaries = 4;
     private const int MaxOverviewEventSummaryChars = 40;
     private const int MaxPostRaceAiLaps = 15;
-    private const int VoiceAiRecognitionTimeoutSeconds = 8;
+    private const int VoiceAiBindingCaptureSeconds = 15;
+    private const int VoiceAiMaxRecordingSeconds = 20;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
     private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
@@ -68,6 +69,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
     private readonly VoiceAiQueryService _voiceAiQueryService;
+    private readonly IMicrophoneService _microphoneService;
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
@@ -91,6 +93,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _readTyreSetsInventoryCommand;
     private readonly RelayCommand _clearTyreInventoryCommand;
     private readonly RelayCommand _saveTyreInventoryCommand;
+    private readonly RelayCommand _bindVoiceAiInputCommand;
+    private readonly RelayCommand _clearVoiceAiInputCommand;
+    private readonly RelayCommand _refreshMicrophonesCommand;
+    private readonly RelayCommand _testMicrophoneCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private PostRaceAiCompletionModeOptionViewModel? _selectedPostRaceAiCompletionMode;
     private bool _isSidebarExpanded = true;
@@ -160,9 +166,25 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _udpRawLogQueueCapacity = 4096;
     private int _udpRawLogSettingsSaveVersion;
     private bool _voiceAiEnabled;
-    private string _voiceAiHotkey = VoiceAiOptions.NoHotkey;
-    private string _voiceAiStatusText = "请选择方向盘映射按键";
+    private VoiceAiInputBinding _voiceAiInputBinding = new();
+    private VoiceAiTalkMode _voiceAiTalkMode = VoiceAiTalkMode.HoldToTalk;
+    private VoiceAiTalkModeOptionViewModel? _selectedVoiceAiTalkModeOption;
+    private string _voiceAiBindingText = "未绑定方向盘按钮";
+    private string _voiceAiStatusText = "请先绑定方向盘按钮";
+    private string _voiceAiMicrophoneDeviceId = string.Empty;
+    private string _voiceAiMicrophoneDeviceName = string.Empty;
+    private string _voiceAiMicrophoneStatusText = "尚未测试麦克风";
+    private double _voiceAiMicrophoneTestLevel;
+    private bool _voiceAiBindingCaptureActive;
+    private bool _voiceAiRawInputReady;
+    private string _voiceAiRawInputStatusText = "方向盘 Raw Input 等待窗口注册。";
+    private bool _isVoiceAiRecording;
     private bool _isVoiceAiQueryRunning;
+    private bool _isVoiceAiMicrophoneTesting;
+    private bool _isStoppingVoiceAiRecording;
+    private IVoiceRecordingSession? _voiceAiRecordingSession;
+    private CancellationTokenSource? _voiceAiRecordingTimeoutCts;
+    private CancellationTokenSource? _voiceAiBindingCaptureCts;
     private int _voiceAiSettingsSaveVersion;
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
@@ -217,6 +239,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="trackMapTrajectoryStore">The optional in-memory track-map trajectory store.</param>
     /// <param name="realtimeCornerAdviceService">The optional realtime corner advice service.</param>
     /// <param name="voiceAiQueryService">The optional voice-to-AI query service.</param>
+    /// <param name="microphoneService">The optional microphone device service.</param>
     public DashboardViewModel(
         IUdpListener udpListener,
         IPacketDispatcher<PacketId, PacketHeader> packetDispatcher,
@@ -239,7 +262,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         CornerAnalysisViewModel? cornerAnalysis = null,
         ITrackMapTrajectoryStore? trackMapTrajectoryStore = null,
         RealtimeCornerAdviceService? realtimeCornerAdviceService = null,
-        VoiceAiQueryService? voiceAiQueryService = null)
+        VoiceAiQueryService? voiceAiQueryService = null,
+        IMicrophoneService? microphoneService = null)
     {
         _udpListener = udpListener ?? throw new ArgumentNullException(nameof(udpListener));
         _packetDispatcher = packetDispatcher ?? throw new ArgumentNullException(nameof(packetDispatcher));
@@ -279,6 +303,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _aiAnalysisService,
             _ttsMessageFactory,
             _ttsQueue);
+        _microphoneService = microphoneService ?? new WindowsMicrophoneService();
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
         _trendChartBuilder = new TrendChartBuilder();
@@ -296,7 +321,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         LogEntries = new ObservableCollection<LogEntryViewModel>();
         OverviewEventSummaries = new ObservableCollection<LogEntryViewModel>();
         AvailableVoices = new ObservableCollection<string>();
-        VoiceAiHotkeyOptions = new ObservableCollection<string>(CreateVoiceAiHotkeyOptions());
+        VoiceAiTalkModeOptions = new ObservableCollection<VoiceAiTalkModeOptionViewModel>(CreateVoiceAiTalkModeOptions());
+        _selectedVoiceAiTalkModeOption = VoiceAiTalkModeOptions[0];
+        VoiceAiMicrophoneDevices = new ObservableCollection<MicrophoneDeviceInfo>();
         RaceWeekendTyreInventoryItems = CreateRaceWeekendTyreInventoryItems();
         PostRaceAiCompletionModes = new ObservableCollection<PostRaceAiCompletionModeOptionViewModel>(
         [
@@ -338,6 +365,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         AiAnalysisLogs.Add(CreateLogEntry("AI", "赛后 AI 总结等待完整正赛结束。"));
         LogEntries.Add(CreateLogEntry("System", "AI / TTS 日志已准备就绪。"));
         LoadAvailableVoices();
+        RefreshVoiceAiMicrophones(persistSelection: false);
         RefreshUdpRawLogStatus();
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
@@ -348,6 +376,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _readTyreSetsInventoryCommand = new RelayCommand(ReadInventoryFromTyreSets);
         _clearTyreInventoryCommand = new RelayCommand(ClearTyreInventory);
         _saveTyreInventoryCommand = new RelayCommand(ForcePersistRaceWeekendTyrePlan);
+        _bindVoiceAiInputCommand = new RelayCommand(StartVoiceAiInputBindingCapture);
+        _clearVoiceAiInputCommand = new RelayCommand(ClearVoiceAiInputBinding);
+        _refreshMicrophonesCommand = new RelayCommand(RefreshVoiceAiMicrophones);
+        _testMicrophoneCommand = new RelayCommand(
+            () => _ = TestVoiceAiMicrophoneAsync(),
+            () => !IsVoiceAiMicrophoneTesting);
         _generatePostRaceAiSummaryCommand = new RelayCommand(
             () =>
             {
@@ -560,26 +594,62 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
-    /// Handles a shell key press when it matches the configured voice AI hotkey.
+    /// Observes a steering-wheel Raw Input button edge for binding capture or voice AI triggering.
     /// </summary>
-    /// <param name="key">The WPF key reported by the shell.</param>
-    /// <returns><see langword="true"/> when the key was consumed.</returns>
-    public bool TryHandleVoiceAiHotkey(Key key)
+    /// <param name="input">The button edge reported by Raw Input.</param>
+    public void ObserveVoiceAiButtonInput(VoiceAiButtonInput input)
     {
-        if (_disposed || !VoiceAiEnabled || IsVoiceAiQueryRunning)
+        if (_disposed)
         {
-            return false;
+            return;
         }
 
-        var keyName = NormalizeVoiceAiHotkey(key.ToString());
-        if (string.Equals(keyName, VoiceAiOptions.NoHotkey, StringComparison.Ordinal) ||
-            !string.Equals(keyName, VoiceAiHotkey, StringComparison.OrdinalIgnoreCase))
+        if (!_dispatcher.CheckAccess())
         {
-            return false;
+            _ = _dispatcher.BeginInvoke(new Action(() => ObserveVoiceAiButtonInput(input)));
+            return;
         }
 
-        _ = RunVoiceAiQueryAsync();
-        return true;
+        if (VoiceAiBindingCaptureActive)
+        {
+            TryCaptureVoiceAiInputBinding(input);
+            return;
+        }
+
+        if (!VoiceAiEnabled || !VoiceAiInputMatchesBinding(input))
+        {
+            return;
+        }
+
+        if (input.IsPressed)
+        {
+            HandleBoundVoiceAiButtonPressed();
+        }
+        else
+        {
+            HandleBoundVoiceAiButtonReleased();
+        }
+    }
+
+    /// <summary>
+    /// Updates the UI status for the Raw Input listener owned by the shell window.
+    /// </summary>
+    /// <param name="statusText">The latest Raw Input listener status.</param>
+    /// <param name="isReady">Whether Raw Input registration is active.</param>
+    public void UpdateVoiceAiRawInputStatus(string statusText, bool isReady)
+    {
+        _voiceAiRawInputReady = isReady;
+        _voiceAiRawInputStatusText = string.IsNullOrWhiteSpace(statusText)
+            ? "方向盘 Raw Input 状态未知。"
+            : statusText.Trim();
+
+        if (!isReady)
+        {
+            VoiceAiStatusText = $"{_voiceAiRawInputStatusText} 请检查方向盘驱动、游戏控制器模式或管理员权限。";
+            return;
+        }
+
+        RefreshVoiceAiStatusText();
     }
 
     /// <summary>
@@ -824,26 +894,183 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
-    /// Gets the selectable key names for steering-wheel button mappings.
+    /// Gets the persisted steering-wheel button binding.
     /// </summary>
-    public ObservableCollection<string> VoiceAiHotkeyOptions { get; }
-
-    /// <summary>
-    /// Gets or sets the WPF key name that triggers microphone AI queries.
-    /// </summary>
-    public string VoiceAiHotkey
+    public VoiceAiInputBinding VoiceAiInputBinding
     {
-        get => _voiceAiHotkey;
-        set
+        get => _voiceAiInputBinding;
+        private set
         {
-            var normalized = NormalizeVoiceAiHotkey(value);
-            if (SetProperty(ref _voiceAiHotkey, normalized))
+            if (SetProperty(ref _voiceAiInputBinding, NormalizeVoiceAiInputBinding(value)))
             {
+                RefreshVoiceAiBindingText();
                 RefreshVoiceAiStatusText();
                 QueuePersistVoiceAiOptions();
             }
         }
     }
+
+    /// <summary>
+    /// Gets the user-facing steering-wheel binding label.
+    /// </summary>
+    public string VoiceAiBindingText
+    {
+        get => _voiceAiBindingText;
+        private set => SetProperty(ref _voiceAiBindingText, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the settings page is waiting for a steering-wheel button.
+    /// </summary>
+    public bool VoiceAiBindingCaptureActive
+    {
+        get => _voiceAiBindingCaptureActive;
+        private set => SetProperty(ref _voiceAiBindingCaptureActive, value);
+    }
+
+    /// <summary>
+    /// Gets selectable push-to-talk modes.
+    /// </summary>
+    public ObservableCollection<VoiceAiTalkModeOptionViewModel> VoiceAiTalkModeOptions { get; }
+
+    /// <summary>
+    /// Gets or sets the selected push-to-talk mode option.
+    /// </summary>
+    public VoiceAiTalkModeOptionViewModel? SelectedVoiceAiTalkModeOption
+    {
+        get => _selectedVoiceAiTalkModeOption;
+        set
+        {
+            var normalized = value ?? VoiceAiTalkModeOptions.FirstOrDefault();
+            if (SetProperty(ref _selectedVoiceAiTalkModeOption, normalized))
+            {
+                VoiceAiTalkMode = normalized?.Mode ?? VoiceAiTalkMode.HoldToTalk;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets how the bound button controls microphone recording.
+    /// </summary>
+    public VoiceAiTalkMode VoiceAiTalkMode
+    {
+        get => _voiceAiTalkMode;
+        set
+        {
+            var normalized = Enum.IsDefined(typeof(VoiceAiTalkMode), value) ? value : VoiceAiTalkMode.HoldToTalk;
+            if (SetProperty(ref _voiceAiTalkMode, normalized))
+            {
+                var selectedOption = VoiceAiTalkModeOptions.FirstOrDefault(option => option.Mode == normalized)
+                                     ?? VoiceAiTalkModeOptions.FirstOrDefault();
+                if (!Equals(_selectedVoiceAiTalkModeOption, selectedOption))
+                {
+                    _selectedVoiceAiTalkModeOption = selectedOption;
+                    OnPropertyChanged(nameof(SelectedVoiceAiTalkModeOption));
+                }
+
+                RefreshVoiceAiStatusText();
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets available system microphones for voice AI recording.
+    /// </summary>
+    public ObservableCollection<MicrophoneDeviceInfo> VoiceAiMicrophoneDevices { get; }
+
+    /// <summary>
+    /// Gets or sets the selected microphone device identifier.
+    /// </summary>
+    public string VoiceAiMicrophoneDeviceId
+    {
+        get => _voiceAiMicrophoneDeviceId;
+        set
+        {
+            var normalized = value?.Trim() ?? string.Empty;
+            if (SetProperty(ref _voiceAiMicrophoneDeviceId, normalized))
+            {
+                var deviceName = ResolveVoiceAiMicrophoneDeviceName(normalized);
+                if (!string.IsNullOrWhiteSpace(deviceName))
+                {
+                    VoiceAiMicrophoneDeviceName = deviceName;
+                }
+
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the selected microphone display name persisted with the settings.
+    /// </summary>
+    public string VoiceAiMicrophoneDeviceName
+    {
+        get => _voiceAiMicrophoneDeviceName;
+        private set => SetProperty(ref _voiceAiMicrophoneDeviceName, value?.Trim() ?? string.Empty);
+    }
+
+    /// <summary>
+    /// Gets the microphone test status shown in Settings.
+    /// </summary>
+    public string VoiceAiMicrophoneStatusText
+    {
+        get => _voiceAiMicrophoneStatusText;
+        private set => SetProperty(ref _voiceAiMicrophoneStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest normalized microphone input test level.
+    /// </summary>
+    public double VoiceAiMicrophoneTestLevel
+    {
+        get => _voiceAiMicrophoneTestLevel;
+        private set => SetProperty(ref _voiceAiMicrophoneTestLevel, Math.Clamp(value, 0d, 1d));
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether microphone recording is active.
+    /// </summary>
+    public bool IsVoiceAiRecording
+    {
+        get => _isVoiceAiRecording;
+        private set => SetProperty(ref _isVoiceAiRecording, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a microphone input test is running.
+    /// </summary>
+    public bool IsVoiceAiMicrophoneTesting
+    {
+        get => _isVoiceAiMicrophoneTesting;
+        private set
+        {
+            if (SetProperty(ref _isVoiceAiMicrophoneTesting, value))
+            {
+                _testMicrophoneCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the command that captures the next Raw Input steering-wheel button press.
+    /// </summary>
+    public ICommand BindVoiceAiInputCommand => _bindVoiceAiInputCommand;
+
+    /// <summary>
+    /// Gets the command that clears the saved steering-wheel voice AI binding.
+    /// </summary>
+    public ICommand ClearVoiceAiInputCommand => _clearVoiceAiInputCommand;
+
+    /// <summary>
+    /// Gets the command that refreshes the system microphone list.
+    /// </summary>
+    public ICommand RefreshMicrophonesCommand => _refreshMicrophonesCommand;
+
+    /// <summary>
+    /// Gets the command that records a short microphone input test.
+    /// </summary>
+    public ICommand TestMicrophoneCommand => _testMicrophoneCommand;
 
     /// <summary>
     /// Gets the current microphone AI query status shown in Settings.
@@ -1538,6 +1765,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         _disposed = true;
         TryCancelLifecycle();
+        CancelVoiceAiBindingCapture();
+        DisposeVoiceAiRecordingSession();
         StopUiTimer();
         StopUdpPortSaveTimer(unsubscribe: true);
 
@@ -2514,7 +2743,93 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _ = _realtimeCornerAdviceService.EvaluateCompletedLapAsync(request, _lifecycleCts.Token);
     }
 
-    private async Task RunVoiceAiQueryAsync()
+    private async Task StartVoiceAiRecordingAsync()
+    {
+        if (_disposed || IsVoiceAiRecording)
+        {
+            return;
+        }
+
+        if (IsVoiceAiQueryRunning || _isStoppingVoiceAiRecording)
+        {
+            VoiceAiStatusText = "AI 正在处理上一条问题，请稍后再试";
+            return;
+        }
+
+        try
+        {
+            _voiceAiRecordingSession = _microphoneService.StartRecording(VoiceAiMicrophoneDeviceId);
+            IsVoiceAiRecording = true;
+            VoiceAiStatusText = VoiceAiTalkMode == VoiceAiTalkMode.HoldToTalk
+                ? "正在录音，松开方向盘按钮后提交"
+                : "正在录音，再按一次方向盘按钮后提交";
+            EnqueueAiTtsLog("AI", $"语音 AI 开始录音：{VoiceAiBindingText}");
+            StartVoiceAiRecordingTimeout();
+        }
+        catch (Exception ex)
+        {
+            VoiceAiStatusText = $"麦克风启动失败：{ex.Message}";
+            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+            DisposeVoiceAiRecordingSession();
+        }
+    }
+
+    private async Task StopVoiceAiRecordingAndAskAsync()
+    {
+        if (_isStoppingVoiceAiRecording)
+        {
+            return;
+        }
+
+        var session = _voiceAiRecordingSession;
+        if (session is null)
+        {
+            return;
+        }
+
+        _isStoppingVoiceAiRecording = true;
+        CancelVoiceAiRecordingTimeout();
+        _voiceAiRecordingSession = null;
+        IsVoiceAiRecording = false;
+        VoiceAiStatusText = "正在整理录音...";
+
+        try
+        {
+            VoiceRecordingResult recording;
+            try
+            {
+                recording = await session.StopAsync(_lifecycleCts.Token);
+            }
+            finally
+            {
+                session.Dispose();
+            }
+
+            VoiceAiMicrophoneTestLevel = recording.PeakLevel;
+            if (!recording.HasInput || recording.WaveBytes.Length == 0)
+            {
+                VoiceAiStatusText = "未检测到语音输入";
+                EnqueueAiTtsLog("AI", "语音 AI 已取消：未检测到语音输入。");
+                return;
+            }
+
+            await RunVoiceAiQueryAsync(recording);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            VoiceAiStatusText = $"语音录音失败：{ex.Message}";
+            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+        }
+        finally
+        {
+            _isStoppingVoiceAiRecording = false;
+        }
+    }
+
+    private async Task RunVoiceAiQueryAsync(VoiceRecordingResult recording)
     {
         if (IsVoiceAiQueryRunning)
         {
@@ -2524,11 +2839,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         try
         {
             IsVoiceAiQueryRunning = true;
-            VoiceAiStatusText = "正在听取语音问题...";
-            EnqueueAiTtsLog("AI", $"语音 AI 已触发：按键 {VoiceAiHotkey}");
+            VoiceAiStatusText = "正在识别语音问题...";
+            EnqueueAiTtsLog("AI", $"语音 AI 已触发：{VoiceAiBindingText}");
 
             var result = await _voiceAiQueryService.AskAsync(
-                BuildVoiceAiQueryRequest(),
+                BuildVoiceAiQueryRequest(recording),
                 _lifecycleCts.Token);
 
             if (!result.IsSuccess)
@@ -2558,7 +2873,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
-    private VoiceAiQueryRequest BuildVoiceAiQueryRequest()
+    private VoiceAiQueryRequest BuildVoiceAiQueryRequest(VoiceRecordingResult recording)
     {
         var sessionState = _sessionStateStore.CaptureState();
         var context = BuildAiAnalysisContext(sessionState, sessionState.PlayerCar, _lapAnalyzer.CaptureLastLap());
@@ -2568,7 +2883,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             AiSettings = BuildAiSettings(),
             TtsOptions = BuildTtsOptions(),
             AdviceKey = BuildVoiceAiAdviceKey(),
-            RecognitionTimeout = TimeSpan.FromSeconds(VoiceAiRecognitionTimeoutSeconds)
+            Recording = recording
         };
     }
 
@@ -2580,6 +2895,186 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             "voice-ai:{0}:{1}",
             sessionToken,
             DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
+    private void StartVoiceAiInputBindingCapture()
+    {
+        CancelVoiceAiBindingCapture();
+        VoiceAiBindingCaptureActive = true;
+        VoiceAiStatusText = _voiceAiRawInputReady
+            ? $"请在 {VoiceAiBindingCaptureSeconds} 秒内按下方向盘按钮"
+            : $"{_voiceAiRawInputStatusText} 请检查方向盘驱动、游戏控制器模式或管理员权限。";
+
+        _voiceAiBindingCaptureCts = new CancellationTokenSource();
+        _ = CompleteVoiceAiBindingCaptureAfterTimeoutAsync(_voiceAiBindingCaptureCts.Token);
+    }
+
+    private void ClearVoiceAiInputBinding()
+    {
+        CancelVoiceAiBindingCapture();
+        VoiceAiInputBinding = new VoiceAiInputBinding();
+        VoiceAiStatusText = "已清除方向盘按钮绑定";
+    }
+
+    private void TryCaptureVoiceAiInputBinding(VoiceAiButtonInput input)
+    {
+        if (!input.IsPressed)
+        {
+            return;
+        }
+
+        if (input.PressedChangeCount != 1 || input.ChangedBitCount > 8)
+        {
+            VoiceAiStatusText = "检测到多个输入变化，请松开后只按一个方向盘按钮";
+            return;
+        }
+
+        CancelVoiceAiBindingCapture();
+        VoiceAiInputBinding = input.ToBinding();
+        VoiceAiStatusText = $"已绑定 {VoiceAiBindingText}";
+        EnqueueAiTtsLog("System", $"语音 AI 已绑定：{VoiceAiBindingText}");
+    }
+
+    private bool VoiceAiInputMatchesBinding(VoiceAiButtonInput input)
+    {
+        var binding = VoiceAiInputBinding;
+        if (binding.Kind != VoiceAiInputBindingKind.RawInputHidButton)
+        {
+            return false;
+        }
+
+        return string.Equals(binding.DeviceId, input.DeviceId, StringComparison.OrdinalIgnoreCase) &&
+               binding.ButtonIndex == input.ButtonIndex &&
+               (binding.ButtonMask == 0 || input.ButtonMask == 0 || binding.ButtonMask == input.ButtonMask);
+    }
+
+    private void HandleBoundVoiceAiButtonPressed()
+    {
+        if (IsVoiceAiQueryRunning || _isStoppingVoiceAiRecording)
+        {
+            VoiceAiStatusText = "AI 正在处理上一条问题，请稍后再试";
+            return;
+        }
+
+        if (VoiceAiTalkMode == VoiceAiTalkMode.ToggleToTalk && IsVoiceAiRecording)
+        {
+            _ = StopVoiceAiRecordingAndAskAsync();
+            return;
+        }
+
+        if (!IsVoiceAiRecording)
+        {
+            _ = StartVoiceAiRecordingAsync();
+        }
+    }
+
+    private void HandleBoundVoiceAiButtonReleased()
+    {
+        if (VoiceAiTalkMode != VoiceAiTalkMode.HoldToTalk || !IsVoiceAiRecording)
+        {
+            return;
+        }
+
+        _ = StopVoiceAiRecordingAndAskAsync();
+    }
+
+    private void StartVoiceAiRecordingTimeout()
+    {
+        CancelVoiceAiRecordingTimeout();
+        _voiceAiRecordingTimeoutCts = CancellationTokenSource.CreateLinkedTokenSource(_lifecycleCts.Token);
+        _ = StopVoiceAiRecordingAfterTimeoutAsync(_voiceAiRecordingTimeoutCts.Token);
+    }
+
+    private async Task StopVoiceAiRecordingAfterTimeoutAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(VoiceAiMaxRecordingSeconds), cancellationToken);
+            await _dispatcher.InvokeAsync(() =>
+            {
+                if (IsVoiceAiRecording)
+                {
+                    VoiceAiStatusText = "录音已达到 20 秒，正在自动提交";
+                    _ = StopVoiceAiRecordingAndAskAsync();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task CompleteVoiceAiBindingCaptureAfterTimeoutAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(VoiceAiBindingCaptureSeconds), cancellationToken);
+            await _dispatcher.InvokeAsync(() =>
+            {
+                if (VoiceAiBindingCaptureActive)
+                {
+                    VoiceAiBindingCaptureActive = false;
+                    RefreshVoiceAiStatusText();
+                    if (VoiceAiInputBinding.Kind == VoiceAiInputBindingKind.None)
+                    {
+                        VoiceAiStatusText = "未捕获到方向盘按钮，请检查方向盘驱动、游戏控制器模式或管理员权限";
+                    }
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private void CancelVoiceAiRecordingTimeout()
+    {
+        try
+        {
+            _voiceAiRecordingTimeoutCts?.Cancel();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _voiceAiRecordingTimeoutCts?.Dispose();
+            _voiceAiRecordingTimeoutCts = null;
+        }
+    }
+
+    private void CancelVoiceAiBindingCapture()
+    {
+        try
+        {
+            _voiceAiBindingCaptureCts?.Cancel();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _voiceAiBindingCaptureCts?.Dispose();
+            _voiceAiBindingCaptureCts = null;
+            VoiceAiBindingCaptureActive = false;
+        }
+    }
+
+    private void DisposeVoiceAiRecordingSession()
+    {
+        CancelVoiceAiRecordingTimeout();
+        try
+        {
+            _voiceAiRecordingSession?.Dispose();
+        }
+        catch
+        {
+        }
+        finally
+        {
+            _voiceAiRecordingSession = null;
+            IsVoiceAiRecording = false;
+        }
     }
 
     private void RecordTrackMapTrajectory(int lapNumber, IReadOnlyList<LapSample> lapSamples)
@@ -2750,7 +3245,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             UdpRawLogEnabled = settings.UdpRawLog.Enabled;
             RefreshUdpRawLogStatus();
             VoiceAiEnabled = settings.VoiceAi.Enabled;
-            VoiceAiHotkey = settings.VoiceAi.Hotkey;
+            VoiceAiInputBinding = settings.VoiceAi.InputBinding;
+            VoiceAiTalkMode = settings.VoiceAi.TalkMode;
+            VoiceAiMicrophoneDeviceId = settings.VoiceAi.MicrophoneDeviceId;
+            if (!string.IsNullOrWhiteSpace(settings.VoiceAi.MicrophoneDeviceName))
+            {
+                VoiceAiMicrophoneDeviceName = settings.VoiceAi.MicrophoneDeviceName;
+            }
+
             RefreshVoiceAiStatusText();
             TtsEnabled = settings.Tts.TtsEnabled;
             var loadedVoiceName = settings.Tts.VoiceName;
@@ -3125,6 +3627,95 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _settingsGate.Release();
             }
         }
+    }
+
+    private void RefreshVoiceAiMicrophones()
+    {
+        RefreshVoiceAiMicrophones(persistSelection: true);
+    }
+
+    private void RefreshVoiceAiMicrophones(bool persistSelection)
+    {
+        try
+        {
+            var devices = _microphoneService.GetDevices();
+            VoiceAiMicrophoneDevices.Clear();
+            foreach (var device in devices)
+            {
+                VoiceAiMicrophoneDevices.Add(device);
+            }
+
+            if (VoiceAiMicrophoneDevices.Count == 0)
+            {
+                VoiceAiMicrophoneStatusText = "未找到系统麦克风";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(VoiceAiMicrophoneDeviceId) ||
+                VoiceAiMicrophoneDevices.All(device => !string.Equals(device.DeviceId, VoiceAiMicrophoneDeviceId, StringComparison.Ordinal)))
+            {
+                var preferredDevice = VoiceAiMicrophoneDevices.FirstOrDefault(device => device.IsDefault)
+                                      ?? VoiceAiMicrophoneDevices[0];
+                if (persistSelection)
+                {
+                    VoiceAiMicrophoneDeviceId = preferredDevice.DeviceId;
+                }
+                else
+                {
+                    _voiceAiMicrophoneDeviceId = preferredDevice.DeviceId;
+                    OnPropertyChanged(nameof(VoiceAiMicrophoneDeviceId));
+                }
+
+                VoiceAiMicrophoneDeviceName = preferredDevice.DisplayName;
+            }
+
+            VoiceAiMicrophoneStatusText = $"已发现 {VoiceAiMicrophoneDevices.Count} 个麦克风";
+        }
+        catch (Exception ex)
+        {
+            VoiceAiMicrophoneStatusText = $"读取麦克风失败：{ex.Message}";
+        }
+    }
+
+    private async Task TestVoiceAiMicrophoneAsync()
+    {
+        if (IsVoiceAiMicrophoneTesting)
+        {
+            return;
+        }
+
+        try
+        {
+            IsVoiceAiMicrophoneTesting = true;
+            VoiceAiMicrophoneStatusText = "正在测试麦克风 3 秒...";
+            VoiceAiMicrophoneTestLevel = 0d;
+            var result = await _microphoneService.TestInputAsync(
+                VoiceAiMicrophoneDeviceId,
+                TimeSpan.FromSeconds(3),
+                _lifecycleCts.Token);
+            VoiceAiMicrophoneTestLevel = result.PeakLevel;
+            VoiceAiMicrophoneStatusText = string.IsNullOrWhiteSpace(result.StatusText)
+                ? (result.HasInput ? "麦克风输入正常" : "未检测到明显麦克风输入")
+                : result.StatusText;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            VoiceAiMicrophoneStatusText = $"麦克风测试失败：{ex.Message}";
+        }
+        finally
+        {
+            IsVoiceAiMicrophoneTesting = false;
+        }
+    }
+
+    private string ResolveVoiceAiMicrophoneDeviceName(string deviceId)
+    {
+        return VoiceAiMicrophoneDevices
+            .FirstOrDefault(device => string.Equals(device.DeviceId, deviceId, StringComparison.Ordinal))
+            ?.DisplayName ?? VoiceAiMicrophoneDeviceName;
     }
 
     private void LoadAvailableVoices()
@@ -3843,54 +4434,93 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         return new VoiceAiOptions
         {
             Enabled = VoiceAiEnabled,
-            Hotkey = NormalizeVoiceAiHotkey(VoiceAiHotkey)
+            InputBinding = VoiceAiInputBinding,
+            TalkMode = VoiceAiTalkMode,
+            MicrophoneDeviceId = VoiceAiMicrophoneDeviceId,
+            MicrophoneDeviceName = VoiceAiMicrophoneDeviceName,
+            Hotkey = VoiceAiOptions.NoHotkey
         };
     }
 
-    private static IReadOnlyList<string> CreateVoiceAiHotkeyOptions()
+    private static IReadOnlyList<VoiceAiTalkModeOptionViewModel> CreateVoiceAiTalkModeOptions()
     {
-        var keys = new List<string> { VoiceAiOptions.NoHotkey };
-        keys.AddRange(Enumerable.Range(13, 12).Select(number => $"F{number}"));
-        keys.AddRange(Enumerable.Range(1, 12).Select(number => $"F{number}"));
-        keys.AddRange(Enumerable.Range('A', 26).Select(value => ((char)value).ToString()));
-        keys.AddRange(Enumerable.Range(0, 10).Select(number => $"D{number}"));
-        keys.AddRange(
+        return
         [
-            nameof(Key.Space),
-            nameof(Key.LeftCtrl),
-            nameof(Key.RightCtrl),
-            nameof(Key.LeftAlt),
-            nameof(Key.RightAlt),
-            nameof(Key.LeftShift),
-            nameof(Key.RightShift)
-        ]);
-        return keys;
+            new VoiceAiTalkModeOptionViewModel
+            {
+                Mode = VoiceAiTalkMode.HoldToTalk,
+                DisplayName = "按住说话",
+                Description = "按住方向盘按钮录音，松开后提交。"
+            },
+            new VoiceAiTalkModeOptionViewModel
+            {
+                Mode = VoiceAiTalkMode.ToggleToTalk,
+                DisplayName = "按下开始/结束",
+                Description = "按一次开始录音，再按一次结束并提交。"
+            }
+        ];
     }
 
-    private static string NormalizeVoiceAiHotkey(string? hotkey)
+    private static VoiceAiInputBinding NormalizeVoiceAiInputBinding(VoiceAiInputBinding? binding)
     {
-        if (string.IsNullOrWhiteSpace(hotkey))
+        if (binding is null ||
+            binding.Kind == VoiceAiInputBindingKind.None ||
+            binding.ButtonIndex <= 0)
         {
-            return VoiceAiOptions.NoHotkey;
+            return new VoiceAiInputBinding();
         }
 
-        var normalized = hotkey.Trim();
-        return Enum.TryParse<Key>(normalized, ignoreCase: true, out var key) && key != Key.None
-            ? key.ToString()
-            : VoiceAiOptions.NoHotkey;
+        var displayText = binding.DisplayText?.Trim();
+        if (string.IsNullOrWhiteSpace(displayText))
+        {
+            displayText = $"方向盘按钮 {binding.ButtonIndex}";
+        }
+
+        return binding with
+        {
+            DeviceId = binding.DeviceId?.Trim() ?? string.Empty,
+            DeviceName = binding.DeviceName?.Trim() ?? string.Empty,
+            DisplayText = displayText
+        };
+    }
+
+    private void RefreshVoiceAiBindingText()
+    {
+        var binding = VoiceAiInputBinding;
+        VoiceAiBindingText = binding.Kind == VoiceAiInputBindingKind.None
+            ? "未绑定方向盘按钮"
+            : (string.IsNullOrWhiteSpace(binding.DisplayText) ? $"方向盘按钮 {binding.ButtonIndex}" : binding.DisplayText);
     }
 
     private void RefreshVoiceAiStatusText()
     {
+        if (VoiceAiBindingCaptureActive || IsVoiceAiRecording || IsVoiceAiQueryRunning)
+        {
+            return;
+        }
+
         if (!VoiceAiEnabled)
         {
             VoiceAiStatusText = "语音 AI 未启用";
             return;
         }
 
-        VoiceAiStatusText = string.Equals(VoiceAiHotkey, VoiceAiOptions.NoHotkey, StringComparison.Ordinal)
-            ? "请选择方向盘映射按键"
-            : $"已绑定 {VoiceAiHotkey}，按下后开始听取问题";
+        if (!_voiceAiRawInputReady)
+        {
+            VoiceAiStatusText = $"{_voiceAiRawInputStatusText} 请检查方向盘驱动、游戏控制器模式或管理员权限。";
+            return;
+        }
+
+        if (VoiceAiInputBinding.Kind == VoiceAiInputBindingKind.None)
+        {
+            VoiceAiStatusText = "请先绑定方向盘按钮";
+            return;
+        }
+
+        var modeText = VoiceAiTalkMode == VoiceAiTalkMode.HoldToTalk
+            ? "按住说话，松开后提交"
+            : "按一下开始，再按一下结束并提交";
+        VoiceAiStatusText = $"已绑定 {VoiceAiBindingText}，{modeText}";
     }
 
     private void ApplyUdpRawLogOptions()
