@@ -9,6 +9,9 @@ public static class AppPaths
     private const string SettingsFileName = "settings.json";
     private const string DatabaseFileName = "f1telemetry.db";
     private const string LogsDirectoryName = "logs";
+    private const string DiagnosticLogsDirectoryName = ".logs";
+    private const string AppLogsDirectoryName = "app";
+    private const string RaceAssistantLogsDirectoryName = "race-assistant";
     private const string StartupLogFileName = "startup.log";
 
     /// <summary>
@@ -44,6 +47,30 @@ public static class AppPaths
     }
 
     /// <summary>
+    /// Gets the diagnostic log root used for optional JSONL runtime logs.
+    /// </summary>
+    public static string GetDiagnosticLogsDir()
+    {
+        return GetDiagnosticLogsDir(GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData));
+    }
+
+    /// <summary>
+    /// Gets the categorized app log directory.
+    /// </summary>
+    public static string GetAppLogDir()
+    {
+        return GetAppLogDir(GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData));
+    }
+
+    /// <summary>
+    /// Gets the RaceAssistant audit log directory.
+    /// </summary>
+    public static string GetRaceAssistantLogDir()
+    {
+        return GetRaceAssistantLogDir(GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData));
+    }
+
+    /// <summary>
     /// Ensures user data directories exist and migrates legacy LocalAppData files without overwriting.
     /// </summary>
     public static void InitializeUserData()
@@ -73,6 +100,21 @@ public static class AppPaths
         return Path.Combine(GetAppDataDir(appDataRoot), LogsDirectoryName);
     }
 
+    internal static string GetDiagnosticLogsDir(string appDataRoot)
+    {
+        return Path.Combine(GetAppDataDir(appDataRoot), DiagnosticLogsDirectoryName);
+    }
+
+    internal static string GetAppLogDir(string appDataRoot)
+    {
+        return Path.Combine(GetDiagnosticLogsDir(appDataRoot), AppLogsDirectoryName);
+    }
+
+    internal static string GetRaceAssistantLogDir(string appDataRoot)
+    {
+        return Path.Combine(GetDiagnosticLogsDir(appDataRoot), RaceAssistantLogsDirectoryName);
+    }
+
     internal static void InitializeUserData(string appDataRoot, string localAppDataRoot)
     {
         var appDataDir = GetAppDataDir(appDataRoot);
@@ -80,6 +122,7 @@ public static class AppPaths
 
         Directory.CreateDirectory(appDataDir);
         Directory.CreateDirectory(logsDir);
+        Directory.CreateDirectory(GetDiagnosticLogsDir(appDataRoot));
 
         MigrateLegacyData(appDataDir, logsDir, GetAppDataDir(localAppDataRoot));
         EnsureSettingsFile(GetSettingsPath(appDataRoot), logsDir);

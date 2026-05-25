@@ -7,6 +7,7 @@ using F1Telemetry.Analytics.Services;
 using F1Telemetry.Analytics.State;
 using F1Telemetry.Core;
 using F1Telemetry.Core.Eventing;
+using F1Telemetry.App.Logging;
 using F1Telemetry.App.Services;
 using F1Telemetry.App.TrackMaps;
 using F1Telemetry.Storage.Repositories;
@@ -39,6 +40,9 @@ public partial class App : Application
         var eventDetectionService = new EventDetectionService();
         var raceEventBus = new InMemoryEventBus<RaceEvent>();
         var appSettingsStore = new AppSettingsStore();
+        var appRunContext = new AppRunContext();
+        var appFileLogger = new AppFileLogger(appRunContext);
+        var raceAssistantAuditLogger = new RaceAssistantAuditLogger(appRunContext);
         _aiHttpClient = new HttpClient();
         var ttsQueue = new TtsQueue(new WindowsTtsService(), new TtsOptions());
         var ttsMessageFactory = new TtsMessageFactory();
@@ -109,7 +113,9 @@ public partial class App : Application
                 ttsMessageFactory: ttsMessageFactory,
                 ttsQueue: ttsQueue,
                 trackMapTrajectoryStore: trackMapTrajectoryStore),
-            trackMapTrajectoryStore: trackMapTrajectoryStore);
+            trackMapTrajectoryStore: trackMapTrajectoryStore,
+            appFileLogger: appFileLogger,
+            raceAssistantAuditLogger: raceAssistantAuditLogger);
         var mainWindow = new MainWindow
         {
             DataContext = _shellViewModel

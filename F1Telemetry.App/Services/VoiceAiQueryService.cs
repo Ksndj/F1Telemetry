@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Strategy;
+using F1Telemetry.App.Logging;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.TTS.Services;
 
@@ -18,6 +20,7 @@ public sealed class VoiceAiQueryService
     private readonly TtsQueue _ttsQueue;
     private readonly RuleBasedFallbackAdviceService _fallbackAdviceService;
     private readonly StrategyRuleConflictResolver _conflictResolver;
+    private readonly RaceAssistantAuditLogger? _raceAssistantAuditLogger;
 
     /// <summary>
     /// Initializes a voice AI query service.
@@ -30,12 +33,14 @@ public sealed class VoiceAiQueryService
         ISpeechRecognitionService speechRecognitionService,
         IAIAnalysisService aiAnalysisService,
         TtsMessageFactory ttsMessageFactory,
-        TtsQueue ttsQueue)
+        TtsQueue ttsQueue,
+        RaceAssistantAuditLogger? raceAssistantAuditLogger = null)
     {
         _speechRecognitionService = speechRecognitionService ?? throw new ArgumentNullException(nameof(speechRecognitionService));
         _aiAnalysisService = aiAnalysisService ?? throw new ArgumentNullException(nameof(aiAnalysisService));
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
+        _raceAssistantAuditLogger = raceAssistantAuditLogger;
         _fallbackAdviceService = new RuleBasedFallbackAdviceService();
         _conflictResolver = new StrategyRuleConflictResolver();
     }
@@ -104,29 +109,52 @@ public sealed class VoiceAiQueryService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var questionId = CreateQuestionId();
+        var aiStopwatch = Stopwatch.StartNew();
+        var aiCalled = false;
+        var aiSucceeded = false;
+        var usedFallback = false;
+        var failureReason = string.Empty;
         var strategyContext = ResolveStrategyContext(question, request);
         if (strategyContext is null)
         {
-            return await AskLegacyAsync(question, request, cancellationToken);
+            return await AskLegacyAsync(question, questionId, request, cancellationToken);
         }
 
         if (!request.AiSettings.AiEnabled)
         {
+            usedFallback = true;
+            failureReason = "AI 未启用";
             var aiDisabledSpeechSkippedReason = request.EnableTtsAnswer && !CanQueueRaceAssistantSpeech(strategyContext)
                 ? "缺少实时遥测"
                 : string.Empty;
-            return CreateRaceAssistantSuccess(
+            var result = CreateRaceAssistantSuccess(
                 question,
+                questionId,
                 strategyContext,
                 _fallbackAdviceService.BuildFallback(strategyContext, "AI 未启用"),
                 request,
                 wasQueued: false,
                 speechSkippedReason: aiDisabledSpeechSkippedReason);
+            AuditRaceAssistant(
+                question,
+                questionId,
+                request,
+                strategyContext,
+                result,
+                usedFallback,
+                failureReason,
+                aiCalled,
+                aiSucceeded,
+                aiStopwatch.ElapsedMilliseconds);
+            return result;
         }
 
         StrategyAdviceResult advice;
         if (string.IsNullOrWhiteSpace(request.AiSettings.ApiKey))
         {
+            usedFallback = true;
+            failureReason = AIErrorMessageFormatter.MissingApiKey;
             advice = _fallbackAdviceService.BuildFallback(strategyContext, AIErrorMessageFormatter.MissingApiKey);
         }
         else
@@ -139,12 +167,29 @@ public sealed class VoiceAiQueryService
                     RealtimeEngineerAdviceSummary = BuildRealtimeInstruction(question),
                     StrategyQuestionContext = strategyContext
                 };
+                aiCalled = true;
                 var result = await _aiAnalysisService.AnalyzeAsync(aiContext, request.AiSettings, cancellationToken);
+                aiSucceeded = result.IsSuccess;
                 if (!result.IsSuccess && IsInvalidAiFormat(result.ErrorMessage))
                 {
-                    return CreateRaceAssistantFailure(question, strategyContext, result.ErrorMessage);
+                    failureReason = result.ErrorMessage;
+                    var failure = CreateRaceAssistantFailure(question, questionId, strategyContext, result.ErrorMessage);
+                    AuditRaceAssistant(
+                        question,
+                        questionId,
+                        request,
+                        strategyContext,
+                        failure,
+                        usedFallback: false,
+                        failureReason,
+                        aiCalled,
+                        aiSucceeded,
+                        aiStopwatch.ElapsedMilliseconds);
+                    return failure;
                 }
 
+                usedFallback = !result.IsSuccess;
+                failureReason = result.IsSuccess ? string.Empty : result.ErrorMessage;
                 advice = result.IsSuccess
                     ? ConvertAiResultToAdvice(result, strategyContext)
                     : _fallbackAdviceService.BuildFallback(strategyContext, result.ErrorMessage);
@@ -155,6 +200,8 @@ public sealed class VoiceAiQueryService
             }
             catch (Exception ex)
             {
+                usedFallback = true;
+                failureReason = ex.Message;
                 advice = _fallbackAdviceService.BuildFallback(strategyContext, ex.Message);
             }
         }
@@ -171,10 +218,11 @@ public sealed class VoiceAiQueryService
             currentSessionUid is not null &&
             strategyContext.SessionUid != currentSessionUid)
         {
-            return new VoiceAiQueryResult
+            var staleResult = new VoiceAiQueryResult
             {
                 IsSuccess = false,
                 RecognizedQuestion = question.Trim(),
+                QuestionId = questionId,
                 SessionUid = strategyContext.SessionUid,
                 Intent = strategyContext.Intent,
                 Mode = strategyContext.Mode,
@@ -182,6 +230,18 @@ public sealed class VoiceAiQueryService
                 ErrorMessage = "会话已变化，已忽略旧回答",
                 WasIgnoredBecauseSessionChanged = true
             };
+            AuditRaceAssistant(
+                question,
+                questionId,
+                request,
+                strategyContext,
+                staleResult,
+                usedFallback,
+                "会话已变化，已忽略旧回答",
+                aiCalled,
+                aiSucceeded,
+                aiStopwatch.ElapsedMilliseconds);
+            return staleResult;
         }
 
         var wasQueued = false;
@@ -195,11 +255,24 @@ public sealed class VoiceAiQueryService
             speechSkippedReason = "缺少实时遥测";
         }
 
-        return CreateRaceAssistantSuccess(question, strategyContext, advice, request, wasQueued, speechSkippedReason);
+        var success = CreateRaceAssistantSuccess(question, questionId, strategyContext, advice, request, wasQueued, speechSkippedReason);
+        AuditRaceAssistant(
+            question,
+            questionId,
+            request,
+            strategyContext,
+            success,
+            usedFallback,
+            failureReason,
+            aiCalled,
+            aiSucceeded,
+            aiStopwatch.ElapsedMilliseconds);
+        return success;
     }
 
     private async Task<VoiceAiQueryResult> AskLegacyAsync(
         string question,
+        string questionId,
         VoiceAiQueryRequest request,
         CancellationToken cancellationToken)
     {
@@ -231,6 +304,7 @@ public sealed class VoiceAiQueryService
         {
             IsSuccess = true,
             RecognizedQuestion = question.Trim(),
+            QuestionId = questionId,
             SpeechText = speechText,
             WasQueuedForSpeech = wasQueued
         };
@@ -302,6 +376,7 @@ public sealed class VoiceAiQueryService
 
     private static VoiceAiQueryResult CreateRaceAssistantFailure(
         string question,
+        string questionId,
         StrategyQuestionContext context,
         string errorMessage)
     {
@@ -309,6 +384,7 @@ public sealed class VoiceAiQueryService
         {
             IsSuccess = false,
             RecognizedQuestion = question.Trim(),
+            QuestionId = questionId,
             SessionUid = context.SessionUid,
             Intent = context.Intent,
             Mode = context.Mode,
@@ -318,6 +394,7 @@ public sealed class VoiceAiQueryService
 
     private static VoiceAiQueryResult CreateRaceAssistantSuccess(
         string question,
+        string questionId,
         StrategyQuestionContext context,
         StrategyAdviceResult advice,
         VoiceAiQueryRequest request,
@@ -332,6 +409,7 @@ public sealed class VoiceAiQueryService
         {
             IsSuccess = true,
             RecognizedQuestion = question.Trim(),
+            QuestionId = questionId,
             SessionUid = context.SessionUid,
             Intent = context.Intent,
             Mode = context.Mode,
@@ -342,9 +420,134 @@ public sealed class VoiceAiQueryService
         };
     }
 
+    private void AuditRaceAssistant(
+        string question,
+        string questionId,
+        VoiceAiQueryRequest request,
+        StrategyQuestionContext context,
+        VoiceAiQueryResult result,
+        bool usedFallback,
+        string failureReason,
+        bool aiCalled,
+        bool aiSucceeded,
+        long aiLatencyMs)
+    {
+        if (_raceAssistantAuditLogger is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var timestamp = DateTimeOffset.Now;
+            var runContext = _raceAssistantAuditLogger.RunContext;
+            _raceAssistantAuditLogger.TryEnqueue(new RaceAssistantAuditRecord
+            {
+                SchemaVersion = 1,
+                RunId = runContext.RunId,
+                QuestionId = questionId,
+                Timestamp = timestamp,
+                ElapsedMsSinceRunStart = runContext.GetElapsedMilliseconds(timestamp),
+                SessionUid = context.SessionUid,
+                Track = request.Track,
+                SessionType = request.SessionType,
+                Lap = context.Snapshot.CurrentLap,
+                UdpRawLogFile = request.UdpRawLogFile,
+                Question = context.Question,
+                RecognizedText = question,
+                PromptSummary = _raceAssistantAuditLogger.LogPromptSummary
+                    ? BuildPromptSummary(context)
+                    : null,
+                Intent = context.Intent.ToString(),
+                IntentDisplayName = string.IsNullOrWhiteSpace(context.IntentDisplayName)
+                    ? context.Intent.ToString()
+                    : context.IntentDisplayName,
+                Mode = context.Mode.ToString(),
+                ModeDisplayName = string.IsNullOrWhiteSpace(context.ModeDisplayName)
+                    ? context.Mode.ToString()
+                    : context.ModeDisplayName,
+                SnapshotAgeMs = context.Snapshot.Quality.AgeSeconds is null
+                    ? null
+                    : context.Snapshot.Quality.AgeSeconds.Value * 1000,
+                MissingData = context.MissingData,
+                RuleSignals = context.Snapshot.RuleSignals.Select(ToAuditSignal).ToArray(),
+                PitDecisionSignal = ToAuditSignal(context.Snapshot.PitDecision.Signal),
+                SafetyCarPitOpportunitySignal = ToAuditSignal(context.Snapshot.SafetyCarPitOpportunity.Signal),
+                Result = ToAuditResult(result.Advice),
+                UsedFallback = usedFallback || result.Advice?.IsFallback == true,
+                FailureReason = string.IsNullOrWhiteSpace(failureReason) ? result.ErrorMessage : failureReason,
+                TtsQueued = result.WasQueuedForSpeech,
+                SpeechSkippedReason = result.SpeechSkippedReason,
+                AiLatencyMs = aiCalled ? aiLatencyMs : null
+            });
+        }
+        catch
+        {
+            // Audit logging must never affect the race-assistant answer path.
+        }
+    }
+
+    private static RaceAssistantAuditSignal ToAuditSignal(StrategyRuleSignal signal)
+    {
+        return new RaceAssistantAuditSignal
+        {
+            SignalType = signal.SignalType,
+            AdviceType = signal.AdviceType.ToString(),
+            Summary = signal.Summary,
+            RecommendedAction = signal.RecommendedAction,
+            Confidence = signal.Confidence.ToString(),
+            RiskLevel = signal.RiskLevel.ToString(),
+            MissingData = signal.MissingData
+        };
+    }
+
+    private static RaceAssistantAuditResult? ToAuditResult(StrategyAdviceResult? advice)
+    {
+        return advice is null
+            ? null
+            : new RaceAssistantAuditResult
+            {
+                AdviceType = advice.AdviceType.ToString(),
+                Summary = advice.Summary,
+                Reason = advice.Reason,
+                RecommendedAction = advice.RecommendedAction,
+                Confidence = advice.Confidence.ToString(),
+                RiskLevel = advice.RiskLevel.ToString(),
+                MissingData = advice.MissingData,
+                Tts = advice.Tts
+            };
+    }
+
     private static string BuildRealtimeInstruction(string question)
     {
         return $"车手通过方向盘绑定按键语音提问：{question.Trim()}。回答要适合驾驶中收听，优先给一条可执行建议；如果问题询问比赛数据，直接用当前状态回答；数据不足时明确说明。";
+    }
+
+    private static string BuildPromptSummary(StrategyQuestionContext context)
+    {
+        var ageText = context.Snapshot.Quality.AgeSeconds is null
+            ? "unknown"
+            : $"{context.Snapshot.Quality.AgeSeconds.Value}s";
+        return string.Join(
+            " | ",
+            $"intent={context.Intent}",
+            $"mode={context.Mode}",
+            $"lap={context.Snapshot.CurrentLap?.ToString() ?? "unknown"}",
+            $"snapshotAge={ageText}",
+            $"missingData={context.MissingData.Count}",
+            $"ruleSignals={context.Snapshot.RuleSignals.Count}",
+            $"template={TrimForPromptSummary(context.IntentPromptTemplate, 180)}");
+    }
+
+    private static string TrimForPromptSummary(string value, int maxLength)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private static string CreateQuestionId()
+    {
+        return $"q_{Guid.NewGuid():N}";
     }
 
     private static string SelectSpeechText(AIAnalysisResult result)

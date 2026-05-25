@@ -35,6 +35,21 @@ public sealed record VoiceAiQueryRequest
     public string QuestionText { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the current track text used by RaceAssistant audit logs.
+    /// </summary>
+    public string Track { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the current session type text used by RaceAssistant audit logs.
+    /// </summary>
+    public string SessionType { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the current or latest UDP Raw Log file path used only as a filename summary.
+    /// </summary>
+    public string UdpRawLogFile { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the already-built strategy question context, usually for typed questions.
     /// </summary>
     public StrategyQuestionContext? StrategyQuestionContext { get; init; }

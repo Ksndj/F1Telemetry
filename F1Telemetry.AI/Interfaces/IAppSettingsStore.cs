@@ -35,6 +35,14 @@ public interface IAppSettingsStore
     Task SaveUdpRawLogOptionsAsync(UdpRawLogOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Saves the runtime file logging settings block while preserving other blocks.
+    /// </summary>
+    Task SaveLogSettingsAsync(LogSettings settings, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Saves the voice-to-AI query settings block while preserving other blocks.
     /// </summary>
     Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default);

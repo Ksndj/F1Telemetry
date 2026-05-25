@@ -44,6 +44,7 @@ public static partial class SensitiveContentSanitizer
         "payload",
         "payloadBase64",
         "rawPayload",
+        "lap_samples",
         "jsonl",
         "rawFile"
     };
@@ -198,7 +199,7 @@ public static partial class SensitiveContentSanitizer
     [GeneratedRegex(@"(?i)\S+\.jsonl\b")]
     private static partial Regex JsonlPathPattern();
 
-    [GeneratedRegex(@"(?i)\b(?:packetId|m_header|payloadBase64|raw packet)\b")]
+    [GeneratedRegex(@"(?i)\b(?:packetId|m_header|payloadBase64|lap_samples|raw packet)\b")]
     private static partial Regex RawTelemetryMarkerPattern();
 
     [GeneratedRegex(@"(?i)\bapi\s*key\b|\bapikey\b")]

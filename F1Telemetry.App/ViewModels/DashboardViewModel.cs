@@ -72,6 +72,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RaceEventSpeechSubscriber _raceEventSpeechSubscriber;
     private readonly RaceEventInsightBuffer _raceEventInsightBuffer;
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
+    private readonly AppFileLogger _appFileLogger;
+    private readonly RaceAssistantAuditLogger _raceAssistantAuditLogger;
+    private readonly LogDirectoryService _logDirectoryService;
     private readonly VoiceAiQueryService _voiceAiQueryService;
     private readonly IMicrophoneService _microphoneService;
     private readonly RaceAssistantSnapshotBuilder _raceAssistantSnapshotBuilder = new();
@@ -97,6 +100,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _downloadLatestVersionCommand;
     private readonly RelayCommand _toggleSidebarCommand;
     private readonly RelayCommand _openUdpRawLogDirectoryCommand;
+    private readonly RelayCommand _openAppLogDirectoryCommand;
+    private readonly RelayCommand _openRaceAssistantLogDirectoryCommand;
     private readonly RelayCommand _generatePostRaceAiSummaryCommand;
     private readonly RelayCommand _readTyreSetsInventoryCommand;
     private readonly RelayCommand _clearTyreInventoryCommand;
@@ -120,6 +125,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _packetsPerSecond;
     private string _portText = "20777";
     private string _statusMessage = "准备监听 F1 25 UDP。";
+    private bool _enableAppFileLog = true;
+    private bool _enableRaceAssistantAuditLog = true;
+    private bool _raceAssistantLogPromptSummary;
+    private string _maxLogFileSizeMbText = "20";
+    private string _maxLogRetentionDaysText = "14";
+    private string _appLogDirectoryText = string.Empty;
+    private string _appLogLastFilePathText = "无";
+    private string _appLogLastFileSizeText = "无";
+    private string _appLogLastWriteTimeText = "无";
+    private string _raceAssistantLogDirectoryText = string.Empty;
+    private string _raceAssistantLogLastFilePathText = "无";
+    private string _raceAssistantLogLastFileSizeText = "无";
+    private string _raceAssistantLogLastWriteTimeText = "无";
+    private string _logSettingsStatusText = "日志设置待加载。";
     private string _trackText = "等待 Session 包。";
     private string _sessionTypeText = "未知赛制";
     private string _lapText = "-";
@@ -177,6 +196,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private long _udpRawLogDroppedPacketCount;
     private int _udpRawLogQueueCapacity = 4096;
     private int _udpRawLogSettingsSaveVersion;
+    private int _logSettingsSaveVersion;
     private bool _voiceAiEnabled;
     private VoiceAiInputBinding _voiceAiInputBinding = new();
     private VoiceAiTalkMode _voiceAiTalkMode = VoiceAiTalkMode.HoldToTalk;
@@ -274,6 +294,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// <param name="sessionComparison">The optional multi-session comparison page view model.</param>
     /// <param name="trackMapTrajectoryStore">The optional in-memory track-map trajectory store.</param>
     /// <param name="realtimeCornerAdviceService">The optional realtime corner advice service.</param>
+    /// <param name="appFileLogger">The optional categorized app file logger.</param>
+    /// <param name="raceAssistantAuditLogger">The optional RaceAssistant audit logger.</param>
+    /// <param name="logDirectoryService">The optional log directory helper used by Settings.</param>
     /// <param name="voiceAiQueryService">The optional voice-to-AI query service.</param>
     /// <param name="microphoneService">The optional microphone device service.</param>
     public DashboardViewModel(
@@ -298,6 +321,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         CornerAnalysisViewModel? cornerAnalysis = null,
         ITrackMapTrajectoryStore? trackMapTrajectoryStore = null,
         RealtimeCornerAdviceService? realtimeCornerAdviceService = null,
+        AppFileLogger? appFileLogger = null,
+        RaceAssistantAuditLogger? raceAssistantAuditLogger = null,
+        LogDirectoryService? logDirectoryService = null,
         VoiceAiQueryService? voiceAiQueryService = null,
         IMicrophoneService? microphoneService = null)
     {
@@ -318,7 +344,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _aiAnalysisService,
             _ttsMessageFactory,
             _ttsQueue,
-            logSink: EnqueueAiTtsLog);
+            logSink: (category, message) => EnqueueAiTtsLog(category, message));
         HistoryBrowser = historyBrowser ?? CreateNoOpHistoryBrowser();
         PostRaceReview = postRaceReview ?? CreateNoOpPostRaceReview();
         SessionComparison = sessionComparison ?? CreateNoOpSessionComparison();
@@ -334,11 +360,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             () => _sessionStateStore.CaptureState().HasFinalClassification);
         _raceEventInsightBuffer = new RaceEventInsightBuffer(_raceEventBus);
         _udpRawLogDirectoryService = udpRawLogDirectoryService ?? new UdpRawLogDirectoryService();
+        var runContext = new AppRunContext();
+        _appFileLogger = appFileLogger ?? new AppFileLogger(runContext);
+        _raceAssistantAuditLogger = raceAssistantAuditLogger ?? new RaceAssistantAuditLogger(runContext);
+        _logDirectoryService = logDirectoryService ?? new LogDirectoryService();
         _voiceAiQueryService = voiceAiQueryService ?? new VoiceAiQueryService(
             new WindowsSpeechRecognitionService(),
             _aiAnalysisService,
             _ttsMessageFactory,
-            _ttsQueue);
+            _ttsQueue,
+            _raceAssistantAuditLogger);
         _microphoneService = microphoneService ?? new WindowsMicrophoneService();
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         _currentLapChartBuilder = new CurrentLapChartBuilder();
@@ -404,12 +435,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         LoadAvailableVoices();
         RefreshVoiceAiMicrophones(persistSelection: false);
         RefreshUdpRawLogStatus();
+        RefreshRuntimeLogStatus();
 
         _startListeningCommand = new RelayCommand(() => _ = StartListeningAsync(), CanStartListening);
         _stopListeningCommand = new RelayCommand(() => _ = StopListeningAsync(), CanStopListening);
         _downloadLatestVersionCommand = new RelayCommand(OpenGitHubReleases);
         _toggleSidebarCommand = new RelayCommand(ToggleSidebar);
         _openUdpRawLogDirectoryCommand = new RelayCommand(OpenUdpRawLogDirectory);
+        _openAppLogDirectoryCommand = new RelayCommand(OpenAppLogDirectory);
+        _openRaceAssistantLogDirectoryCommand = new RelayCommand(OpenRaceAssistantLogDirectory);
         _readTyreSetsInventoryCommand = new RelayCommand(ReadInventoryFromTyreSets);
         _clearTyreInventoryCommand = new RelayCommand(ClearTyreInventory);
         _saveTyreInventoryCommand = new RelayCommand(ForcePersistRaceWeekendTyrePlan);
@@ -961,6 +995,166 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _udpRawLogLastErrorText;
         private set => SetProperty(ref _udpRawLogLastErrorText, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether categorized app file logs are enabled.
+    /// </summary>
+    public bool EnableAppFileLog
+    {
+        get => _enableAppFileLog;
+        set
+        {
+            if (SetProperty(ref _enableAppFileLog, value))
+            {
+                ApplyLogSettings();
+                QueuePersistLogSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether RaceAssistant audit JSONL is enabled.
+    /// </summary>
+    public bool EnableRaceAssistantAuditLog
+    {
+        get => _enableRaceAssistantAuditLog;
+        set
+        {
+            if (SetProperty(ref _enableRaceAssistantAuditLog, value))
+            {
+                ApplyLogSettings();
+                QueuePersistLogSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether prompt summaries may be logged.
+    /// </summary>
+    public bool RaceAssistantLogPromptSummary
+    {
+        get => _raceAssistantLogPromptSummary;
+        set
+        {
+            if (SetProperty(ref _raceAssistantLogPromptSummary, value))
+            {
+                QueuePersistLogSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the maximum log file size text in megabytes.
+    /// </summary>
+    public string MaxLogFileSizeMbText
+    {
+        get => _maxLogFileSizeMbText;
+        set
+        {
+            if (SetProperty(ref _maxLogFileSizeMbText, value))
+            {
+                ApplyLogSettings();
+                QueuePersistLogSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the log retention days text.
+    /// </summary>
+    public string MaxLogRetentionDaysText
+    {
+        get => _maxLogRetentionDaysText;
+        set
+        {
+            if (SetProperty(ref _maxLogRetentionDaysText, value))
+            {
+                ApplyLogSettings();
+                QueuePersistLogSettings();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the categorized app log directory shown in Settings.
+    /// </summary>
+    public string AppLogDirectoryText
+    {
+        get => _appLogDirectoryText;
+        private set => SetProperty(ref _appLogDirectoryText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest categorized app log file path.
+    /// </summary>
+    public string AppLogLastFilePathText
+    {
+        get => _appLogLastFilePathText;
+        private set => SetProperty(ref _appLogLastFilePathText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest categorized app log file size.
+    /// </summary>
+    public string AppLogLastFileSizeText
+    {
+        get => _appLogLastFileSizeText;
+        private set => SetProperty(ref _appLogLastFileSizeText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest categorized app log write time.
+    /// </summary>
+    public string AppLogLastWriteTimeText
+    {
+        get => _appLogLastWriteTimeText;
+        private set => SetProperty(ref _appLogLastWriteTimeText, value);
+    }
+
+    /// <summary>
+    /// Gets the RaceAssistant audit log directory shown in Settings.
+    /// </summary>
+    public string RaceAssistantLogDirectoryText
+    {
+        get => _raceAssistantLogDirectoryText;
+        private set => SetProperty(ref _raceAssistantLogDirectoryText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest RaceAssistant audit log file path.
+    /// </summary>
+    public string RaceAssistantLogLastFilePathText
+    {
+        get => _raceAssistantLogLastFilePathText;
+        private set => SetProperty(ref _raceAssistantLogLastFilePathText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest RaceAssistant audit log file size.
+    /// </summary>
+    public string RaceAssistantLogLastFileSizeText
+    {
+        get => _raceAssistantLogLastFileSizeText;
+        private set => SetProperty(ref _raceAssistantLogLastFileSizeText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest RaceAssistant audit log write time.
+    /// </summary>
+    public string RaceAssistantLogLastWriteTimeText
+    {
+        get => _raceAssistantLogLastWriteTimeText;
+        private set => SetProperty(ref _raceAssistantLogLastWriteTimeText, value);
+    }
+
+    /// <summary>
+    /// Gets the runtime log settings status text.
+    /// </summary>
+    public string LogSettingsStatusText
+    {
+        get => _logSettingsStatusText;
+        private set => SetProperty(ref _logSettingsStatusText, value);
     }
 
     /// <summary>
@@ -1674,6 +1868,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public ICommand OpenUdpRawLogDirectoryCommand => _openUdpRawLogDirectoryCommand;
 
     /// <summary>
+    /// Gets the command that opens the categorized app log directory.
+    /// </summary>
+    public ICommand OpenAppLogDirectoryCommand => _openAppLogDirectoryCommand;
+
+    /// <summary>
+    /// Gets the command that opens the RaceAssistant audit log directory.
+    /// </summary>
+    public ICommand OpenRaceAssistantLogDirectoryCommand => _openRaceAssistantLogDirectoryCommand;
+
+    /// <summary>
     /// Gets the command that manually generates a post-race AI summary from staged race data.
     /// </summary>
     public ICommand GeneratePostRaceAiSummaryCommand => _generatePostRaceAiSummaryCommand;
@@ -2177,6 +2381,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch
         {
         }
+
+        await FlushLoggersAsync().ConfigureAwait(false);
+
+        try
+        {
+            await _raceAssistantAuditLogger.DisposeAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            await _appFileLogger.DisposeAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+        }
         finally
         {
             try
@@ -2587,6 +2809,55 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
+    private async Task FlushLoggersAsync()
+    {
+        try
+        {
+            await Task.WhenAll(
+                _appFileLogger.FlushAsync(TimeSpan.FromMilliseconds(1500)),
+                _raceAssistantAuditLogger.FlushAsync(TimeSpan.FromMilliseconds(1500))).ConfigureAwait(false);
+        }
+        catch
+        {
+        }
+    }
+
+    private async void OpenAppLogDirectory()
+    {
+        await OpenRuntimeLogDirectoryAsync(_appFileLogger.Status.DirectoryPath, isRaceAssistant: false);
+    }
+
+    private async void OpenRaceAssistantLogDirectory()
+    {
+        await OpenRuntimeLogDirectoryAsync(_raceAssistantAuditLogger.Status.DirectoryPath, isRaceAssistant: true);
+    }
+
+    private async Task OpenRuntimeLogDirectoryAsync(string directoryPath, bool isRaceAssistant)
+    {
+        try
+        {
+            var result = await Task
+                .Run(() => _logDirectoryService.OpenDirectory(directoryPath))
+                .ConfigureAwait(false);
+
+            _dispatcher.Invoke(() =>
+            {
+                LogSettingsStatusText = result.Succeeded ? "日志目录已打开" : result.ErrorMessage;
+                RefreshRuntimeLogStatus();
+            });
+        }
+        catch (Exception ex)
+        {
+            _dispatcher.Invoke(() =>
+            {
+                LogSettingsStatusText = isRaceAssistant
+                    ? $"打开 RaceAssistant 日志目录失败：{ex.Message}"
+                    : $"打开 App 日志目录失败：{ex.Message}";
+                RefreshRuntimeLogStatus();
+            });
+        }
+    }
+
     private async Task StartListeningAsync()
     {
         if (!TryParseUdpListenPort(PortText, out var port))
@@ -2665,6 +2936,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             ResetChartPanels();
             StatusMessage = "UDP 监听已停止。";
             EnqueueEventLog("系统", StatusMessage);
+            await FlushLoggersAsync();
         }
         catch (Exception ex)
         {
@@ -2712,6 +2984,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
+        _ = FlushLoggersAsync();
         MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "检测到新的 UDP session，上一场正赛未收到最终分类。");
         _sessionStateStore.Reset();
         _eventDetectionService.Reset();
@@ -2745,6 +3018,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         RefreshConnectionState();
         RefreshCounters();
         RefreshUdpRawLogStatus();
+        RefreshRuntimeLogStatus();
         RefreshCentralState();
     }
 
@@ -3281,6 +3555,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             AiSettings = BuildAiSettings(),
             TtsOptions = BuildTtsOptions(),
             AdviceKey = string.Empty,
+            Track = BuildTrackText(sessionState.TrackId),
+            SessionType = SessionModeFormatter.FormatDisplayName(ResolveSessionMode(sessionState)),
+            UdpRawLogFile = _udpRawLogWriter.Status.CurrentFilePath,
             Recording = recording,
             BuildStrategyQuestionContext = question =>
             {
@@ -3310,6 +3587,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             TtsOptions = BuildTtsOptions(),
             AdviceKey = BuildVoiceAiAdviceKey(question, strategyContext.Intent),
             QuestionText = question,
+            Track = BuildTrackText(sessionState.TrackId),
+            SessionType = SessionModeFormatter.FormatDisplayName(ResolveSessionMode(sessionState)),
+            UdpRawLogFile = _udpRawLogWriter.Status.CurrentFilePath,
             StrategyQuestionContext = strategyContext,
             CaptureCurrentSessionUid = () => _activeSessionUid,
             EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
@@ -3424,8 +3704,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 : FormatVoiceAssistantFailure(result.ErrorMessage);
             VoiceAssistantStatusText = failure;
             VoiceAiStatusText = failure;
-            EnqueueAiTtsLog("VoiceAI", failure);
-            EnqueueAiTtsLog("RaceAssistant", failure);
+            EnqueueAiTtsLog("VoiceAI", failure, "Warning", result.QuestionId, result.SessionUid);
+            EnqueueAiTtsLog("RaceAssistant", failure, "Warning", result.QuestionId, result.SessionUid);
             return;
         }
 
@@ -3464,8 +3744,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             RaceAssistantHistory.RemoveAt(RaceAssistantHistory.Count - 1);
         }
 
-        EnqueueAiTtsLog("VoiceAI", $"问题：{result.RecognizedQuestion}");
-        EnqueueAiTtsLog("RaceAssistant", FormatRaceAssistantUserLog(result, advice));
+        EnqueueAiTtsLog("VoiceAI", $"问题：{result.RecognizedQuestion}", questionId: result.QuestionId, sessionUid: result.SessionUid);
+        EnqueueAiTtsLog("RaceAssistant", FormatRaceAssistantUserLog(result, advice), questionId: result.QuestionId, sessionUid: result.SessionUid);
     }
 
     private static bool IsTelemetryLimitedMode(RaceAssistantMode mode)
@@ -3868,8 +4148,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         EnqueueEventLog(display.Category, display.Message);
     }
 
-    private void EnqueueEventLog(string category, string message)
+    private void EnqueueEventLog(
+        string category,
+        string message,
+        string level = "Info",
+        string? questionId = null,
+        ulong? sessionUid = null,
+        int? lap = null,
+        string? exception = null)
     {
+        _appFileLogger.TryEnqueue(category, message, level, sessionUid, lap, questionId, exception);
         lock (_pendingEventLogsLock)
         {
             _pendingEventLogs.Enqueue(CreateLogEntry(category, message));
@@ -3907,8 +4195,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
-    private void EnqueueAiTtsLog(string category, string message)
+    private void EnqueueAiTtsLog(
+        string category,
+        string message,
+        string level = "Info",
+        string? questionId = null,
+        ulong? sessionUid = null,
+        int? lap = null,
+        string? exception = null)
     {
+        _appFileLogger.TryEnqueue(category, message, level, sessionUid, lap, questionId, exception);
         lock (_pendingAiTtsLogsLock)
         {
             _pendingAiTtsLogs.Enqueue(CreateLogEntry(category, message));
@@ -3941,8 +4237,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
     }
 
-    private void EnqueueAiAnalysisLog(string category, string message)
+    private void EnqueueAiAnalysisLog(
+        string category,
+        string message,
+        string level = "Info",
+        string? questionId = null,
+        ulong? sessionUid = null,
+        int? lap = null,
+        string? exception = null)
     {
+        _appFileLogger.TryEnqueue(category, message, level, sessionUid, lap, questionId, exception);
         lock (_pendingAiAnalysisLogsLock)
         {
             _pendingAiAnalysisLogs.Enqueue(CreateLogEntry(category, message));
@@ -4010,6 +4314,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _udpRawLogWriter.UpdateOptions(BuildUdpRawLogOptions(settings.UdpRawLog.Enabled, settings.UdpRawLog.DirectoryPath, settings.UdpRawLog.QueueCapacity));
             UdpRawLogEnabled = settings.UdpRawLog.Enabled;
             RefreshUdpRawLogStatus();
+            ApplyLoadedLogSettings(settings.Logs);
+            RefreshRuntimeLogStatus();
             VoiceAiEnabled = settings.VoiceAi.Enabled;
             VoiceAiInputBinding = settings.VoiceAi.InputBinding;
             VoiceAiTalkMode = settings.VoiceAi.TalkMode;
@@ -4081,6 +4387,31 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         VoiceAssistantEnableTtsAnswer = normalized.EnableTtsAnswer;
         VoiceAssistantMaxAnswerLength = normalized.MaxAnswerLength;
         VoiceAssistantRepeatQuestionCooldownSeconds = normalized.RepeatQuestionCooldownSeconds;
+    }
+
+    private void ApplyLoadedLogSettings(LogSettings settings)
+    {
+        var normalized = NormalizeLogSettings(settings);
+        EnableAppFileLog = normalized.EnableAppFileLog;
+        EnableRaceAssistantAuditLog = normalized.EnableRaceAssistantAuditLog;
+        RaceAssistantLogPromptSummary = normalized.RaceAssistantLogPromptSummary;
+        MaxLogFileSizeMbText = normalized.MaxLogFileSizeMB.ToString(CultureInfo.InvariantCulture);
+        MaxLogRetentionDaysText = normalized.MaxLogRetentionDays.ToString(CultureInfo.InvariantCulture);
+        ApplyLogSettings(normalized);
+        LogSettingsStatusText = "日志设置已加载";
+    }
+
+    private void ApplyLogSettings()
+    {
+        ApplyLogSettings(BuildLogSettings());
+    }
+
+    private void ApplyLogSettings(LogSettings settings)
+    {
+        var normalized = NormalizeLogSettings(settings);
+        _appFileLogger.UpdateSettings(normalized);
+        _raceAssistantAuditLogger.UpdateSettings(normalized);
+        RefreshRuntimeLogStatus();
     }
 
     private void ReadInventoryFromTyreSets()
@@ -4349,6 +4680,54 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch (Exception ex)
         {
             EnqueueAiTtsLog("System", $"UDP Raw Log 设置保存失败：{ex.Message}");
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                _settingsGate.Release();
+            }
+        }
+    }
+
+    private void QueuePersistLogSettings()
+    {
+        if (_isApplyingSettings)
+        {
+            return;
+        }
+
+        var saveVersion = Interlocked.Increment(ref _logSettingsSaveVersion);
+        var settings = BuildLogSettings();
+        _ = PersistLogSettingsAsync(settings, saveVersion);
+    }
+
+    private async Task PersistLogSettingsAsync(LogSettings settings, int saveVersion)
+    {
+        var gateHeld = false;
+        try
+        {
+            await _settingsGate.WaitAsync();
+            gateHeld = true;
+            if (saveVersion < Volatile.Read(ref _logSettingsSaveVersion))
+            {
+                return;
+            }
+
+            await _appSettingsStore.SaveLogSettingsAsync(settings, CancellationToken.None);
+            if (saveVersion == Volatile.Read(ref _logSettingsSaveVersion))
+            {
+                LogSettingsStatusText = "日志设置已保存";
+                EnqueueAiTtsLog("System", "日志设置已保存。");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            LogSettingsStatusText = "日志设置保存失败";
+            EnqueueAiTtsLog("System", $"日志设置保存失败：{ex.Message}");
         }
         finally
         {
@@ -5212,6 +5591,35 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
     }
 
+    private LogSettings BuildLogSettings()
+    {
+        return NormalizeLogSettings(
+            new LogSettings
+            {
+                EnableAppFileLog = EnableAppFileLog,
+                EnableRaceAssistantAuditLog = EnableRaceAssistantAuditLog,
+                RaceAssistantLogPromptSummary = RaceAssistantLogPromptSummary,
+                MaxLogFileSizeMB = ParsePositiveInt(MaxLogFileSizeMbText, 20),
+                MaxLogRetentionDays = ParsePositiveInt(MaxLogRetentionDaysText, 14)
+            });
+    }
+
+    private static LogSettings NormalizeLogSettings(LogSettings settings)
+    {
+        return settings with
+        {
+            MaxLogFileSizeMB = Math.Clamp(settings.MaxLogFileSizeMB, 1, 1024),
+            MaxLogRetentionDays = Math.Clamp(settings.MaxLogRetentionDays, 1, 366)
+        };
+    }
+
+    private static int ParsePositiveInt(string value, int fallback)
+    {
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed > 0
+            ? parsed
+            : fallback;
+    }
+
     private VoiceAiOptions BuildVoiceAiOptions()
     {
         return new VoiceAiOptions
@@ -5343,6 +5751,37 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         UdpRawLogStatusText = status.Enabled
             ? "Raw Log 已启用"
             : "Raw Log 未启用";
+    }
+
+    private void RefreshRuntimeLogStatus()
+    {
+        var appStatus = _appFileLogger.Status;
+        var appLatestFileInfo = _logDirectoryService.GetLatestFileInfo(appStatus, "app-*.log");
+        AppLogDirectoryText = appStatus.DirectoryPath;
+        AppLogLastFilePathText = appLatestFileInfo.FilePathText;
+        AppLogLastFileSizeText = appLatestFileInfo.FileSizeText;
+        AppLogLastWriteTimeText = appLatestFileInfo.LastWriteTimeText;
+
+        var auditStatus = _raceAssistantAuditLogger.Status;
+        var auditLatestFileInfo = _logDirectoryService.GetLatestFileInfo(auditStatus, "race-assistant-*.jsonl");
+        RaceAssistantLogDirectoryText = auditStatus.DirectoryPath;
+        RaceAssistantLogLastFilePathText = auditLatestFileInfo.FilePathText;
+        RaceAssistantLogLastFileSizeText = auditLatestFileInfo.FileSizeText;
+        RaceAssistantLogLastWriteTimeText = auditLatestFileInfo.LastWriteTimeText;
+
+        var warnings = BuildUdpRawLogErrorText(
+            appStatus.LastWarning,
+            appLatestFileInfo.ErrorMessage,
+            auditStatus.LastWarning,
+            auditLatestFileInfo.ErrorMessage);
+        if (!string.IsNullOrWhiteSpace(warnings))
+        {
+            LogSettingsStatusText = warnings;
+        }
+        else if (string.IsNullOrWhiteSpace(LogSettingsStatusText) || LogSettingsStatusText.Contains("失败", StringComparison.Ordinal))
+        {
+            LogSettingsStatusText = "日志设置正常";
+        }
     }
 
     private void UpdateUdpRawLogUi(Action update)
