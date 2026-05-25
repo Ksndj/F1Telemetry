@@ -122,4 +122,9 @@ public sealed record AIAnalysisContext
     /// Gets the recent race events in summary form.
     /// </summary>
     public IReadOnlyList<string> RecentEvents { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets the structured race-assistant question context when the request is an interactive strategy answer.
+    /// </summary>
+    public StrategyQuestionContext? StrategyQuestionContext { get; init; }
 }

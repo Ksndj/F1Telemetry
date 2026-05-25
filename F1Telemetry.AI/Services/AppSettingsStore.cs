@@ -85,7 +85,14 @@ public sealed class AppSettingsStore : IAppSettingsStore
         ArgumentNullException.ThrowIfNull(options);
 
         var existing = await LoadDocumentCoreAsync(cancellationToken);
-        await WriteDocumentAsync(existing with { VoiceAi = NormalizeVoiceAiOptions(options) }, cancellationToken);
+        var normalized = NormalizeVoiceAiOptions(options);
+        await WriteDocumentAsync(
+            existing with
+            {
+                VoiceAi = normalized,
+                VoiceAssistantSettings = normalized.AssistantSettings
+            },
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -109,6 +116,14 @@ public sealed class AppSettingsStore : IAppSettingsStore
             await using var stream = File.OpenRead(_settingsPath);
             using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
             var root = document.RootElement;
+            var voiceAi = ReadVoiceAiOptions(root);
+            var voiceAssistantSettings = ReadVoiceAssistantSettings(root);
+            if (!root.TryGetProperty("voiceAssistantSettings", out _))
+            {
+                voiceAssistantSettings = voiceAi.AssistantSettings;
+            }
+
+            voiceAi = voiceAi with { AssistantSettings = voiceAssistantSettings };
 
             return new AppSettingsDocument
             {
@@ -116,7 +131,8 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 Tts = ReadTtsSettings(root),
                 RaceWeekendTyrePlan = ReadRaceWeekendTyrePlan(root),
                 UdpRawLog = ReadUdpRawLogOptions(root),
-                VoiceAi = ReadVoiceAiOptions(root),
+                VoiceAi = voiceAi,
+                VoiceAssistantSettings = voiceAssistantSettings,
                 Udp = ReadUdpSettings(root)
             };
         }
@@ -307,13 +323,14 @@ public sealed class AppSettingsStore : IAppSettingsStore
 
     private static VoiceAiOptions ReadVoiceAiOptions(JsonElement rootElement)
     {
-        if (!rootElement.TryGetProperty("voiceAi", out var voiceAiElement))
-        {
-            return new VoiceAiOptions();
-        }
-
         try
         {
+            if (!rootElement.TryGetProperty("voiceAi", out var voiceAiElement))
+            {
+                var assistantOnly = ReadVoiceAssistantSettings(rootElement);
+                return NormalizeVoiceAiOptions(new VoiceAiOptions { AssistantSettings = assistantOnly });
+            }
+
             return NormalizeVoiceAiOptions(
                 new VoiceAiOptions
                 {
@@ -322,12 +339,48 @@ public sealed class AppSettingsStore : IAppSettingsStore
                     TalkMode = ReadEnum(voiceAiElement, "talkMode", VoiceAiTalkMode.HoldToTalk),
                     MicrophoneDeviceId = ReadString(voiceAiElement, "microphoneDeviceId"),
                     MicrophoneDeviceName = ReadString(voiceAiElement, "microphoneDeviceName"),
-                    Hotkey = ReadString(voiceAiElement, "hotkey", VoiceAiOptions.NoHotkey)
+                    Hotkey = ReadString(voiceAiElement, "hotkey", VoiceAiOptions.NoHotkey),
+                    AssistantSettings = ReadVoiceAssistantSettings(rootElement, voiceAiElement)
                 });
         }
         catch
         {
             return new VoiceAiOptions();
+        }
+    }
+
+    private static VoiceAssistantSettings ReadVoiceAssistantSettings(
+        JsonElement rootElement,
+        JsonElement? voiceAiElement = null)
+    {
+        var source = default(JsonElement);
+        var hasSource = voiceAiElement is not null &&
+                        voiceAiElement.Value.TryGetProperty("assistantSettings", out source);
+        if (!hasSource)
+        {
+            hasSource = rootElement.TryGetProperty("voiceAssistantSettings", out source);
+        }
+
+        if (!hasSource)
+        {
+            return new VoiceAssistantSettings();
+        }
+
+        try
+        {
+            return new VoiceAssistantSettings
+            {
+                EnableVoiceAssistant = ReadBool(source, "enableVoiceAssistant"),
+                PushToTalkKey = ReadString(source, "pushToTalkKey", VoiceAiOptions.NoHotkey),
+                PushToTalkButton = ReadString(source, "pushToTalkButton"),
+                EnableTtsAnswer = ReadBool(source, "enableTtsAnswer", defaultValue: true),
+                MaxAnswerLength = ReadInt(source, "maxAnswerLength", 240),
+                RepeatQuestionCooldownSeconds = ReadInt(source, "repeatQuestionCooldownSeconds", 12)
+            }.Normalize();
+        }
+        catch
+        {
+            return new VoiceAssistantSettings();
         }
     }
 
@@ -353,12 +406,31 @@ public sealed class AppSettingsStore : IAppSettingsStore
     private static VoiceAiOptions NormalizeVoiceAiOptions(VoiceAiOptions options)
     {
         var hotkey = options.Hotkey?.Trim();
+        var inputBinding = NormalizeVoiceAiInputBinding(options.InputBinding);
+        var assistantSettings = options.AssistantSettings.Normalize();
+        if (string.IsNullOrWhiteSpace(assistantSettings.PushToTalkButton) &&
+            inputBinding.Kind != VoiceAiInputBindingKind.None)
+        {
+            assistantSettings = assistantSettings with { PushToTalkButton = inputBinding.DisplayText };
+        }
+
+        if (string.Equals(assistantSettings.PushToTalkKey, VoiceAiOptions.NoHotkey, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(hotkey) &&
+            !string.Equals(hotkey, VoiceAiOptions.NoHotkey, StringComparison.Ordinal))
+        {
+            assistantSettings = assistantSettings with { PushToTalkKey = hotkey.Trim() };
+        }
+
         return options with
         {
-            InputBinding = NormalizeVoiceAiInputBinding(options.InputBinding),
+            InputBinding = inputBinding,
             MicrophoneDeviceId = options.MicrophoneDeviceId?.Trim() ?? string.Empty,
             MicrophoneDeviceName = options.MicrophoneDeviceName?.Trim() ?? string.Empty,
-            Hotkey = string.IsNullOrWhiteSpace(hotkey) ? VoiceAiOptions.NoHotkey : hotkey
+            Hotkey = string.IsNullOrWhiteSpace(hotkey) ? VoiceAiOptions.NoHotkey : hotkey,
+            AssistantSettings = assistantSettings with
+            {
+                EnableVoiceAssistant = options.Enabled || assistantSettings.EnableVoiceAssistant
+            }
         };
     }
 

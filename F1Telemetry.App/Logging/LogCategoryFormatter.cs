@@ -20,6 +20,8 @@ public static class LogCategoryFormatter
             "UDP" or "协议" => "UDP",
             "RaceEvent" or "事件" or "告警" => "RaceEvent",
             "AI" => "AI",
+            "VoiceAI" => "VoiceAI",
+            "RaceAssistant" => "RaceAssistant",
             "TTS" => "TTS",
             "Storage" or "存储" => "Storage",
             _ when LooksLikeUdpMessage(message) => "UDP",

@@ -45,6 +45,10 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceId);
         Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceName);
         Assert.Equal(VoiceAiOptions.NoHotkey, settings.VoiceAi.Hotkey);
+        Assert.False(settings.VoiceAssistantSettings.EnableVoiceAssistant);
+        Assert.True(settings.VoiceAssistantSettings.EnableTtsAnswer);
+        Assert.Equal(240, settings.VoiceAssistantSettings.MaxAnswerLength);
+        Assert.Equal(12, settings.VoiceAssistantSettings.RepeatQuestionCooldownSeconds);
         Assert.Equal(20777, settings.Udp.ListenPort);
     }
 
@@ -558,7 +562,16 @@ public sealed class AppSettingsStoreTests
                 TalkMode = VoiceAiTalkMode.ToggleToTalk,
                 MicrophoneDeviceId = "1",
                 MicrophoneDeviceName = "USB Microphone",
-                Hotkey = "F13"
+                Hotkey = "F13",
+                AssistantSettings = new VoiceAssistantSettings
+                {
+                    EnableVoiceAssistant = true,
+                    PushToTalkKey = "F13",
+                    PushToTalkButton = "方向盘/手柄设备 · 按钮 7",
+                    EnableTtsAnswer = false,
+                    MaxAnswerLength = 180,
+                    RepeatQuestionCooldownSeconds = 18
+                }
             });
 
         var persisted = await store.LoadAsync();
@@ -573,6 +586,11 @@ public sealed class AppSettingsStoreTests
         Assert.Equal("1", persisted.VoiceAi.MicrophoneDeviceId);
         Assert.Equal("USB Microphone", persisted.VoiceAi.MicrophoneDeviceName);
         Assert.Equal("F13", persisted.VoiceAi.Hotkey);
+        Assert.True(persisted.VoiceAssistantSettings.EnableVoiceAssistant);
+        Assert.False(persisted.VoiceAssistantSettings.EnableTtsAnswer);
+        Assert.Equal(180, persisted.VoiceAssistantSettings.MaxAnswerLength);
+        Assert.Equal(18, persisted.VoiceAssistantSettings.RepeatQuestionCooldownSeconds);
+        Assert.False(persisted.VoiceAi.AssistantSettings.EnableTtsAnswer);
         Assert.Equal("configured", persisted.Ai.ApiKey);
         Assert.True(persisted.Tts.TtsEnabled);
         Assert.Equal(20778, persisted.Udp.ListenPort);
@@ -585,6 +603,8 @@ public sealed class AppSettingsStoreTests
         Assert.Equal((int)VoiceAiInputBindingKind.RawInputHidButton, voiceAiJson.GetProperty("inputBinding").GetProperty("kind").GetInt32());
         Assert.Equal(7, voiceAiJson.GetProperty("inputBinding").GetProperty("buttonIndex").GetInt32());
         Assert.Equal("方向盘/手柄设备 · 按钮 7", voiceAiJson.GetProperty("inputBinding").GetProperty("displayText").GetString());
+        Assert.False(voiceAiJson.GetProperty("assistantSettings").GetProperty("enableTtsAnswer").GetBoolean());
+        Assert.False(json.RootElement.GetProperty("voiceAssistantSettings").GetProperty("enableTtsAnswer").GetBoolean());
     }
 
     /// <summary>

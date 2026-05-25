@@ -34,6 +34,11 @@ public sealed record AppSettingsDocument
     public VoiceAiOptions VoiceAi { get; init; } = new();
 
     /// <summary>
+    /// Gets the first-version race assistant voice/text question settings block.
+    /// </summary>
+    public VoiceAssistantSettings VoiceAssistantSettings { get; init; } = new();
+
+    /// <summary>
     /// Gets the UDP listener settings block.
     /// </summary>
     public UdpSettings Udp { get; init; } = new();

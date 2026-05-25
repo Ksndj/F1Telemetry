@@ -39,6 +39,11 @@ public sealed record VoiceAiOptions
     /// Gets the legacy WPF key name from the previous keyboard-mapping implementation.
     /// </summary>
     public string Hotkey { get; init; } = NoHotkey;
+
+    /// <summary>
+    /// Gets the race-assistant voice/text question settings.
+    /// </summary>
+    public VoiceAssistantSettings AssistantSettings { get; init; } = new();
 }
 
 /// <summary>

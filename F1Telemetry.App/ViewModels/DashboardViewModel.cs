@@ -2,11 +2,14 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using F1Telemetry.AI.Interfaces;
+using F1Telemetry.AI.Formatting;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
@@ -71,6 +74,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly IUdpRawLogDirectoryService _udpRawLogDirectoryService;
     private readonly VoiceAiQueryService _voiceAiQueryService;
     private readonly IMicrophoneService _microphoneService;
+    private readonly RaceAssistantSnapshotBuilder _raceAssistantSnapshotBuilder = new();
+    private readonly VoiceQuestionIntentClassifier _voiceQuestionIntentClassifier = new();
+    private readonly StrategyQuestionContextBuilder _strategyQuestionContextBuilder = new();
     private readonly Dispatcher _dispatcher;
     private readonly CurrentLapChartBuilder _currentLapChartBuilder;
     private readonly TrendChartBuilder _trendChartBuilder;
@@ -99,6 +105,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _clearVoiceAiInputCommand;
     private readonly RelayCommand _refreshMicrophonesCommand;
     private readonly RelayCommand _testMicrophoneCommand;
+    private readonly RelayCommand _askRaceAssistantQuestionCommand;
+    private readonly RelayCommand _cancelRaceAssistantQuestionCommand;
+    private readonly RelayCommand _toggleRaceAssistantVoiceCommand;
+    private readonly RelayCommand _openRaceAssistantCommand;
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private PostRaceAiCompletionModeOptionViewModel? _selectedPostRaceAiCompletionMode;
     private bool _isSidebarExpanded = true;
@@ -187,9 +197,31 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private IVoiceRecordingSession? _voiceAiRecordingSession;
     private CancellationTokenSource? _voiceAiRecordingTimeoutCts;
     private CancellationTokenSource? _voiceAiBindingCaptureCts;
+    private CancellationTokenSource? _voiceAiQueryCts;
+    private int _voiceAiQueryVersion;
     private DateTimeOffset _voiceAiBindingCaptureArmedAt = DateTimeOffset.MinValue;
     private bool _voiceAiToggleWaitingForRelease;
     private int _voiceAiSettingsSaveVersion;
+    private bool _voiceAssistantEnabled;
+    private string _voiceAssistantQuestionText = string.Empty;
+    private string _voiceAssistantRecognizedText = string.Empty;
+    private string _voiceAssistantIntentText = "-";
+    private string _voiceAssistantModeText = "-";
+    private string _voiceAssistantStatusText = "未录音";
+    private string _voiceAssistantAnswerText = string.Empty;
+    private string _voiceAssistantAdviceTypeText = "-";
+    private string _voiceAssistantSummaryText = string.Empty;
+    private string _voiceAssistantReasonText = string.Empty;
+    private string _voiceAssistantRecommendedActionText = string.Empty;
+    private string _voiceAssistantConfidenceText = "-";
+    private string _voiceAssistantRiskLevelText = "-";
+    private string _voiceAssistantMissingDataText = "-";
+    private string _voiceAssistantMissingDataDetailText = string.Empty;
+    private string _voiceAssistantTelemetryNoticeText = string.Empty;
+    private bool _voiceAssistantEnableTtsAnswer = true;
+    private int _voiceAssistantMaxAnswerLength = 240;
+    private int _voiceAssistantRepeatQuestionCooldownSeconds = 12;
+    private readonly Dictionary<string, DateTimeOffset> _recentVoiceAssistantQuestions = new(StringComparer.Ordinal);
     private bool _ttsEnabled;
     private string _ttsVoiceName = string.Empty;
     private string _ttsVoiceStatusText = "正在读取 Windows 语音...";
@@ -328,6 +360,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         VoiceAiTalkModeOptions = new ObservableCollection<VoiceAiTalkModeOptionViewModel>(CreateVoiceAiTalkModeOptions());
         _selectedVoiceAiTalkModeOption = VoiceAiTalkModeOptions[0];
         VoiceAiMicrophoneDevices = new ObservableCollection<MicrophoneDeviceInfo>();
+        RaceAssistantHistory = new ObservableCollection<RaceAssistantHistoryItemViewModel>();
         RaceWeekendTyreInventoryItems = CreateRaceWeekendTyreInventoryItems();
         PostRaceAiCompletionModes = new ObservableCollection<PostRaceAiCompletionModeOptionViewModel>(
         [
@@ -386,6 +419,26 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _testMicrophoneCommand = new RelayCommand(
             () => _ = TestVoiceAiMicrophoneAsync(),
             () => !IsVoiceAiMicrophoneTesting);
+        _askRaceAssistantQuestionCommand = new RelayCommand(
+            () => _ = AskRaceAssistantTextQuestionAsync(),
+            CanAskRaceAssistantTextQuestion);
+        _cancelRaceAssistantQuestionCommand = new RelayCommand(
+            () => CancelActiveVoiceAssistantQuery("已取消当前问答。", logAsCanceled: true),
+            () => IsVoiceAiQueryRunning);
+        _toggleRaceAssistantVoiceCommand = new RelayCommand(
+            () =>
+            {
+                if (IsVoiceAiRecording)
+                {
+                    _ = StopVoiceAiRecordingAndAskAsync();
+                }
+                else
+                {
+                    _ = StartVoiceAiRecordingAsync();
+                }
+            },
+            () => VoiceAssistantEnabled || VoiceAiEnabled);
+        _openRaceAssistantCommand = new RelayCommand(OpenRaceAssistantPanel);
         _generatePostRaceAiSummaryCommand = new RelayCommand(
             () =>
             {
@@ -626,7 +679,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        if (!VoiceAiEnabled || !VoiceAiInputMatchesBinding(acceptedInput))
+        if ((!VoiceAiEnabled && !VoiceAssistantEnabled) || !VoiceAiInputMatchesBinding(acceptedInput))
         {
             return;
         }
@@ -922,6 +975,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 RefreshVoiceAiStatusText();
                 QueuePersistVoiceAiOptions();
+                _toggleRaceAssistantVoiceCommand?.RaiseCanExecuteChanged();
+                _askRaceAssistantQuestionCommand?.RaiseCanExecuteChanged();
             }
         }
     }
@@ -1117,12 +1172,254 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the V1 race assistant question panel is enabled.
+    /// </summary>
+    public bool VoiceAssistantEnabled
+    {
+        get => _voiceAssistantEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAssistantEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+                _toggleRaceAssistantVoiceCommand?.RaiseCanExecuteChanged();
+                _askRaceAssistantQuestionCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the typed fallback question for the race assistant.
+    /// </summary>
+    public string VoiceAssistantQuestionText
+    {
+        get => _voiceAssistantQuestionText;
+        set
+        {
+            if (SetProperty(ref _voiceAssistantQuestionText, value ?? string.Empty))
+            {
+                _askRaceAssistantQuestionCommand?.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the latest recognized voice or typed question text.
+    /// </summary>
+    public string VoiceAssistantRecognizedText
+    {
+        get => _voiceAssistantRecognizedText;
+        private set => SetProperty(ref _voiceAssistantRecognizedText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest recognized intent label.
+    /// </summary>
+    public string VoiceAssistantIntentText
+    {
+        get => _voiceAssistantIntentText;
+        private set => SetProperty(ref _voiceAssistantIntentText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest race-assistant mode label.
+    /// </summary>
+    public string VoiceAssistantModeText
+    {
+        get => _voiceAssistantModeText;
+        private set => SetProperty(ref _voiceAssistantModeText, value);
+    }
+
+    /// <summary>
+    /// Gets the race assistant request status text.
+    /// </summary>
+    public string VoiceAssistantStatusText
+    {
+        get => _voiceAssistantStatusText;
+        private set => SetProperty(ref _voiceAssistantStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest short race-assistant answer.
+    /// </summary>
+    public string VoiceAssistantAnswerText
+    {
+        get => _voiceAssistantAnswerText;
+        private set => SetProperty(ref _voiceAssistantAnswerText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest structured advice type.
+    /// </summary>
+    public string VoiceAssistantAdviceTypeText
+    {
+        get => _voiceAssistantAdviceTypeText;
+        private set => SetProperty(ref _voiceAssistantAdviceTypeText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest structured advice summary.
+    /// </summary>
+    public string VoiceAssistantSummaryText
+    {
+        get => _voiceAssistantSummaryText;
+        private set => SetProperty(ref _voiceAssistantSummaryText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest structured advice reason.
+    /// </summary>
+    public string VoiceAssistantReasonText
+    {
+        get => _voiceAssistantReasonText;
+        private set => SetProperty(ref _voiceAssistantReasonText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest structured recommended action.
+    /// </summary>
+    public string VoiceAssistantRecommendedActionText
+    {
+        get => _voiceAssistantRecommendedActionText;
+        private set => SetProperty(ref _voiceAssistantRecommendedActionText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest confidence label.
+    /// </summary>
+    public string VoiceAssistantConfidenceText
+    {
+        get => _voiceAssistantConfidenceText;
+        private set => SetProperty(ref _voiceAssistantConfidenceText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest risk label.
+    /// </summary>
+    public string VoiceAssistantRiskLevelText
+    {
+        get => _voiceAssistantRiskLevelText;
+        private set => SetProperty(ref _voiceAssistantRiskLevelText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest missing data label.
+    /// </summary>
+    public string VoiceAssistantMissingDataText
+    {
+        get => _voiceAssistantMissingDataText;
+        private set => SetProperty(ref _voiceAssistantMissingDataText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest complete localized missing-data details.
+    /// </summary>
+    public string VoiceAssistantMissingDataDetailText
+    {
+        get => _voiceAssistantMissingDataDetailText;
+        private set => SetProperty(ref _voiceAssistantMissingDataDetailText, value);
+    }
+
+    /// <summary>
+    /// Gets the telemetry availability notice shown above the race-assistant panel.
+    /// </summary>
+    public string VoiceAssistantTelemetryNoticeText
+    {
+        get => _voiceAssistantTelemetryNoticeText;
+        private set => SetProperty(ref _voiceAssistantTelemetryNoticeText, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether race assistant answers may use TTS.
+    /// </summary>
+    public bool VoiceAssistantEnableTtsAnswer
+    {
+        get => _voiceAssistantEnableTtsAnswer;
+        set
+        {
+            if (SetProperty(ref _voiceAssistantEnableTtsAnswer, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the maximum displayed race assistant answer length.
+    /// </summary>
+    public int VoiceAssistantMaxAnswerLength
+    {
+        get => _voiceAssistantMaxAnswerLength;
+        set
+        {
+            var normalized = Math.Clamp(value, 35, 2_000);
+            if (SetProperty(ref _voiceAssistantMaxAnswerLength, normalized))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the repeated question cooldown in seconds.
+    /// </summary>
+    public int VoiceAssistantRepeatQuestionCooldownSeconds
+    {
+        get => _voiceAssistantRepeatQuestionCooldownSeconds;
+        set
+        {
+            var normalized = Math.Clamp(value, 5, 600);
+            if (SetProperty(ref _voiceAssistantRepeatQuestionCooldownSeconds, normalized))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the in-memory race assistant question history.
+    /// </summary>
+    public ObservableCollection<RaceAssistantHistoryItemViewModel> RaceAssistantHistory { get; }
+
+    /// <summary>
+    /// Gets the command that submits the typed race assistant question.
+    /// </summary>
+    public ICommand AskRaceAssistantQuestionCommand => _askRaceAssistantQuestionCommand;
+
+    /// <summary>
+    /// Gets the command that submits the typed race assistant question.
+    /// </summary>
+    public ICommand AskEngineerCommand => _askRaceAssistantQuestionCommand;
+
+    /// <summary>
+    /// Gets the command that cancels the active race assistant question.
+    /// </summary>
+    public ICommand CancelRaceAssistantQuestionCommand => _cancelRaceAssistantQuestionCommand;
+
+    /// <summary>
+    /// Gets the command that starts or stops push-to-talk recording from the AI/TTS page.
+    /// </summary>
+    public ICommand ToggleRaceAssistantVoiceCommand => _toggleRaceAssistantVoiceCommand;
+
+    /// <summary>
+    /// Gets the command that opens the AI/TTS page from the overview.
+    /// </summary>
+    public ICommand OpenRaceAssistantCommand => _openRaceAssistantCommand;
+
+    /// <summary>
     /// Gets a value indicating whether a voice AI query is currently in progress.
     /// </summary>
     public bool IsVoiceAiQueryRunning
     {
         get => _isVoiceAiQueryRunning;
-        private set => SetProperty(ref _isVoiceAiQueryRunning, value);
+        private set
+        {
+            if (SetProperty(ref _isVoiceAiQueryRunning, value))
+            {
+                _askRaceAssistantQuestionCommand?.RaiseCanExecuteChanged();
+                _cancelRaceAssistantQuestionCommand?.RaiseCanExecuteChanged();
+            }
+        }
     }
 
     /// <summary>
@@ -1800,6 +2097,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         _disposed = true;
         TryCancelLifecycle();
+        CancelActiveVoiceAssistantQuery("语音问答已取消。", logAsCanceled: true);
         CancelVoiceAiBindingCapture();
         DisposeVoiceAiRecordingSession();
         StopUiTimer();
@@ -2311,6 +2609,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             IsListening = _udpListener.IsListening;
             if (IsListening)
             {
+                CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
@@ -2356,6 +2655,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             Interlocked.Exchange(ref _lastPacketReceivedUnixMs, -1);
             PacketsPerSecond = 0;
             MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "UDP 监听已停止，未收到最终分类。");
+            CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
@@ -2411,6 +2711,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
         MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "检测到新的 UDP session，上一场正赛未收到最终分类。");
         _sessionStateStore.Reset();
         _eventDetectionService.Reset();
@@ -2788,6 +3089,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         if (IsVoiceAiQueryRunning || _isStoppingVoiceAiRecording)
         {
             VoiceAiStatusText = "AI 正在处理上一条问题，请稍后再试";
+            VoiceAssistantStatusText = "AI生成中";
             return;
         }
 
@@ -2798,13 +3100,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             VoiceAiStatusText = VoiceAiTalkMode == VoiceAiTalkMode.HoldToTalk
                 ? "正在录音，松开方向盘按钮后提交"
                 : "正在录音，再按一次方向盘按钮后提交";
-            EnqueueAiTtsLog("AI", $"语音 AI 开始录音：{VoiceAiBindingText}");
+            VoiceAssistantStatusText = "正在听";
+            EnqueueAiTtsLog("VoiceAI", $"语音 AI 开始录音：{VoiceAiBindingText}");
             StartVoiceAiRecordingTimeout();
         }
         catch (Exception ex)
         {
             VoiceAiStatusText = $"麦克风启动失败：{FormatVoiceAiMicrophoneError(ex)}";
-            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+            VoiceAssistantStatusText = "失败：麦克风不可用";
+            EnqueueAiTtsLog("VoiceAI", VoiceAiStatusText);
             DisposeVoiceAiRecordingSession();
         }
     }
@@ -2827,6 +3131,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _voiceAiRecordingSession = null;
         IsVoiceAiRecording = false;
         VoiceAiStatusText = "正在整理录音...";
+        VoiceAssistantStatusText = "正在识别";
 
         try
         {
@@ -2844,7 +3149,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             if (!recording.HasInput || recording.WaveBytes.Length == 0)
             {
                 VoiceAiStatusText = "未检测到语音输入";
-                EnqueueAiTtsLog("AI", "语音 AI 已取消：未检测到语音输入。");
+                VoiceAssistantStatusText = "失败：识别失败";
+                EnqueueAiTtsLog("VoiceAI", "语音 AI 已取消：未检测到语音输入。");
                 return;
             }
 
@@ -2856,7 +3162,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         catch (Exception ex)
         {
             VoiceAiStatusText = $"语音录音失败：{ex.Message}";
-            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+            VoiceAssistantStatusText = FormatVoiceAssistantFailure(ex.Message);
+            EnqueueAiTtsLog("VoiceAI", VoiceAiStatusText);
         }
         finally
         {
@@ -2866,45 +3173,101 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private async Task RunVoiceAiQueryAsync(VoiceRecordingResult recording)
     {
-        if (IsVoiceAiQueryRunning)
-        {
-            return;
-        }
-
+        var (requestVersion, requestCts) = BeginVoiceAssistantQuery("正在识别");
         try
         {
-            IsVoiceAiQueryRunning = true;
             VoiceAiStatusText = "正在识别语音问题...";
-            EnqueueAiTtsLog("AI", $"语音 AI 已触发：{VoiceAiBindingText}");
+            VoiceAssistantStatusText = "正在识别";
+            EnqueueAiTtsLog("VoiceAI", $"语音 AI 已触发：{VoiceAiBindingText}");
 
             var result = await _voiceAiQueryService.AskAsync(
                 BuildVoiceAiQueryRequest(recording),
-                _lifecycleCts.Token);
+                requestCts.Token);
 
-            if (!result.IsSuccess)
+            if (requestVersion != _voiceAiQueryVersion)
             {
-                VoiceAiStatusText = result.ErrorMessage;
-                EnqueueAiTtsLog("AI", $"语音 AI 失败：{result.ErrorMessage}");
                 return;
             }
 
-            VoiceAiStatusText = result.WasQueuedForSpeech
-                ? $"已回答：{result.SpeechText}"
-                : $"已生成回答，TTS 未启用：{result.SpeechText}";
-            EnqueueAiTtsLog("AI", $"语音问题：{result.RecognizedQuestion}");
-            EnqueueAiTtsLog("AI", $"语音回答：{result.SpeechText}");
+            ApplyVoiceAssistantResult(result);
+            if (!result.IsSuccess)
+            {
+                return;
+            }
         }
         catch (OperationCanceledException)
         {
+            if (requestVersion == _voiceAiQueryVersion)
+            {
+                VoiceAiStatusText = "语音问答已取消";
+                VoiceAssistantStatusText = "未录音";
+                EnqueueAiTtsLog("VoiceAI", "语音 AI 已取消。");
+            }
         }
         catch (Exception ex)
         {
             VoiceAiStatusText = $"语音 AI 失败：{ex.Message}";
-            EnqueueAiTtsLog("AI", VoiceAiStatusText);
+            VoiceAssistantStatusText = FormatVoiceAssistantFailure(ex.Message);
+            EnqueueAiTtsLog("VoiceAI", VoiceAiStatusText);
         }
         finally
         {
-            IsVoiceAiQueryRunning = false;
+            CompleteVoiceAssistantQuery(requestVersion, requestCts);
+        }
+    }
+
+    private async Task AskRaceAssistantTextQuestionAsync()
+    {
+        var question = VoiceAssistantQuestionText.Trim();
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            VoiceAssistantStatusText = "失败：请输入问题";
+            return;
+        }
+
+        if (!TryReserveVoiceAssistantQuestion(question, out var cooldownMessage))
+        {
+            VoiceAssistantStatusText = cooldownMessage;
+            EnqueueAiTtsLog("VoiceAI", cooldownMessage);
+            return;
+        }
+
+        var (requestVersion, requestCts) = BeginVoiceAssistantQuery("AI生成中");
+        try
+        {
+            VoiceAssistantStatusText = "AI生成中";
+            VoiceAssistantRecognizedText = question;
+            var context = BuildStrategyQuestionContext(question);
+            var result = await _voiceAiQueryService.AskTextAsync(
+                BuildVoiceAiQueryRequest(question, context),
+                requestCts.Token);
+
+            if (requestVersion != _voiceAiQueryVersion)
+            {
+                return;
+            }
+
+            ApplyVoiceAssistantResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            if (requestVersion == _voiceAiQueryVersion)
+            {
+                VoiceAssistantStatusText = "未录音";
+                VoiceAiStatusText = "语音问答已取消";
+                EnqueueAiTtsLog("VoiceAI", "文字问答已取消。");
+            }
+        }
+        catch (Exception ex)
+        {
+            var failure = FormatVoiceAssistantFailure(ex.Message);
+            VoiceAssistantStatusText = failure;
+            VoiceAiStatusText = failure;
+            EnqueueAiTtsLog("VoiceAI", failure);
+        }
+        finally
+        {
+            CompleteVoiceAssistantQuery(requestVersion, requestCts);
         }
     }
 
@@ -2917,19 +3280,341 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             BaseContext = context,
             AiSettings = BuildAiSettings(),
             TtsOptions = BuildTtsOptions(),
-            AdviceKey = BuildVoiceAiAdviceKey(),
-            Recording = recording
+            AdviceKey = string.Empty,
+            Recording = recording,
+            BuildStrategyQuestionContext = question =>
+            {
+                if (!TryReserveVoiceAssistantQuestion(question, out var cooldownMessage))
+                {
+                    throw new InvalidOperationException(cooldownMessage);
+                }
+
+                return BuildStrategyQuestionContext(question);
+            },
+            CaptureCurrentSessionUid = () => _activeSessionUid,
+            EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
+            MaxAnswerLength = VoiceAssistantMaxAnswerLength
         };
     }
 
-    private string BuildVoiceAiAdviceKey()
+    private VoiceAiQueryRequest BuildVoiceAiQueryRequest(
+        string question,
+        StrategyQuestionContext strategyContext)
+    {
+        var sessionState = _sessionStateStore.CaptureState();
+        var context = BuildAiAnalysisContext(sessionState, sessionState.PlayerCar, _lapAnalyzer.CaptureLastLap());
+        return new VoiceAiQueryRequest
+        {
+            BaseContext = context,
+            AiSettings = BuildAiSettings(),
+            TtsOptions = BuildTtsOptions(),
+            AdviceKey = BuildVoiceAiAdviceKey(question, strategyContext.Intent),
+            QuestionText = question,
+            StrategyQuestionContext = strategyContext,
+            CaptureCurrentSessionUid = () => _activeSessionUid,
+            EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
+            MaxAnswerLength = VoiceAssistantMaxAnswerLength
+        };
+    }
+
+    private string BuildVoiceAiAdviceKey(string question, VoiceQuestionIntent intent)
     {
         var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
-        return string.Format(
-            CultureInfo.InvariantCulture,
-            "voice-ai:{0}:{1}",
-            sessionToken,
-            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        var normalizedQuestion = NormalizeVoiceAssistantQuestion(question);
+        var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedQuestion));
+        var hash = Convert.ToHexString(hashBytes)[..12];
+        return $"voice-ai:{sessionToken}:{intent}:{hash}";
+    }
+
+    private (int Version, CancellationTokenSource TokenSource) BeginVoiceAssistantQuery(string statusText)
+    {
+        CancelActiveVoiceAssistantQuery("已取消上一个未完成问答。", logAsCanceled: true);
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifecycleCts.Token);
+        _voiceAiQueryCts = cts;
+        var version = ++_voiceAiQueryVersion;
+        IsVoiceAiQueryRunning = true;
+        VoiceAssistantStatusText = statusText;
+        return (version, cts);
+    }
+
+    private void CompleteVoiceAssistantQuery(int requestVersion, CancellationTokenSource requestCts)
+    {
+        if (requestVersion == _voiceAiQueryVersion)
+        {
+            IsVoiceAiQueryRunning = false;
+            if (ReferenceEquals(_voiceAiQueryCts, requestCts))
+            {
+                _voiceAiQueryCts = null;
+            }
+        }
+
+        try
+        {
+            requestCts.Dispose();
+        }
+        catch
+        {
+        }
+    }
+
+    private void CancelActiveVoiceAssistantQuery(string statusText, bool logAsCanceled)
+    {
+        var cts = _voiceAiQueryCts;
+        if (cts is null && !IsVoiceAiQueryRunning)
+        {
+            return;
+        }
+
+        _voiceAiQueryVersion++;
+        _voiceAiQueryCts = null;
+        try
+        {
+            cts?.Cancel();
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            cts?.Dispose();
+        }
+        catch
+        {
+        }
+
+        IsVoiceAiQueryRunning = false;
+        VoiceAssistantStatusText = statusText;
+        VoiceAiStatusText = statusText;
+        if (logAsCanceled)
+        {
+            EnqueueAiTtsLog("VoiceAI", statusText);
+            EnqueueAiTtsLog("RaceAssistant", statusText);
+        }
+    }
+
+    private StrategyQuestionContext BuildStrategyQuestionContext(string question)
+    {
+        var sessionState = _sessionStateStore.CaptureState();
+        var snapshot = _raceAssistantSnapshotBuilder.Build(
+            _activeSessionUid,
+            sessionState,
+            _lapAnalyzer.CaptureRecentLaps(5),
+            _raceEventInsightBuffer.CaptureMessages(),
+            DateTimeOffset.UtcNow,
+            BuildRaceWeekendTyrePlan(),
+            IsListening);
+        var intent = _voiceQuestionIntentClassifier.Classify(question);
+        return _strategyQuestionContextBuilder.Build(snapshot, question, intent);
+    }
+
+    private void ApplyVoiceAssistantResult(VoiceAiQueryResult result)
+    {
+        VoiceAssistantRecognizedText = result.RecognizedQuestion;
+        VoiceAssistantIntentText = RaceAssistantDisplayFormatter.FormatIntent(result.Intent);
+        VoiceAssistantModeText = RaceAssistantDisplayFormatter.FormatMode(result.Mode);
+        VoiceAssistantTelemetryNoticeText = IsTelemetryLimitedMode(result.Mode)
+            ? "当前未接入实时遥测，仅能给通用建议。"
+            : string.Empty;
+
+        if (!result.IsSuccess)
+        {
+            var failure = result.WasIgnoredBecauseSessionChanged
+                ? "会话已变化，已忽略旧回答"
+                : FormatVoiceAssistantFailure(result.ErrorMessage);
+            VoiceAssistantStatusText = failure;
+            VoiceAiStatusText = failure;
+            EnqueueAiTtsLog("VoiceAI", failure);
+            EnqueueAiTtsLog("RaceAssistant", failure);
+            return;
+        }
+
+        var advice = result.Advice;
+        VoiceAssistantStatusText = result.WasQueuedForSpeech
+            ? "播放回答"
+            : string.Equals(result.SpeechSkippedReason, "缺少实时遥测", StringComparison.Ordinal)
+                ? "未播报：缺少实时遥测"
+                : "未录音";
+        VoiceAiStatusText = result.WasQueuedForSpeech
+            ? $"已回答：{result.SpeechText}"
+            : string.Equals(result.SpeechSkippedReason, "缺少实时遥测", StringComparison.Ordinal)
+                ? $"已生成回答，未播报：缺少实时遥测：{result.SpeechText}"
+                : $"已生成回答，TTS 未启用：{result.SpeechText}";
+        VoiceAssistantAnswerText = result.SpeechText;
+        VoiceAssistantAdviceTypeText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatAdviceType(advice.AdviceType);
+        VoiceAssistantSummaryText = advice?.Summary ?? result.SpeechText;
+        VoiceAssistantReasonText = advice?.Reason ?? string.Empty;
+        VoiceAssistantRecommendedActionText = advice?.RecommendedAction ?? result.SpeechText;
+        VoiceAssistantConfidenceText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatConfidence(advice.Confidence);
+        VoiceAssistantRiskLevelText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatRiskLevel(advice.RiskLevel);
+        (VoiceAssistantMissingDataText, VoiceAssistantMissingDataDetailText) = FormatMissingData(advice?.MissingData ?? Array.Empty<string>());
+
+        RaceAssistantHistory.Insert(
+            0,
+            new RaceAssistantHistoryItemViewModel
+            {
+                Timestamp = DateTimeOffset.Now,
+                Question = result.RecognizedQuestion,
+                Intent = VoiceAssistantIntentText,
+                Answer = result.SpeechText,
+                Confidence = VoiceAssistantConfidenceText
+            });
+        while (RaceAssistantHistory.Count > 12)
+        {
+            RaceAssistantHistory.RemoveAt(RaceAssistantHistory.Count - 1);
+        }
+
+        EnqueueAiTtsLog("VoiceAI", $"问题：{result.RecognizedQuestion}");
+        EnqueueAiTtsLog("RaceAssistant", FormatRaceAssistantUserLog(result, advice));
+    }
+
+    private static bool IsTelemetryLimitedMode(RaceAssistantMode mode)
+    {
+        return mode is RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry;
+    }
+
+    private static (string Summary, string Detail) FormatMissingData(IReadOnlyList<string> missingData)
+    {
+        var labels = missingData
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .Select(RaceAssistantDisplayFormatter.FormatMissingDataKey)
+            .ToArray();
+        if (labels.Length == 0)
+        {
+            return ("-", string.Empty);
+        }
+
+        var preview = string.Join("、", labels.Take(5));
+        var summary = string.IsNullOrWhiteSpace(preview)
+            ? $"缺失数据：{labels.Length} 项"
+            : $"缺失数据：{labels.Length} 项：{preview}";
+        return (summary, string.Join("、", labels));
+    }
+
+    private static string FormatRaceAssistantUserLog(VoiceAiQueryResult result, StrategyAdviceResult? advice)
+    {
+        var broadcastText = result.WasQueuedForSpeech ? "已播报" : "未播报";
+        if (advice?.MissingData.Count > 0)
+        {
+            return $"问工程师：数据不足，{broadcastText}。";
+        }
+
+        var intent = RaceAssistantDisplayFormatter.FormatIntent(result.Intent);
+        var confidence = advice is null
+            ? "低"
+            : RaceAssistantDisplayFormatter.FormatConfidence(advice.Confidence);
+        return $"问工程师：{intent}，置信度{confidence}，{broadcastText}。";
+    }
+
+    private bool CanAskRaceAssistantTextQuestion()
+    {
+        return (VoiceAssistantEnabled || VoiceAiEnabled) &&
+               !IsVoiceAiQueryRunning &&
+               !string.IsNullOrWhiteSpace(VoiceAssistantQuestionText);
+    }
+
+    private void OpenRaceAssistantPanel()
+    {
+        var item = ShellNavigationItems.FirstOrDefault(navigationItem => string.Equals(navigationItem.Key, "ai-tts", StringComparison.Ordinal));
+        if (item is not null)
+        {
+            SelectedShellNavigationItem = item;
+        }
+    }
+
+    private bool TryReserveVoiceAssistantQuestion(string question, out string failureMessage)
+    {
+        failureMessage = string.Empty;
+        var key = NormalizeVoiceAssistantQuestion(question);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            failureMessage = "失败：请输入问题";
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (_recentVoiceAssistantQuestions.TryGetValue(key, out var lastAskedAt) &&
+            now - lastAskedAt < TimeSpan.FromSeconds(VoiceAssistantRepeatQuestionCooldownSeconds))
+        {
+            failureMessage = "连续重复提问过快，请稍后再问。";
+            return false;
+        }
+
+        _recentVoiceAssistantQuestions[key] = now;
+        return true;
+    }
+
+    private static string NormalizeVoiceAssistantQuestion(string question)
+    {
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(question.Length);
+        foreach (var character in question.Trim())
+        {
+            if (!char.IsWhiteSpace(character))
+            {
+                builder.Append(char.ToLowerInvariant(character));
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static string FormatVoiceAssistantFailure(string? failure)
+    {
+        if (string.IsNullOrWhiteSpace(failure))
+        {
+            return "失败：网络失败";
+        }
+
+        var normalized = failure.Trim();
+        if (normalized.Contains("API Key", StringComparison.OrdinalIgnoreCase))
+        {
+            return "失败：API Key 未配置";
+        }
+
+        if (normalized.Contains("取消", StringComparison.Ordinal) ||
+            normalized.Contains("已忽略", StringComparison.Ordinal))
+        {
+            return normalized;
+        }
+
+        if (normalized.Contains("超时", StringComparison.Ordinal) ||
+            normalized.Contains("timeout", StringComparison.OrdinalIgnoreCase))
+        {
+            return "失败：请求超时";
+        }
+
+        if (normalized.Contains("格式无效", StringComparison.Ordinal) ||
+            normalized.Contains("JSON", StringComparison.OrdinalIgnoreCase))
+        {
+            return "失败：AI 返回格式无效";
+        }
+
+        if (normalized.Contains("数据不足", StringComparison.Ordinal))
+        {
+            return "失败：数据不足";
+        }
+
+        if (normalized.Contains("识别", StringComparison.Ordinal) ||
+            normalized.Contains("麦克风", StringComparison.Ordinal))
+        {
+            return normalized.Contains("不可用", StringComparison.Ordinal)
+                ? "失败：麦克风不可用"
+                : "失败：识别失败";
+        }
+
+        if (normalized.Contains("network", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("网络", StringComparison.Ordinal))
+        {
+            return "失败：网络失败";
+        }
+
+        return $"失败：{normalized}";
     }
 
     private void StartVoiceAiInputBindingCapture()
@@ -3072,6 +3757,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 if (IsVoiceAiRecording)
                 {
                     VoiceAiStatusText = "录音已达到 20 秒，正在自动提交";
+                    VoiceAssistantStatusText = "正在识别";
                     _ = StopVoiceAiRecordingAndAskAsync();
                 }
             });
@@ -3269,13 +3955,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void UpdateOverviewAiTtsSummary(LogEntryViewModel logEntry)
     {
-        if (string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(logEntry.Category, "RaceAssistant", StringComparison.OrdinalIgnoreCase))
         {
             OverviewRecentAiSuggestionText = logEntry.Message;
         }
 
         if (string.Equals(logEntry.Category, "TTS", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase))
+            string.Equals(logEntry.Category, "AI", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(logEntry.Category, "VoiceAI", StringComparison.OrdinalIgnoreCase))
         {
             OverviewRecentTtsStatusText = logEntry.Message;
         }
@@ -3326,6 +4014,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             VoiceAiInputBinding = settings.VoiceAi.InputBinding;
             VoiceAiTalkMode = settings.VoiceAi.TalkMode;
             VoiceAiMicrophoneDeviceId = settings.VoiceAi.MicrophoneDeviceId;
+            ApplyVoiceAssistantSettings(settings.VoiceAi.AssistantSettings);
             if (!string.IsNullOrWhiteSpace(settings.VoiceAi.MicrophoneDeviceName))
             {
                 VoiceAiMicrophoneDeviceName = settings.VoiceAi.MicrophoneDeviceName;
@@ -3383,6 +4072,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         SetInventoryCount("Hard", normalized.HardCount, silent: true);
         SetInventoryCount("Intermediate", normalized.IntermediateCount, silent: true);
         SetInventoryCount("Wet", normalized.WetCount, silent: true);
+    }
+
+    private void ApplyVoiceAssistantSettings(VoiceAssistantSettings settings)
+    {
+        var normalized = settings.Normalize();
+        VoiceAssistantEnabled = normalized.EnableVoiceAssistant || VoiceAiEnabled;
+        VoiceAssistantEnableTtsAnswer = normalized.EnableTtsAnswer;
+        VoiceAssistantMaxAnswerLength = normalized.MaxAnswerLength;
+        VoiceAssistantRepeatQuestionCooldownSeconds = normalized.RepeatQuestionCooldownSeconds;
     }
 
     private void ReadInventoryFromTyreSets()
@@ -4523,7 +5221,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             TalkMode = VoiceAiTalkMode,
             MicrophoneDeviceId = VoiceAiMicrophoneDeviceId,
             MicrophoneDeviceName = VoiceAiMicrophoneDeviceName,
-            Hotkey = VoiceAiOptions.NoHotkey
+            Hotkey = VoiceAiOptions.NoHotkey,
+            AssistantSettings = new VoiceAssistantSettings
+            {
+                EnableVoiceAssistant = VoiceAssistantEnabled,
+                PushToTalkKey = VoiceAiOptions.NoHotkey,
+                PushToTalkButton = VoiceAiBindingText,
+                EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
+                MaxAnswerLength = VoiceAssistantMaxAnswerLength,
+                RepeatQuestionCooldownSeconds = VoiceAssistantRepeatQuestionCooldownSeconds
+            }
         };
     }
 
@@ -4586,9 +5293,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        if (!VoiceAiEnabled)
+        if (!VoiceAiEnabled && !VoiceAssistantEnabled)
         {
             VoiceAiStatusText = "语音 AI 未启用";
+            VoiceAssistantStatusText = "未录音";
             return;
         }
 
@@ -4601,6 +5309,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         if (VoiceAiInputBinding.Kind == VoiceAiInputBindingKind.None)
         {
             VoiceAiStatusText = "请先绑定方向盘按钮";
+            VoiceAssistantStatusText = "未录音";
             return;
         }
 
@@ -4608,6 +5317,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             ? "按住说话，松开后提交"
             : "按一下开始，再按一下结束并提交";
         VoiceAiStatusText = $"已绑定 {VoiceAiBindingText}，{modeText}";
+        VoiceAssistantStatusText = "未录音";
     }
 
     private void ApplyUdpRawLogOptions()

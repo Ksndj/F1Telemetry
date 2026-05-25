@@ -309,6 +309,11 @@
                                        Text="{Binding OverviewRecentAiSuggestionText}"
                                        TextWrapping="Wrap" />
                         </Border>
+                        <Button Margin="0,12,0,0"
+                                Padding="12,7"
+                                HorizontalAlignment="Left"
+                                Command="{Binding OpenRaceAssistantCommand}"
+                                Content="问工程师" />
                     </StackPanel>
 
                     <StackPanel Grid.Column="2">
