@@ -455,6 +455,9 @@ public sealed class VoiceAiQueryService
                 UdpRawLogFile = request.UdpRawLogFile,
                 Question = context.Question,
                 RecognizedText = question,
+                PromptSummary = _raceAssistantAuditLogger.LogPromptSummary
+                    ? BuildPromptSummary(context)
+                    : null,
                 Intent = context.Intent.ToString(),
                 IntentDisplayName = string.IsNullOrWhiteSpace(context.IntentDisplayName)
                     ? context.Intent.ToString()
@@ -518,6 +521,28 @@ public sealed class VoiceAiQueryService
     private static string BuildRealtimeInstruction(string question)
     {
         return $"车手通过方向盘绑定按键语音提问：{question.Trim()}。回答要适合驾驶中收听，优先给一条可执行建议；如果问题询问比赛数据，直接用当前状态回答；数据不足时明确说明。";
+    }
+
+    private static string BuildPromptSummary(StrategyQuestionContext context)
+    {
+        var ageText = context.Snapshot.Quality.AgeSeconds is null
+            ? "unknown"
+            : $"{context.Snapshot.Quality.AgeSeconds.Value}s";
+        return string.Join(
+            " | ",
+            $"intent={context.Intent}",
+            $"mode={context.Mode}",
+            $"lap={context.Snapshot.CurrentLap?.ToString() ?? "unknown"}",
+            $"snapshotAge={ageText}",
+            $"missingData={context.MissingData.Count}",
+            $"ruleSignals={context.Snapshot.RuleSignals.Count}",
+            $"template={TrimForPromptSummary(context.IntentPromptTemplate, 180)}");
+    }
+
+    private static string TrimForPromptSummary(string value, int maxLength)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 
     private static string CreateQuestionId()

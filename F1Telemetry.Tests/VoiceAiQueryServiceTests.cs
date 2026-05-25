@@ -187,7 +187,33 @@ public sealed class VoiceAiQueryServiceTests
         Assert.Equal("run-voice", root.GetProperty("runId").GetString());
         Assert.Equal(result.QuestionId, root.GetProperty("questionId").GetString());
         Assert.Equal("f1telemetry-udp.jsonl", root.GetProperty("udpRawLogFile").GetString());
+        Assert.False(root.TryGetProperty("promptSummary", out _));
         Assert.True(root.GetProperty("ttsQueued").GetBoolean());
+    }
+
+    /// <summary>
+    /// Verifies prompt summary auditing is opt-in and compact.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenPromptSummaryEnabled_WritesCompactPromptSummary()
+    {
+        var directory = CreateTempDirectory();
+        await using var auditLogger = new RaceAssistantAuditLogger(new AppRunContext("run-prompt", DateTimeOffset.Now), directory);
+        auditLogger.UpdateSettings(new LogSettings { RaceAssistantLogPromptSummary = true });
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue, auditLogger);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:audit-prompt"));
+        await auditLogger.FlushAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(result.IsSuccess);
+        using var json = await ReadSingleAuditJsonAsync(directory);
+        var summary = json.RootElement.GetProperty("promptSummary").GetString();
+        Assert.Contains("intent=", summary, StringComparison.Ordinal);
+        Assert.Contains("mode=", summary, StringComparison.Ordinal);
+        Assert.DoesNotContain("现在进站吗", summary, StringComparison.Ordinal);
     }
 
     /// <summary>

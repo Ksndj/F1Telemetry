@@ -11,6 +11,7 @@ namespace F1Telemetry.App.Logging;
 public sealed class RaceAssistantAuditLogger : IAsyncDisposable, IDisposable
 {
     private readonly AsyncJsonLineLogWriter<RaceAssistantAuditRecord> _writer;
+    private LogSettings _settings = new();
 
     /// <summary>
     /// Initializes a new RaceAssistant audit logger.
@@ -42,8 +43,14 @@ public sealed class RaceAssistantAuditLogger : IAsyncDisposable, IDisposable
     /// </summary>
     public void UpdateSettings(LogSettings settings)
     {
+        _settings = settings;
         _writer.UpdateSettings(settings);
     }
+
+    /// <summary>
+    /// Gets a value indicating whether compact prompt summaries should be audited.
+    /// </summary>
+    public bool LogPromptSummary => _settings.RaceAssistantLogPromptSummary;
 
     /// <summary>
     /// Enqueues one audit record without waiting for file I/O.
@@ -80,6 +87,7 @@ public sealed class RaceAssistantAuditLogger : IAsyncDisposable, IDisposable
         {
             Question = SensitiveContentSanitizer.Sanitize(record.Question),
             RecognizedText = SensitiveContentSanitizer.Sanitize(record.RecognizedText),
+            PromptSummary = SensitiveContentSanitizer.SanitizeNullable(record.PromptSummary),
             UdpRawLogFile = SummarizeUdpRawLogFile(record.UdpRawLogFile),
             MissingData = SanitizeList(record.MissingData),
             FailureReason = SensitiveContentSanitizer.Sanitize(record.FailureReason),
@@ -185,6 +193,8 @@ public sealed record RaceAssistantAuditRecord
     public string Question { get; init; } = string.Empty;
 
     public string RecognizedText { get; init; } = string.Empty;
+
+    public string? PromptSummary { get; init; }
 
     public string Intent { get; init; } = string.Empty;
 
