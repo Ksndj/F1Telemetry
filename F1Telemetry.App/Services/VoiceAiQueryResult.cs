@@ -18,6 +18,11 @@ public sealed record VoiceAiQueryResult
     public string RecognizedQuestion { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the per-question correlation id shared by app and audit logs.
+    /// </summary>
+    public string QuestionId { get; init; } = string.Empty;
+
+    /// <summary>
     /// Gets the session UID used by the answered request.
     /// </summary>
     public ulong? SessionUid { get; init; }

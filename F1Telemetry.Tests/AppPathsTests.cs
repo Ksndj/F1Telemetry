@@ -21,6 +21,9 @@ public sealed class AppPathsTests
         Assert.Equal(Path.Combine(root, "F1Telemetry", "settings.json"), AppPaths.GetSettingsPath(root));
         Assert.Equal(Path.Combine(root, "F1Telemetry", "f1telemetry.db"), AppPaths.GetDatabasePath(root));
         Assert.Equal(Path.Combine(root, "F1Telemetry", "logs"), AppPaths.GetLogsDir(root));
+        Assert.Equal(Path.Combine(root, "F1Telemetry", ".logs"), AppPaths.GetDiagnosticLogsDir(root));
+        Assert.Equal(Path.Combine(root, "F1Telemetry", ".logs", "app"), AppPaths.GetAppLogDir(root));
+        Assert.Equal(Path.Combine(root, "F1Telemetry", ".logs", "race-assistant"), AppPaths.GetRaceAssistantLogDir(root));
     }
 
     /// <summary>
@@ -36,6 +39,7 @@ public sealed class AppPathsTests
 
         Assert.True(Directory.Exists(Path.Combine(appDataRoot, "F1Telemetry")));
         Assert.True(Directory.Exists(Path.Combine(appDataRoot, "F1Telemetry", "logs")));
+        Assert.True(Directory.Exists(Path.Combine(appDataRoot, "F1Telemetry", ".logs")));
         Assert.Equal("{}", File.ReadAllText(Path.Combine(appDataRoot, "F1Telemetry", "settings.json")));
         Assert.False(File.Exists(Path.Combine(appDataRoot, "F1Telemetry", "f1telemetry.db")));
     }

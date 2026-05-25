@@ -80,6 +80,15 @@ public sealed class AppSettingsStore : IAppSettingsStore
     }
 
     /// <inheritdoc />
+    public async Task SaveLogSettingsAsync(LogSettings settings, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var existing = await LoadDocumentCoreAsync(cancellationToken);
+        await WriteDocumentAsync(existing with { Logs = NormalizeLogSettings(settings) }, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task SaveVoiceAiOptionsAsync(VoiceAiOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -131,6 +140,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 Tts = ReadTtsSettings(root),
                 RaceWeekendTyrePlan = ReadRaceWeekendTyrePlan(root),
                 UdpRawLog = ReadUdpRawLogOptions(root),
+                Logs = ReadLogSettings(root),
                 VoiceAi = voiceAi,
                 VoiceAssistantSettings = voiceAssistantSettings,
                 Udp = ReadUdpSettings(root)
@@ -318,6 +328,40 @@ public sealed class AppSettingsStore : IAppSettingsStore
         {
             DirectoryPath = options.DirectoryPath?.Trim() ?? string.Empty,
             QueueCapacity = Math.Clamp(options.QueueCapacity, 0, 100_000)
+        };
+    }
+
+    private static LogSettings ReadLogSettings(JsonElement rootElement)
+    {
+        if (!rootElement.TryGetProperty("logs", out var logsElement))
+        {
+            return new LogSettings();
+        }
+
+        try
+        {
+            return NormalizeLogSettings(
+                new LogSettings
+                {
+                    EnableAppFileLog = ReadBool(logsElement, "enableAppFileLog", defaultValue: true),
+                    EnableRaceAssistantAuditLog = ReadBool(logsElement, "enableRaceAssistantAuditLog", defaultValue: true),
+                    RaceAssistantLogPromptSummary = ReadBool(logsElement, "raceAssistantLogPromptSummary"),
+                    MaxLogFileSizeMB = ReadInt(logsElement, "maxLogFileSizeMB", 20),
+                    MaxLogRetentionDays = ReadInt(logsElement, "maxLogRetentionDays", 14)
+                });
+        }
+        catch
+        {
+            return new LogSettings();
+        }
+    }
+
+    private static LogSettings NormalizeLogSettings(LogSettings settings)
+    {
+        return settings with
+        {
+            MaxLogFileSizeMB = Math.Clamp(settings.MaxLogFileSizeMB, 1, 1024),
+            MaxLogRetentionDays = Math.Clamp(settings.MaxLogRetentionDays, 1, 366)
         };
     }
 

@@ -29,6 +29,11 @@ public sealed record AppSettingsDocument
     public UdpRawLogOptions UdpRawLog { get; init; } = new();
 
     /// <summary>
+    /// Gets the runtime file logging settings block.
+    /// </summary>
+    public LogSettings Logs { get; init; } = new();
+
+    /// <summary>
     /// Gets the voice-to-AI query settings block.
     /// </summary>
     public VoiceAiOptions VoiceAi { get; init; } = new();

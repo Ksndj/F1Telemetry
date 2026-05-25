@@ -31,6 +31,28 @@ public sealed class UdpRawLogSettingsUiTests
     }
 
     /// <summary>
+    /// Verifies SettingsView binds to App and RaceAssistant log controls.
+    /// </summary>
+    [Fact]
+    public void SettingsView_BindsRuntimeLogControls()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("EnableAppFileLog", xaml, StringComparison.Ordinal);
+        Assert.Contains("EnableRaceAssistantAuditLog", xaml, StringComparison.Ordinal);
+        Assert.Contains("RaceAssistantLogPromptSummary", xaml, StringComparison.Ordinal);
+        Assert.Contains("AppLogDirectoryText", xaml, StringComparison.Ordinal);
+        Assert.Contains("RaceAssistantLogDirectoryText", xaml, StringComparison.Ordinal);
+        Assert.Contains("AppLogLastFileSizeText", xaml, StringComparison.Ordinal);
+        Assert.Contains("RaceAssistantLogLastWriteTimeText", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxLogFileSizeMbText", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxLogRetentionDaysText", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenAppLogDirectoryCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("OpenRaceAssistantLogDirectoryCommand", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies read-only raw UDP counters use one-way bindings so Settings can load without WPF source updates.
     /// </summary>
     [Fact]

@@ -39,6 +39,11 @@ public sealed class AppSettingsStoreTests
         Assert.False(settings.UdpRawLog.Enabled);
         Assert.Equal(string.Empty, settings.UdpRawLog.DirectoryPath);
         Assert.Equal(4096, settings.UdpRawLog.QueueCapacity);
+        Assert.True(settings.Logs.EnableAppFileLog);
+        Assert.True(settings.Logs.EnableRaceAssistantAuditLog);
+        Assert.False(settings.Logs.RaceAssistantLogPromptSummary);
+        Assert.Equal(20, settings.Logs.MaxLogFileSizeMB);
+        Assert.Equal(14, settings.Logs.MaxLogRetentionDays);
         Assert.False(settings.VoiceAi.Enabled);
         Assert.Equal(VoiceAiInputBindingKind.None, settings.VoiceAi.InputBinding.Kind);
         Assert.Equal(VoiceAiTalkMode.HoldToTalk, settings.VoiceAi.TalkMode);
@@ -509,6 +514,60 @@ public sealed class AppSettingsStoreTests
         Assert.True(json.RootElement.GetProperty("ai").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("tts").GetProperty("enabled").GetBoolean());
         Assert.True(json.RootElement.GetProperty("udpRawLog").GetProperty("enabled").GetBoolean());
+    }
+
+    /// <summary>
+    /// Verifies saving runtime log settings preserves existing settings blocks.
+    /// </summary>
+    [Fact]
+    public async Task SaveLogSettingsAsync_PreservesExistingBlocksAndWritesLogSettings()
+    {
+        var root = CreateRootPath();
+        Directory.CreateDirectory(Path.Combine(root, "F1Telemetry"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(root, "F1Telemetry", "settings.json"),
+            """
+            {
+              "ai": {
+                "apiKey": "configured",
+                "baseUrl": "https://example.com/api",
+                "model": "deepseek-chat",
+                "enabled": true,
+                "requestTimeoutSeconds": 18
+              },
+              "udpRawLog": {
+                "enabled": true,
+                "directoryPath": "C:\\Logs\\Udp",
+                "queueCapacity": 64
+              }
+            }
+            """);
+
+        IAppSettingsStore store = new AppSettingsStore(root);
+
+        await store.SaveLogSettingsAsync(
+            new LogSettings
+            {
+                EnableAppFileLog = false,
+                EnableRaceAssistantAuditLog = true,
+                RaceAssistantLogPromptSummary = true,
+                MaxLogFileSizeMB = 32,
+                MaxLogRetentionDays = 21
+            });
+
+        var persisted = await store.LoadAsync();
+        using var json = await ReadPersistedJsonAsync(root);
+
+        Assert.Equal("configured", persisted.Ai.ApiKey);
+        Assert.True(persisted.UdpRawLog.Enabled);
+        Assert.False(persisted.Logs.EnableAppFileLog);
+        Assert.True(persisted.Logs.EnableRaceAssistantAuditLog);
+        Assert.True(persisted.Logs.RaceAssistantLogPromptSummary);
+        Assert.Equal(32, persisted.Logs.MaxLogFileSizeMB);
+        Assert.Equal(21, persisted.Logs.MaxLogRetentionDays);
+        Assert.False(json.RootElement.GetProperty("logs").GetProperty("enableAppFileLog").GetBoolean());
+        Assert.True(json.RootElement.GetProperty("logs").GetProperty("raceAssistantLogPromptSummary").GetBoolean());
     }
 
     /// <summary>

@@ -1,7 +1,10 @@
+using System.IO;
+using System.Text.Json;
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Strategy;
+using F1Telemetry.App.Logging;
 using F1Telemetry.App.Services;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -155,6 +158,106 @@ public sealed class VoiceAiQueryServiceTests
         Assert.Equal("缺少实时遥测", result.SpeechSkippedReason);
     }
 
+    /// <summary>
+    /// Verifies a successful RaceAssistant answer writes an audit record with correlation ids.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenAiSucceeds_WritesAuditRecord()
+    {
+        var directory = CreateTempDirectory();
+        await using var auditLogger = new RaceAssistantAuditLogger(new AppRunContext("run-voice", DateTimeOffset.Now), directory);
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue, auditLogger);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:audit") with
+        {
+            Track = "Monza",
+            SessionType = "正赛",
+            UdpRawLogFile = @"C:\Users\driver\AppData\Roaming\F1Telemetry\.logs\udp\f1telemetry-udp.jsonl"
+        });
+        await auditLogger.FlushAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(string.IsNullOrWhiteSpace(result.QuestionId));
+        using var json = await ReadSingleAuditJsonAsync(directory);
+        var root = json.RootElement;
+        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("run-voice", root.GetProperty("runId").GetString());
+        Assert.Equal(result.QuestionId, root.GetProperty("questionId").GetString());
+        Assert.Equal("f1telemetry-udp.jsonl", root.GetProperty("udpRawLogFile").GetString());
+        Assert.True(root.GetProperty("ttsQueued").GetBoolean());
+    }
+
+    /// <summary>
+    /// Verifies AI failures still write an audit record for the fallback answer.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenAiFails_WritesFallbackAuditRecord()
+    {
+        var directory = CreateTempDirectory();
+        await using var auditLogger = new RaceAssistantAuditLogger(new AppRunContext("run-fallback", DateTimeOffset.Now), directory);
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new FailingAiAnalysisService(AIErrorMessageFormatter.NetworkError);
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue, auditLogger);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("ERS怎么用", adviceKey: "voice-ai:audit-fallback"));
+        await auditLogger.FlushAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(result.IsSuccess);
+        using var json = await ReadSingleAuditJsonAsync(directory);
+        Assert.True(json.RootElement.GetProperty("usedFallback").GetBoolean());
+        Assert.Contains("网络", json.RootElement.GetProperty("failureReason").GetString(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies no-telemetry answers audit skipped speech.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenNoTelemetry_WritesSkippedSpeechAuditRecord()
+    {
+        var directory = CreateTempDirectory();
+        await using var auditLogger = new RaceAssistantAuditLogger(new AppRunContext("run-no-telemetry", DateTimeOffset.Now), directory);
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue, auditLogger);
+
+        var result = await service.AskTextAsync(
+            CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:audit-no-telemetry", mode: RaceAssistantMode.NoTelemetry));
+        await auditLogger.FlushAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(result.IsSuccess);
+        using var json = await ReadSingleAuditJsonAsync(directory);
+        Assert.False(json.RootElement.GetProperty("ttsQueued").GetBoolean());
+        Assert.Equal("缺少实时遥测", json.RootElement.GetProperty("speechSkippedReason").GetString());
+    }
+
+    /// <summary>
+    /// Verifies audit write failures do not affect the answer result.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenAuditWriteFails_DoesNotFailQuestion()
+    {
+        var root = CreateTempDirectory();
+        var invalidDirectory = Path.Combine(root, "not-a-directory");
+        await File.WriteAllTextAsync(invalidDirectory, "blocked");
+        var auditLogger = new RaceAssistantAuditLogger(new AppRunContext("run-write-fail", DateTimeOffset.Now), invalidDirectory);
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue, auditLogger);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:audit-write-fail"));
+        await auditLogger.FlushAsync(TimeSpan.FromMilliseconds(500));
+        await auditLogger.DisposeAsync();
+
+        Assert.True(result.IsSuccess);
+        Assert.Contains("日志", auditLogger.Status.LastWarning, StringComparison.Ordinal);
+    }
+
     private static VoiceAiQueryRequest CreateRequest()
     {
         return new VoiceAiQueryRequest
@@ -185,6 +288,23 @@ public sealed class VoiceAiQueryServiceTests
                 Duration = TimeSpan.FromSeconds(1)
             }
         };
+    }
+
+    private static async Task<JsonDocument> ReadSingleAuditJsonAsync(string directory)
+    {
+        var file = Assert.Single(Directory.EnumerateFiles(directory, "race-assistant-*.jsonl"));
+        await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = new StreamReader(stream);
+        var lines = (await reader.ReadToEndAsync()).Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+        var line = Assert.Single(lines);
+        return JsonDocument.Parse(line);
+    }
+
+    private static string CreateTempDirectory()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "F1TelemetryTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
     }
 
     private static VoiceAiQueryRequest CreateStrategyRequest(

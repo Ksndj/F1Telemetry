@@ -81,6 +81,170 @@
                     <TextBlock FontSize="22"
                                FontWeight="SemiBold"
                                Foreground="White"
+                               Text="App 日志" />
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox Foreground="#D7E4F3"
+                                      Content="App 分类日志"
+                                      IsChecked="{Binding EnableAppFileLog, Mode=TwoWay}" />
+                            <CheckBox Margin="18,0,0,0"
+                                      Foreground="#D7E4F3"
+                                      Content="RaceAssistant 问答记录"
+                                      IsChecked="{Binding EnableRaceAssistantAuditLog, Mode=TwoWay}" />
+                            <CheckBox Margin="18,0,0,0"
+                                      Foreground="#D7E4F3"
+                                      Content="Prompt 摘要"
+                                      IsChecked="{Binding RaceAssistantLogPromptSummary, Mode=TwoWay}" />
+                        </StackPanel>
+                        <Button Grid.Column="1"
+                                Width="120"
+                                Height="32"
+                                Margin="12,0,0,0"
+                                Command="{Binding OpenAppLogDirectoryCommand}"
+                                Content="打开 App 日志" />
+                        <Button Grid.Column="2"
+                                Width="148"
+                                Height="32"
+                                Margin="8,0,0,0"
+                                Command="{Binding OpenRaceAssistantLogDirectoryCommand}"
+                                Content="打开问答日志" />
+                    </Grid>
+
+                    <Grid Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Foreground="#7FA5D8" Text="App 日志目录" />
+                        <TextBlock Grid.Column="1"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding AppLogDirectoryText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="App 最近文件" />
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding AppLogLastFilePathText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="App 文件大小" />
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding AppLogLastFileSizeText}" />
+
+                        <TextBlock Grid.Row="3"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="App 最近写入" />
+                        <TextBlock Grid.Row="3"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding AppLogLastWriteTimeText}" />
+
+                        <TextBlock Grid.Row="4"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="问答日志目录" />
+                        <TextBlock Grid.Row="4"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding RaceAssistantLogDirectoryText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="5"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="问答最近文件" />
+                        <TextBlock Grid.Row="5"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding RaceAssistantLogLastFilePathText}"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="6"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="问答文件状态" />
+                        <TextBlock Grid.Row="6"
+                                   Grid.Column="1"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3">
+                            <Run Text="{Binding RaceAssistantLogLastFileSizeText}" />
+                            <Run Text=" · " />
+                            <Run Text="{Binding RaceAssistantLogLastWriteTimeText}" />
+                        </TextBlock>
+
+                        <TextBlock Grid.Column="2"
+                                   Foreground="#7FA5D8"
+                                   Text="最大 MB" />
+                        <TextBox Grid.Column="3"
+                                 Height="30"
+                                 Text="{Binding MaxLogFileSizeMbText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="保留天数" />
+                        <TextBox Grid.Row="1"
+                                 Grid.Column="3"
+                                 Margin="0,8,0,0"
+                                 Height="30"
+                                 Text="{Binding MaxLogRetentionDaysText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="状态" />
+                        <TextBlock Grid.Row="2"
+                                   Grid.Column="3"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding LogSettingsStatusText}"
+                                   TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="18"
+                    Background="#0F1B2E">
+                <StackPanel>
+                    <TextBlock FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="White"
                                Text="UDP Raw Log" />
                     <Grid Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
