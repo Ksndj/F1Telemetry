@@ -30,7 +30,7 @@ public sealed record VoiceAiQueryResult
     /// <summary>
     /// Gets the assistant mode used for the answer.
     /// </summary>
-    public RaceAssistantMode Mode { get; init; } = RaceAssistantMode.Practice;
+    public RaceAssistantMode Mode { get; init; } = RaceAssistantMode.NoTelemetry;
 
     /// <summary>
     /// Gets the structured strategy advice.
@@ -46,6 +46,11 @@ public sealed record VoiceAiQueryResult
     /// Gets a value indicating whether the answer entered the TTS queue.
     /// </summary>
     public bool WasQueuedForSpeech { get; init; }
+
+    /// <summary>
+    /// Gets the reason why speech playback was skipped.
+    /// </summary>
+    public string SpeechSkippedReason { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets the short user-facing failure reason.

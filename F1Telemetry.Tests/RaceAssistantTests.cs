@@ -1,3 +1,4 @@
+using F1Telemetry.AI.Formatting;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Laps;
@@ -238,15 +239,116 @@ public sealed class RaceAssistantTests
         Assert.Equal(TtsPriority.Low, message!.Priority);
     }
 
+    /// <summary>
+    /// Verifies stopped UDP listening resolves to no-telemetry mode.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_StateMachine_NotListeningReturnsNoTelemetry()
+    {
+        var snapshot = BuildSnapshot(isListening: false);
+
+        Assert.Equal(RaceAssistantMode.NoTelemetry, snapshot.Mode);
+        Assert.Contains("fresh-snapshot", snapshot.Quality.MissingData);
+    }
+
+    /// <summary>
+    /// Verifies missing session UID waits for telemetry instead of falling back to practice.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_StateMachine_MissingSessionUidReturnsWaitingForTelemetry()
+    {
+        var snapshot = BuildSnapshot(sessionUid: null);
+
+        Assert.Equal(RaceAssistantMode.WaitingForTelemetry, snapshot.Mode);
+        Assert.Contains("session-uid", snapshot.Quality.MissingData);
+    }
+
+    /// <summary>
+    /// Verifies manual tyre inventory prevents tyre-inventory from being marked missing.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_SnapshotBuilder_ManualInventoryPreventsInventoryMissing()
+    {
+        var snapshot = BuildSnapshot(
+            includeInventory: false,
+            tyrePlan: new RaceWeekendTyrePlan { SoftCount = 1, MediumCount = 2 });
+        var context = new StrategyQuestionContextBuilder().Build(snapshot, "现在要不要进站", VoiceQuestionIntent.PIT_DECISION);
+
+        Assert.DoesNotContain("tyre-inventory", context.MissingData);
+        Assert.Contains("tyre-sets-packet", context.MissingData);
+        Assert.Contains("手动库存", snapshot.TyreInventorySummary, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies missing TyreSets is separated from manual tyre inventory.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_SnapshotBuilder_MissingTyreSetsUsesSeparateMissingKey()
+    {
+        var snapshot = BuildSnapshot(
+            includeInventory: false,
+            tyrePlan: new RaceWeekendTyrePlan { HardCount = 1 });
+
+        Assert.DoesNotContain("tyre-inventory", snapshot.Quality.MissingData);
+        Assert.Contains("tyre-sets-packet", snapshot.Quality.MissingData);
+    }
+
+    /// <summary>
+    /// Verifies practice pit questions do not produce a race pit-window answer.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_PracticePitDecision_DoesNotReturnPitWindow()
+    {
+        var snapshot = BuildSnapshot(sessionType: 1);
+        var context = new StrategyQuestionContextBuilder().Build(snapshot, "现在要不要进站", VoiceQuestionIntent.PIT_DECISION);
+        var fallback = new RuleBasedFallbackAdviceService().BuildFallback(context, "AI unavailable");
+
+        Assert.Equal(RaceAssistantMode.Practice, snapshot.Mode);
+        Assert.NotEqual(RaceAssistantAdviceType.PitWindow, snapshot.PitDecision.Signal.AdviceType);
+        Assert.NotEqual(RaceAssistantAdviceType.PitWindow, fallback.AdviceType);
+        Assert.Equal(RaceAssistantAdviceType.GeneralStatus, fallback.AdviceType);
+    }
+
+    /// <summary>
+    /// Verifies race assistant enum display names are localized.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_DisplayFormatter_LocalizesEnumsAndMissingData()
+    {
+        Assert.Equal("进站判断", RaceAssistantDisplayFormatter.FormatIntent(VoiceQuestionIntent.PIT_DECISION));
+        Assert.Equal("低", RaceAssistantDisplayFormatter.FormatConfidence(StrategyAdviceConfidence.Low));
+        Assert.Equal("轮胎库存", RaceAssistantDisplayFormatter.FormatMissingDataKey("tyre-inventory"));
+    }
+
+    /// <summary>
+    /// Verifies strategy contexts carry Chinese display names for prompts.
+    /// </summary>
+    [Fact]
+    public void RaceAssistant_ContextBuilder_IncludesChineseDisplayNames()
+    {
+        var snapshot = BuildSnapshot(sessionType: 1);
+        var context = new StrategyQuestionContextBuilder().Build(snapshot, "现在要不要进站", VoiceQuestionIntent.PIT_DECISION);
+
+        Assert.Equal("进站判断", context.IntentDisplayName);
+        Assert.Equal("练习赛", context.ModeDisplayName);
+        Assert.Equal("当前状态", context.AdviceTypeDisplayName);
+    }
+
     private static RaceAssistantSnapshot BuildSnapshot(
         float tyreWear = 48f,
         float ersStoreEnergy = 2_500_000f,
         ushort gapToBehindMs = 2_400,
         byte? safetyCarStatus = 0,
         byte? weather = 0,
-        bool includeInventory = true)
+        bool includeInventory = true,
+        RaceWeekendTyrePlan? tyrePlan = null,
+        bool isListening = true,
+        byte sessionType = 15,
+        ulong? sessionUid = 1234,
+        DateTimeOffset? updatedAt = null)
     {
         var now = DateTimeOffset.UtcNow;
+        var stateUpdatedAt = updatedAt ?? now;
         var player = new CarSnapshot
         {
             IsPlayer = true,
@@ -257,17 +359,17 @@ public sealed class RaceAssistantTests
             TyreWear = tyreWear,
             FuelRemainingLaps = 4.2f,
             ErsStoreEnergy = ersStoreEnergy,
-            UpdatedAt = now
+            UpdatedAt = stateUpdatedAt
         };
         var behind = new CarSnapshot
         {
             Position = 6,
             DeltaToCarInFrontInMs = gapToBehindMs,
-            UpdatedAt = now
+            UpdatedAt = stateUpdatedAt
         };
         var state = new SessionState
         {
-            SessionType = 15,
+            SessionType = sessionType,
             Weather = weather,
             TrackTemperature = 32,
             AirTemperature = 24,
@@ -293,15 +395,17 @@ public sealed class RaceAssistantTests
                     ]
                 }
                 : null,
-            UpdatedAt = now
+            UpdatedAt = stateUpdatedAt
         };
 
         return new RaceAssistantSnapshotBuilder().Build(
-            1234,
+            sessionUid,
             state,
             CreateRecentLaps(),
             Array.Empty<string>(),
-            now);
+            now,
+            tyrePlan,
+            isListening);
     }
 
     private static IReadOnlyList<LapSummary> CreateRecentLaps()

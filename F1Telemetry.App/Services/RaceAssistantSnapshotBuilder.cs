@@ -35,20 +35,29 @@ public sealed class RaceAssistantSnapshotBuilder
         SessionState sessionState,
         IReadOnlyList<LapSummary> recentLaps,
         IReadOnlyList<string> recentEvents,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        RaceWeekendTyrePlan? tyrePlan = null,
+        bool isListening = true)
     {
         ArgumentNullException.ThrowIfNull(sessionState);
 
         var player = sessionState.PlayerCar;
-        var mode = _stateMachine.Resolve(sessionState);
         var sessionMode = SessionModeFormatter.Resolve(
             sessionState.SessionType,
             sessionState.TotalLaps,
             sessionState.WeekendStructure);
         var trend = BuildTrend(recentLaps);
-        var tyreInventorySummary = BuildTyreInventorySummary(sessionState.PlayerTyreInventory);
+        var tyreInventorySummary = BuildTyreInventorySummary(sessionState.PlayerTyreInventory, tyrePlan);
         var weatherSummary = BuildWeatherSummary(sessionState);
-        var quality = BuildQuality(sessionUid, sessionState, player, tyreInventorySummary, now);
+        var quality = BuildQuality(
+            sessionUid,
+            sessionState,
+            player,
+            tyreInventorySummary,
+            HasTyreSetsPacket(sessionState.PlayerTyreInventory),
+            isListening,
+            now);
+        var mode = _stateMachine.Resolve(sessionState, isListening, sessionUid, player, quality.IsStale);
         int? currentLap = player?.CurrentLapNumber is null ? null : player.CurrentLapNumber.Value;
         int? totalLaps = sessionState.TotalLaps is null ? null : sessionState.TotalLaps.Value;
         var remainingLaps = currentLap is not null && totalLaps is not null
@@ -69,7 +78,8 @@ public sealed class RaceAssistantSnapshotBuilder
             tyreInventorySummary,
             gapToFront,
             gapToBehind,
-            sessionState.SafetyCarStatus);
+            sessionState.SafetyCarStatus,
+            mode);
         var safetyCarPit = BuildSafetyCarPitOpportunity(
             remainingLaps,
             player,
@@ -117,9 +127,16 @@ public sealed class RaceAssistantSnapshotBuilder
         SessionState sessionState,
         CarSnapshot? player,
         string tyreInventorySummary,
+        bool hasTyreSetsPacket,
+        bool isListening,
         DateTimeOffset now)
     {
         var missing = new List<string>();
+        if (!isListening)
+        {
+            missing.Add("fresh-snapshot");
+        }
+
         if (sessionUid is null)
         {
             missing.Add("session-uid");
@@ -155,6 +172,11 @@ public sealed class RaceAssistantSnapshotBuilder
             missing.Add("tyre-inventory");
         }
 
+        if (!hasTyreSetsPacket)
+        {
+            missing.Add("tyre-sets-packet");
+        }
+
         if (sessionState.Weather is null)
         {
             missing.Add("weather");
@@ -165,7 +187,7 @@ public sealed class RaceAssistantSnapshotBuilder
         var ageSeconds = sessionState.UpdatedAt == default
             ? (int?)null
             : (int)Math.Max(0, (now - sessionState.UpdatedAt).TotalSeconds);
-        var stale = ageSeconds is null or > StaleSnapshotSeconds;
+        var stale = !isListening || ageSeconds is null or > StaleSnapshotSeconds;
         if (stale)
         {
             missing.Add("fresh-snapshot");
@@ -195,7 +217,8 @@ public sealed class RaceAssistantSnapshotBuilder
         string tyreInventorySummary,
         double? gapToFrontMs,
         double? gapToBehindMs,
-        byte? safetyCarStatus)
+        byte? safetyCarStatus,
+        RaceAssistantMode mode)
     {
         var missing = new List<string>();
         if (player?.TyresAgeLaps is null) missing.Add("tyre-age");
@@ -222,6 +245,25 @@ public sealed class RaceAssistantSnapshotBuilder
         };
 
         var wear = player?.TyreWear;
+        if (mode == RaceAssistantMode.Practice)
+        {
+            return new PitDecisionSignal
+            {
+                Inputs = inputs,
+                Signal = new StrategyRuleSignal
+                {
+                    SignalType = "practice-pit-question",
+                    AdviceType = RaceAssistantAdviceType.GeneralStatus,
+                    Summary = missing.Count > 0 ? "当前数据不足，暂不做进站判断。" : "练习赛进站问题按长距离采集处理。",
+                    RecommendedAction = missing.Count > 0 ? "当前数据不足，暂不做进站判断。" : "练习赛先多跑一圈收集胎耗。",
+                    Confidence = StrategyAdviceConfidence.Low,
+                    RiskLevel = StrategyRiskLevel.Unknown,
+                    RequiredData = ["current-tyre", "tyre-age", "tyre-wear", "recent-lap-trend"],
+                    MissingData = missing
+                }
+            };
+        }
+
         var signal = wear switch
         {
             >= 72f => new StrategyRuleSignal
@@ -423,20 +465,45 @@ public sealed class RaceAssistantSnapshotBuilder
         return $"{label}{direction}，变化 {delta / 1000d:+0.0;-0.0;0.0}s";
     }
 
-    private static string BuildTyreInventorySummary(TyreInventorySnapshot? inventory)
+    private static bool HasTyreSetsPacket(TyreInventorySnapshot? inventory)
     {
-        if (inventory is null || inventory.Sets.Count == 0)
+        return inventory is not null && inventory.Sets.Count > 0;
+    }
+
+    private static string BuildTyreInventorySummary(TyreInventorySnapshot? inventory, RaceWeekendTyrePlan? tyrePlan)
+    {
+        var parts = new List<string>();
+        var normalizedPlan = tyrePlan?.Normalize();
+        if (HasManualTyreInventory(normalizedPlan))
         {
-            return string.Empty;
+            parts.Add($"手动库存：{RaceWeekendTyrePlan.FormatInventoryText(normalizedPlan!)}");
         }
 
-        var available = inventory.Sets
-            .Where(set => set.Available)
-            .OrderBy(set => set.Wear)
-            .Take(6)
-            .Select(set => $"#{set.Index + 1} {set.VisualTyreCompound}/{set.ActualTyreCompound} wear {set.Wear}%")
-            .ToArray();
-        return available.Length == 0 ? string.Empty : string.Join("；", available);
+        if (inventory is not null && inventory.Sets.Count > 0)
+        {
+            var available = inventory.Sets
+                .Where(set => set.Available)
+                .OrderBy(set => set.Wear)
+                .Take(6)
+                .Select(set => $"#{set.Index + 1} {set.VisualTyreCompound}/{set.ActualTyreCompound} wear {set.Wear}%")
+                .ToArray();
+            if (available.Length > 0)
+            {
+                parts.Add($"游戏库存：{string.Join("；", available)}");
+            }
+        }
+
+        return parts.Count == 0 ? string.Empty : string.Join("；", parts);
+    }
+
+    private static bool HasManualTyreInventory(RaceWeekendTyrePlan? tyrePlan)
+    {
+        return tyrePlan is not null &&
+               (tyrePlan.SoftCount > 0 ||
+                tyrePlan.MediumCount > 0 ||
+                tyrePlan.HardCount > 0 ||
+                tyrePlan.IntermediateCount > 0 ||
+                tyrePlan.WetCount > 0);
     }
 
     private static string BuildWeatherSummary(SessionState sessionState)

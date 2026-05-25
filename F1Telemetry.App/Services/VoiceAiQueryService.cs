@@ -112,12 +112,16 @@ public sealed class VoiceAiQueryService
 
         if (!request.AiSettings.AiEnabled)
         {
+            var aiDisabledSpeechSkippedReason = request.EnableTtsAnswer && !CanQueueRaceAssistantSpeech(strategyContext)
+                ? "缺少实时遥测"
+                : string.Empty;
             return CreateRaceAssistantSuccess(
                 question,
                 strategyContext,
                 _fallbackAdviceService.BuildFallback(strategyContext, "AI 未启用"),
                 request,
-                wasQueued: false);
+                wasQueued: false,
+                speechSkippedReason: aiDisabledSpeechSkippedReason);
         }
 
         StrategyAdviceResult advice;
@@ -181,12 +185,17 @@ public sealed class VoiceAiQueryService
         }
 
         var wasQueued = false;
-        if (request.EnableTtsAnswer)
+        var speechSkippedReason = string.Empty;
+        if (request.EnableTtsAnswer && CanQueueRaceAssistantSpeech(strategyContext))
         {
             wasQueued = TryQueueSpeech(request, advice.Tts);
         }
+        else if (request.EnableTtsAnswer)
+        {
+            speechSkippedReason = "缺少实时遥测";
+        }
 
-        return CreateRaceAssistantSuccess(question, strategyContext, advice, request, wasQueued);
+        return CreateRaceAssistantSuccess(question, strategyContext, advice, request, wasQueued, speechSkippedReason);
     }
 
     private async Task<VoiceAiQueryResult> AskLegacyAsync(
@@ -278,6 +287,13 @@ public sealed class VoiceAiQueryService
         return message is not null && _ttsQueue.TryEnqueue(message);
     }
 
+    private static bool CanQueueRaceAssistantSpeech(StrategyQuestionContext context)
+    {
+        return context.Mode is not RaceAssistantMode.NoTelemetry and not RaceAssistantMode.WaitingForTelemetry &&
+               !context.Snapshot.Quality.IsStale &&
+               !context.MissingData.Contains("fresh-snapshot", StringComparer.Ordinal);
+    }
+
     private static bool IsInvalidAiFormat(string? errorMessage)
     {
         return !string.IsNullOrWhiteSpace(errorMessage) &&
@@ -305,7 +321,8 @@ public sealed class VoiceAiQueryService
         StrategyQuestionContext context,
         StrategyAdviceResult advice,
         VoiceAiQueryRequest request,
-        bool wasQueued)
+        bool wasQueued,
+        string speechSkippedReason = "")
     {
         var speechText = StrategyAdviceJsonParser.CompressTts(advice.Tts);
         var answer = request.MaxAnswerLength > 0 && speechText.Length > request.MaxAnswerLength
@@ -320,7 +337,8 @@ public sealed class VoiceAiQueryService
             Mode = context.Mode,
             Advice = advice with { Tts = speechText },
             SpeechText = answer,
-            WasQueuedForSpeech = wasQueued
+            WasQueuedForSpeech = wasQueued,
+            SpeechSkippedReason = speechSkippedReason
         };
     }
 

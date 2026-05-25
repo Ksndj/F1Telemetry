@@ -1,4 +1,5 @@
 using System.Text;
+using F1Telemetry.AI.Formatting;
 using F1Telemetry.AI.Models;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.Core.Formatting;
@@ -79,7 +80,10 @@ TTS 只能来自 tts 字段，不要把长 reason 放进 tts。
         builder.AppendLine("Race assistant question context:");
         builder.AppendLine($"SessionUid: {context.SessionUid?.ToString() ?? "n/a"}");
         builder.AppendLine($"Mode: {context.Mode}");
+        builder.AppendLine($"modeDisplayName: {context.ModeDisplayName}");
         builder.AppendLine($"Intent: {context.Intent}");
+        builder.AppendLine($"intentDisplayName: {context.IntentDisplayName}");
+        builder.AppendLine($"adviceTypeDisplayName: {context.AdviceTypeDisplayName}");
         builder.AppendLine($"Question: {context.Question}");
         builder.AppendLine($"Intent template: {context.IntentPromptTemplate}");
         builder.AppendLine();
@@ -118,7 +122,7 @@ TTS 只能来自 tts 字段，不要把长 reason 放进 tts。
         builder.AppendLine("Rule signals:");
         foreach (var signal in snapshot.RuleSignals)
         {
-            builder.AppendLine($"- {signal.SignalType}: adviceType={signal.AdviceType}, confidence={signal.Confidence}, risk={signal.RiskLevel}, summary={signal.Summary}, action={signal.RecommendedAction}, missing=[{string.Join(", ", signal.MissingData)}]");
+            builder.AppendLine($"- {signal.SignalType}: adviceType={signal.AdviceType}, adviceTypeDisplayName={RaceAssistantDisplayFormatter.FormatAdviceType(signal.AdviceType)}, confidence={signal.Confidence}, risk={signal.RiskLevel}, summary={signal.Summary}, action={signal.RecommendedAction}, missing=[{string.Join(", ", signal.MissingData)}]");
         }
 
         builder.AppendLine();

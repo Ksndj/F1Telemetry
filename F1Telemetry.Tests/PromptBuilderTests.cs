@@ -209,6 +209,54 @@ public sealed class PromptBuilderTests
         Assert.DoesNotContain("焦耳", prompt.UserMessage, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies race-assistant prompts include localized display names beside internal enums.
+    /// </summary>
+    [Fact]
+    public void BuildMessages_RaceAssistantPrompt_IncludesChineseDisplayNames()
+    {
+        var snapshot = new RaceAssistantSnapshot
+        {
+            SessionUid = 123,
+            Mode = RaceAssistantMode.Practice,
+            SessionMode = SessionMode.Practice,
+            Quality = new SnapshotQuality { MaxRecommendedConfidence = StrategyAdviceConfidence.Low },
+            PitDecision = new PitDecisionSignal
+            {
+                Signal = new StrategyRuleSignal
+                {
+                    SignalType = "practice-pit-question",
+                    AdviceType = RaceAssistantAdviceType.GeneralStatus,
+                    Confidence = StrategyAdviceConfidence.Low,
+                    Summary = "练习赛进站问题按长距离采集处理。",
+                    RecommendedAction = "练习赛先多跑一圈收集胎耗。"
+                }
+            },
+            RuleSignals =
+            [
+                new StrategyRuleSignal
+                {
+                    SignalType = "practice-pit-question",
+                    AdviceType = RaceAssistantAdviceType.GeneralStatus,
+                    Confidence = StrategyAdviceConfidence.Low,
+                    Summary = "练习赛进站问题按长距离采集处理。",
+                    RecommendedAction = "练习赛先多跑一圈收集胎耗。"
+                }
+            ]
+        };
+        var strategyContext = new StrategyQuestionContextBuilder().Build(
+            snapshot,
+            "现在要不要进站",
+            VoiceQuestionIntent.PIT_DECISION);
+
+        var prompt = new PromptBuilder().BuildMessages(new AIAnalysisContext { StrategyQuestionContext = strategyContext });
+
+        Assert.Contains("intentDisplayName: 进站判断", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("modeDisplayName: 练习赛", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("adviceTypeDisplayName: 当前状态", prompt.UserMessage, StringComparison.Ordinal);
+        Assert.Contains("adviceTypeDisplayName=当前状态", prompt.UserMessage, StringComparison.Ordinal);
+    }
+
     private static AIAnalysisContext CreateContext(
         bool includeRecentCollections = true,
         SessionMode sessionMode = SessionMode.Race,

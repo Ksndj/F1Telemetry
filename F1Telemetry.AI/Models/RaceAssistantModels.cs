@@ -9,6 +9,12 @@ namespace F1Telemetry.AI.Models;
 /// </summary>
 public enum RaceAssistantMode
 {
+    /// <summary>No live telemetry is connected.</summary>
+    NoTelemetry,
+
+    /// <summary>Waiting for enough live telemetry to answer with race context.</summary>
+    WaitingForTelemetry,
+
     /// <summary>Practice-oriented advice.</summary>
     Practice,
 
@@ -334,7 +340,7 @@ public sealed record RaceAssistantSnapshot
     public ulong? SessionUid { get; init; }
 
     /// <summary>Gets the resolved assistant mode.</summary>
-    public RaceAssistantMode Mode { get; init; } = RaceAssistantMode.Practice;
+    public RaceAssistantMode Mode { get; init; } = RaceAssistantMode.NoTelemetry;
 
     /// <summary>Gets the high-level session mode.</summary>
     public SessionMode SessionMode { get; init; } = SessionMode.Unknown;
@@ -422,6 +428,15 @@ public sealed record StrategyQuestionContext
 
     /// <summary>Gets the assistant mode.</summary>
     public RaceAssistantMode Mode { get; init; }
+
+    /// <summary>Gets the localized recognized-intent label.</summary>
+    public string IntentDisplayName { get; init; } = string.Empty;
+
+    /// <summary>Gets the localized assistant-mode label.</summary>
+    public string ModeDisplayName { get; init; } = string.Empty;
+
+    /// <summary>Gets the localized expected advice-type label for this question.</summary>
+    public string AdviceTypeDisplayName { get; init; } = string.Empty;
 
     /// <summary>Gets the source snapshot.</summary>
     public RaceAssistantSnapshot Snapshot { get; init; } = new();

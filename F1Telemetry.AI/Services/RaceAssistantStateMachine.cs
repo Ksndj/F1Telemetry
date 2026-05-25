@@ -15,7 +15,42 @@ public sealed class RaceAssistantStateMachine
     /// <param name="sessionState">The current session state.</param>
     public RaceAssistantMode Resolve(SessionState sessionState)
     {
+        return Resolve(sessionState, isListening: true, sessionUid: 1, player: sessionState?.PlayerCar, isSnapshotStale: false);
+    }
+
+    /// <summary>
+    /// Resolves the current assistant mode with live telemetry availability gates.
+    /// </summary>
+    /// <param name="sessionState">The current session state.</param>
+    /// <param name="isListening">Whether the UDP listener is currently active.</param>
+    /// <param name="sessionUid">The active session UID.</param>
+    /// <param name="player">The current player car snapshot.</param>
+    /// <param name="isSnapshotStale">Whether the latest aggregate snapshot is stale.</param>
+    public RaceAssistantMode Resolve(
+        SessionState sessionState,
+        bool isListening,
+        ulong? sessionUid,
+        CarSnapshot? player,
+        bool isSnapshotStale)
+    {
         ArgumentNullException.ThrowIfNull(sessionState);
+
+        if (!isListening)
+        {
+            return RaceAssistantMode.NoTelemetry;
+        }
+
+        var sessionMode = SessionModeFormatter.Resolve(
+            sessionState.SessionType,
+            sessionState.TotalLaps,
+            sessionState.WeekendStructure);
+        if (sessionUid is null ||
+            player is null ||
+            isSnapshotStale ||
+            sessionMode == SessionMode.Unknown)
+        {
+            return RaceAssistantMode.WaitingForTelemetry;
+        }
 
         if (sessionState.HasFinalClassification)
         {
@@ -31,16 +66,12 @@ public sealed class RaceAssistantStateMachine
         {
             1 => RaceAssistantMode.SafetyCar,
             2 => RaceAssistantMode.VirtualSafetyCar,
-            _ => ResolveGreenFlagMode(sessionState)
+            _ => ResolveGreenFlagMode(sessionState, sessionMode)
         };
     }
 
-    private static RaceAssistantMode ResolveGreenFlagMode(SessionState sessionState)
+    private static RaceAssistantMode ResolveGreenFlagMode(SessionState sessionState, SessionMode sessionMode)
     {
-        var sessionMode = SessionModeFormatter.Resolve(
-            sessionState.SessionType,
-            sessionState.TotalLaps,
-            sessionState.WeekendStructure);
         int? currentLap = sessionState.PlayerCar?.CurrentLapNumber is null
             ? null
             : sessionState.PlayerCar.CurrentLapNumber.Value;
@@ -53,7 +84,7 @@ public sealed class RaceAssistantStateMachine
                 ? RaceAssistantMode.QualifyingPush
                 : RaceAssistantMode.QualifyingPrep,
             SessionMode.Race or SessionMode.SprintRace => ResolveRaceMode(sessionState, currentLap, totalLaps),
-            _ => RaceAssistantMode.Practice
+            _ => RaceAssistantMode.WaitingForTelemetry
         };
     }
 

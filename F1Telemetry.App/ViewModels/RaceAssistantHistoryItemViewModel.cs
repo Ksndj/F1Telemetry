@@ -1,3 +1,5 @@
+using F1Telemetry.AI.Formatting;
+
 namespace F1Telemetry.App.ViewModels;
 
 /// <summary>
@@ -5,6 +7,9 @@ namespace F1Telemetry.App.ViewModels;
 /// </summary>
 public sealed record RaceAssistantHistoryItemViewModel
 {
+    private string _intent = string.Empty;
+    private string _confidence = string.Empty;
+
     /// <summary>
     /// Gets when the answer was produced.
     /// </summary>
@@ -18,7 +23,11 @@ public sealed record RaceAssistantHistoryItemViewModel
     /// <summary>
     /// Gets the classified intent.
     /// </summary>
-    public string Intent { get; init; } = string.Empty;
+    public string Intent
+    {
+        get => RaceAssistantDisplayFormatter.FormatIntentText(_intent);
+        init => _intent = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the short answer.
@@ -28,5 +37,9 @@ public sealed record RaceAssistantHistoryItemViewModel
     /// <summary>
     /// Gets the confidence label.
     /// </summary>
-    public string Confidence { get; init; } = string.Empty;
+    public string Confidence
+    {
+        get => RaceAssistantDisplayFormatter.FormatConfidenceText(_confidence);
+        init => _confidence = value ?? string.Empty;
+    }
 }

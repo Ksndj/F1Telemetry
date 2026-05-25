@@ -1,3 +1,4 @@
+using F1Telemetry.AI.Formatting;
 using F1Telemetry.AI.Models;
 
 namespace F1Telemetry.AI.Services;
@@ -17,6 +18,7 @@ public sealed class StrategyQuestionContextBuilder
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
+        var expectedAdviceType = ResolveExpectedAdviceType(intent, snapshot.Mode);
         var requiredData = BuildRequiredData(intent, snapshot.Mode);
         var missing = requiredData
             .Where(field => IsMissing(field, snapshot))
@@ -33,10 +35,13 @@ public sealed class StrategyQuestionContextBuilder
             Question = question?.Trim() ?? string.Empty,
             Intent = intent,
             Mode = snapshot.Mode,
+            IntentDisplayName = RaceAssistantDisplayFormatter.FormatIntent(intent),
+            ModeDisplayName = RaceAssistantDisplayFormatter.FormatMode(snapshot.Mode),
+            AdviceTypeDisplayName = RaceAssistantDisplayFormatter.FormatAdviceType(expectedAdviceType),
             Snapshot = snapshot,
             RequiredData = requiredData,
             MissingData = missing,
-            IntentPromptTemplate = BuildIntentTemplate(intent)
+            IntentPromptTemplate = BuildIntentTemplate(intent, snapshot.Mode)
         };
     }
 
@@ -47,6 +52,8 @@ public sealed class StrategyQuestionContextBuilder
         {
             VoiceQuestionIntent.PIT_DECISION => mode is RaceAssistantMode.SafetyCar or RaceAssistantMode.VirtualSafetyCar
                 ? ["tyre-age", "tyre-wear", "remaining-laps", "tyre-inventory", "weather", "track-wetness", "pit-entry-state", "pit-exit-traffic", "position"]
+                : mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry
+                    ? ["current-tyre", "tyre-age", "tyre-wear", "recent-lap-trend"]
                 : ["tyre-age", "tyre-wear", "recent-lap-trend", "tyre-inventory", "weather", "track-wetness", "remaining-laps", "gaps", "estimated-pit-loss"],
             VoiceQuestionIntent.TYRE_STATUS => ["current-tyre", "tyre-age", "tyre-wear", "recent-lap-trend"],
             VoiceQuestionIntent.ERS_STRATEGY => ["ers-store-energy", "recent-lap-trend"],
@@ -86,6 +93,29 @@ public sealed class StrategyQuestionContextBuilder
         };
     }
 
+    private static RaceAssistantAdviceType ResolveExpectedAdviceType(VoiceQuestionIntent intent, RaceAssistantMode mode)
+    {
+        if (intent == VoiceQuestionIntent.PIT_DECISION &&
+            mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry)
+        {
+            return RaceAssistantAdviceType.GeneralStatus;
+        }
+
+        return intent switch
+        {
+            VoiceQuestionIntent.PIT_DECISION => mode is RaceAssistantMode.SafetyCar or RaceAssistantMode.VirtualSafetyCar
+                ? RaceAssistantAdviceType.SafetyCar
+                : RaceAssistantAdviceType.PitWindow,
+            VoiceQuestionIntent.TYRE_STATUS => RaceAssistantAdviceType.TyreManagement,
+            VoiceQuestionIntent.ERS_STRATEGY => RaceAssistantAdviceType.ErsManagement,
+            VoiceQuestionIntent.GAP_ANALYSIS => RaceAssistantAdviceType.Defense,
+            VoiceQuestionIntent.SETUP_FEEDBACK => RaceAssistantAdviceType.SetupFeedback,
+            VoiceQuestionIntent.CORNER_ANALYSIS => RaceAssistantAdviceType.Corner,
+            VoiceQuestionIntent.DAMAGE_STATUS => RaceAssistantAdviceType.Damage,
+            _ => RaceAssistantAdviceType.GeneralStatus
+        };
+    }
+
     private static IEnumerable<string> SelectPitMissingData(RaceAssistantSnapshot snapshot)
     {
         return snapshot.Mode is RaceAssistantMode.SafetyCar or RaceAssistantMode.VirtualSafetyCar
@@ -93,8 +123,14 @@ public sealed class StrategyQuestionContextBuilder
             : snapshot.PitDecision.Inputs.MissingData;
     }
 
-    private static string BuildIntentTemplate(VoiceQuestionIntent intent)
+    private static string BuildIntentTemplate(VoiceQuestionIntent intent, RaceAssistantMode mode)
     {
+        if (intent == VoiceQuestionIntent.PIT_DECISION &&
+            mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry)
+        {
+            return "PIT_DECISION in non-race context: 不做正赛进站窗口、undercut 或 overcut 判断；只给练习/通用数据采集建议，数据不足时说明暂不做进站判断。";
+        }
+
         return intent switch
         {
             VoiceQuestionIntent.PIT_DECISION =>

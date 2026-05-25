@@ -9,6 +9,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
 using F1Telemetry.AI.Interfaces;
+using F1Telemetry.AI.Formatting;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Events;
@@ -215,6 +216,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _voiceAssistantConfidenceText = "-";
     private string _voiceAssistantRiskLevelText = "-";
     private string _voiceAssistantMissingDataText = "-";
+    private string _voiceAssistantMissingDataDetailText = string.Empty;
+    private string _voiceAssistantTelemetryNoticeText = string.Empty;
     private bool _voiceAssistantEnableTtsAnswer = true;
     private int _voiceAssistantMaxAnswerLength = 240;
     private int _voiceAssistantRepeatQuestionCooldownSeconds = 12;
@@ -1306,6 +1309,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _voiceAssistantMissingDataText;
         private set => SetProperty(ref _voiceAssistantMissingDataText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest complete localized missing-data details.
+    /// </summary>
+    public string VoiceAssistantMissingDataDetailText
+    {
+        get => _voiceAssistantMissingDataDetailText;
+        private set => SetProperty(ref _voiceAssistantMissingDataDetailText, value);
+    }
+
+    /// <summary>
+    /// Gets the telemetry availability notice shown above the race-assistant panel.
+    /// </summary>
+    public string VoiceAssistantTelemetryNoticeText
+    {
+        get => _voiceAssistantTelemetryNoticeText;
+        private set => SetProperty(ref _voiceAssistantTelemetryNoticeText, value);
     }
 
     /// <summary>
@@ -3380,7 +3401,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             sessionState,
             _lapAnalyzer.CaptureRecentLaps(5),
             _raceEventInsightBuffer.CaptureMessages(),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            BuildRaceWeekendTyrePlan(),
+            IsListening);
         var intent = _voiceQuestionIntentClassifier.Classify(question);
         return _strategyQuestionContextBuilder.Build(snapshot, question, intent);
     }
@@ -3388,8 +3411,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void ApplyVoiceAssistantResult(VoiceAiQueryResult result)
     {
         VoiceAssistantRecognizedText = result.RecognizedQuestion;
-        VoiceAssistantIntentText = result.Intent.ToString();
-        VoiceAssistantModeText = result.Mode.ToString();
+        VoiceAssistantIntentText = RaceAssistantDisplayFormatter.FormatIntent(result.Intent);
+        VoiceAssistantModeText = RaceAssistantDisplayFormatter.FormatMode(result.Mode);
+        VoiceAssistantTelemetryNoticeText = IsTelemetryLimitedMode(result.Mode)
+            ? "当前未接入实时遥测，仅能给通用建议。"
+            : string.Empty;
 
         if (!result.IsSuccess)
         {
@@ -3404,20 +3430,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var advice = result.Advice;
-        VoiceAssistantStatusText = result.WasQueuedForSpeech ? "播放回答" : "未录音";
+        VoiceAssistantStatusText = result.WasQueuedForSpeech
+            ? "播放回答"
+            : string.Equals(result.SpeechSkippedReason, "缺少实时遥测", StringComparison.Ordinal)
+                ? "未播报：缺少实时遥测"
+                : "未录音";
         VoiceAiStatusText = result.WasQueuedForSpeech
             ? $"已回答：{result.SpeechText}"
-            : $"已生成回答，TTS 未启用：{result.SpeechText}";
+            : string.Equals(result.SpeechSkippedReason, "缺少实时遥测", StringComparison.Ordinal)
+                ? $"已生成回答，未播报：缺少实时遥测：{result.SpeechText}"
+                : $"已生成回答，TTS 未启用：{result.SpeechText}";
         VoiceAssistantAnswerText = result.SpeechText;
-        VoiceAssistantAdviceTypeText = advice?.AdviceType.ToString() ?? "-";
+        VoiceAssistantAdviceTypeText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatAdviceType(advice.AdviceType);
         VoiceAssistantSummaryText = advice?.Summary ?? result.SpeechText;
         VoiceAssistantReasonText = advice?.Reason ?? string.Empty;
         VoiceAssistantRecommendedActionText = advice?.RecommendedAction ?? result.SpeechText;
-        VoiceAssistantConfidenceText = advice?.Confidence.ToString() ?? "-";
-        VoiceAssistantRiskLevelText = advice?.RiskLevel.ToString() ?? "-";
-        VoiceAssistantMissingDataText = advice is null || advice.MissingData.Count == 0
-            ? "-"
-            : string.Join("、", advice.MissingData);
+        VoiceAssistantConfidenceText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatConfidence(advice.Confidence);
+        VoiceAssistantRiskLevelText = advice is null ? "-" : RaceAssistantDisplayFormatter.FormatRiskLevel(advice.RiskLevel);
+        (VoiceAssistantMissingDataText, VoiceAssistantMissingDataDetailText) = FormatMissingData(advice?.MissingData ?? Array.Empty<string>());
 
         RaceAssistantHistory.Insert(
             0,
@@ -3425,7 +3455,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 Timestamp = DateTimeOffset.Now,
                 Question = result.RecognizedQuestion,
-                Intent = result.Intent.ToString(),
+                Intent = VoiceAssistantIntentText,
                 Answer = result.SpeechText,
                 Confidence = VoiceAssistantConfidenceText
             });
@@ -3435,7 +3465,46 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         EnqueueAiTtsLog("VoiceAI", $"问题：{result.RecognizedQuestion}");
-        EnqueueAiTtsLog("RaceAssistant", $"回答：{result.SpeechText} · intent={result.Intent} · mode={result.Mode} · confidence={VoiceAssistantConfidenceText} · ttsQueued={result.WasQueuedForSpeech}");
+        EnqueueAiTtsLog("RaceAssistant", FormatRaceAssistantUserLog(result, advice));
+    }
+
+    private static bool IsTelemetryLimitedMode(RaceAssistantMode mode)
+    {
+        return mode is RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry;
+    }
+
+    private static (string Summary, string Detail) FormatMissingData(IReadOnlyList<string> missingData)
+    {
+        var labels = missingData
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Distinct(StringComparer.Ordinal)
+            .Select(RaceAssistantDisplayFormatter.FormatMissingDataKey)
+            .ToArray();
+        if (labels.Length == 0)
+        {
+            return ("-", string.Empty);
+        }
+
+        var preview = string.Join("、", labels.Take(5));
+        var summary = string.IsNullOrWhiteSpace(preview)
+            ? $"缺失数据：{labels.Length} 项"
+            : $"缺失数据：{labels.Length} 项：{preview}";
+        return (summary, string.Join("、", labels));
+    }
+
+    private static string FormatRaceAssistantUserLog(VoiceAiQueryResult result, StrategyAdviceResult? advice)
+    {
+        var broadcastText = result.WasQueuedForSpeech ? "已播报" : "未播报";
+        if (advice?.MissingData.Count > 0)
+        {
+            return $"问工程师：数据不足，{broadcastText}。";
+        }
+
+        var intent = RaceAssistantDisplayFormatter.FormatIntent(result.Intent);
+        var confidence = advice is null
+            ? "低"
+            : RaceAssistantDisplayFormatter.FormatConfidence(advice.Confidence);
+        return $"问工程师：{intent}，置信度{confidence}，{broadcastText}。";
     }
 
     private bool CanAskRaceAssistantTextQuestion()

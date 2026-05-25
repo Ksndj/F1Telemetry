@@ -1,4 +1,5 @@
 using F1Telemetry.AI.Models;
+using F1Telemetry.Analytics.Strategy;
 
 namespace F1Telemetry.AI.Services;
 
@@ -15,6 +16,32 @@ public sealed class StrategyRuleConflictResolver
         StrategyQuestionContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        if (context.Intent == VoiceQuestionIntent.PIT_DECISION &&
+            context.Mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry &&
+            aiAdvice.AdviceType is RaceAssistantAdviceType.PitWindow or RaceAssistantAdviceType.Undercut or RaceAssistantAdviceType.Overcut)
+        {
+            return aiAdvice with
+            {
+                AdviceType = RaceAssistantAdviceType.GeneralStatus,
+                Summary = context.Mode == RaceAssistantMode.Practice
+                    ? "练习赛不做正赛进站窗口判断。"
+                    : "当前未接入实时遥测，仅能给通用建议。",
+                RecommendedAction = context.Mode == RaceAssistantMode.Practice
+                    ? "练习赛先多跑一圈收集胎耗。"
+                    : "当前数据不足，暂不做进站判断。",
+                Confidence = StrategyAdviceConfidence.Low,
+                RiskLevel = StrategyRiskLevel.Unknown,
+                MissingData = aiAdvice.MissingData.Concat(context.MissingData).Distinct(StringComparer.Ordinal).ToArray(),
+                Tts = context.Mode == RaceAssistantMode.Practice
+                    ? "练习赛先多跑一圈收集胎耗。"
+                    : "当前未接入实时数据，先保守。",
+                Warnings = aiAdvice.Warnings
+                    .Append("Practice/无遥测模式禁止输出正赛进站窗口，已降级。")
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray()
+            };
+        }
 
         foreach (var signal in context.Snapshot.RuleSignals.Where(signal => signal.Confidence == StrategyAdviceConfidence.High))
         {

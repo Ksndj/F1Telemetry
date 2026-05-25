@@ -26,12 +26,12 @@ public sealed class RuleBasedFallbackAdviceService
         var missing = context.MissingData.Distinct(StringComparer.Ordinal).ToArray();
         var summary = missing.Length > 0
             ? "数据不足，先按保守节奏执行。"
-            : BuildGenericSummary(context.Intent);
-        var action = BuildGenericAction(context.Intent, missing.Length > 0);
+            : BuildGenericSummary(context.Intent, context.Mode);
+        var action = BuildGenericAction(context.Intent, context.Mode, missing.Length > 0);
 
         return new StrategyAdviceResult
         {
-            AdviceType = MapAdviceType(context.Intent),
+            AdviceType = MapAdviceType(context.Intent, context.Mode),
             Summary = summary,
             Reason = string.IsNullOrWhiteSpace(failureReason)
                 ? "AI 暂不可用，已使用规则兜底。"
@@ -94,6 +94,17 @@ public sealed class RuleBasedFallbackAdviceService
 
     private static RaceAssistantAdviceType MapAdviceType(VoiceQuestionIntent intent)
     {
+        return MapAdviceType(intent, RaceAssistantMode.RaceStintManagement);
+    }
+
+    private static RaceAssistantAdviceType MapAdviceType(VoiceQuestionIntent intent, RaceAssistantMode mode)
+    {
+        if (intent == VoiceQuestionIntent.PIT_DECISION &&
+            mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry)
+        {
+            return RaceAssistantAdviceType.GeneralStatus;
+        }
+
         return intent switch
         {
             VoiceQuestionIntent.PIT_DECISION => RaceAssistantAdviceType.PitWindow,
@@ -107,8 +118,14 @@ public sealed class RuleBasedFallbackAdviceService
         };
     }
 
-    private static string BuildGenericSummary(VoiceQuestionIntent intent)
+    private static string BuildGenericSummary(VoiceQuestionIntent intent, RaceAssistantMode mode)
     {
+        if (intent == VoiceQuestionIntent.PIT_DECISION &&
+            mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry)
+        {
+            return "暂不做正赛进站判断。";
+        }
+
         return intent switch
         {
             VoiceQuestionIntent.PIT_DECISION => "进站证据不够明确。",
@@ -119,11 +136,22 @@ public sealed class RuleBasedFallbackAdviceService
         };
     }
 
-    private static string BuildGenericAction(VoiceQuestionIntent intent, bool hasMissingData)
+    private static string BuildGenericAction(VoiceQuestionIntent intent, RaceAssistantMode mode, bool hasMissingData)
     {
         if (hasMissingData)
         {
-            return "数据不足，先保守观察。";
+            return intent == VoiceQuestionIntent.PIT_DECISION &&
+                   mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry
+                ? "当前数据不足，暂不做进站判断。"
+                : "数据不足，先保守观察。";
+        }
+
+        if (intent == VoiceQuestionIntent.PIT_DECISION &&
+            mode is RaceAssistantMode.Practice or RaceAssistantMode.NoTelemetry or RaceAssistantMode.WaitingForTelemetry)
+        {
+            return mode == RaceAssistantMode.Practice
+                ? "练习赛先多跑一圈收集胎耗。"
+                : "当前未接入实时数据，仅能通用建议。";
         }
 
         return intent switch

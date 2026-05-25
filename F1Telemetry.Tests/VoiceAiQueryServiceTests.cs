@@ -136,6 +136,25 @@ public sealed class VoiceAiQueryServiceTests
         Assert.False(result.WasQueuedForSpeech);
     }
 
+    /// <summary>
+    /// Verifies no-telemetry strategy answers stay text-only and explain the skipped speech.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenNoTelemetry_DoesNotQueueTts()
+    {
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+
+        var result = await service.AskTextAsync(
+            CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:no-telemetry", mode: RaceAssistantMode.NoTelemetry));
+
+        Assert.True(result.IsSuccess);
+        Assert.False(result.WasQueuedForSpeech);
+        Assert.Equal("缺少实时遥测", result.SpeechSkippedReason);
+    }
+
     private static VoiceAiQueryRequest CreateRequest()
     {
         return new VoiceAiQueryRequest
@@ -168,7 +187,10 @@ public sealed class VoiceAiQueryServiceTests
         };
     }
 
-    private static VoiceAiQueryRequest CreateStrategyRequest(string question, string adviceKey)
+    private static VoiceAiQueryRequest CreateStrategyRequest(
+        string question,
+        string adviceKey,
+        RaceAssistantMode mode = RaceAssistantMode.RaceStintManagement)
     {
         var context = new StrategyQuestionContext
         {
@@ -177,13 +199,20 @@ public sealed class VoiceAiQueryServiceTests
             Intent = question.Contains("ERS", StringComparison.OrdinalIgnoreCase)
                 ? VoiceQuestionIntent.ERS_STRATEGY
                 : VoiceQuestionIntent.PIT_DECISION,
-            Mode = RaceAssistantMode.RaceStintManagement,
+            Mode = mode,
             RequiredData = ["ers-store-energy", "tyre-wear"],
             Snapshot = new RaceAssistantSnapshot
             {
                 SessionUid = 123,
-                Mode = RaceAssistantMode.RaceStintManagement,
-                Quality = new SnapshotQuality { MaxRecommendedConfidence = StrategyAdviceConfidence.High },
+                Mode = mode,
+                Quality = mode == RaceAssistantMode.NoTelemetry
+                    ? new SnapshotQuality
+                    {
+                        IsStale = true,
+                        MissingData = ["fresh-snapshot"],
+                        MaxRecommendedConfidence = StrategyAdviceConfidence.Low
+                    }
+                    : new SnapshotQuality { MaxRecommendedConfidence = StrategyAdviceConfidence.High },
                 RuleSignals =
                 [
                     new StrategyRuleSignal

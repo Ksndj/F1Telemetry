@@ -422,7 +422,14 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <Border Padding="14"
+                        <TextBlock Grid.ColumnSpan="2"
+                                   Margin="0,0,0,10"
+                                   Foreground="#F4C430"
+                                   Text="{Binding VoiceAssistantTelemetryNoticeText}"
+                                   TextWrapping="Wrap" />
+
+                        <Border Grid.Row="1"
+                                Padding="14"
                                 CornerRadius="8"
                                 Background="#132743">
                             <Grid>
@@ -468,11 +475,18 @@
                                                Text="{Binding VoiceAssistantRiskLevelText}" />
                                 </StackPanel>
                                 <TextBlock Grid.Row="7" Margin="0,8,0,0" Foreground="#7FA5D8" Text="缺失数据" />
-                                <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,8,0,0" Foreground="#D7E4F3" Text="{Binding VoiceAssistantMissingDataText}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="7"
+                                           Grid.Column="1"
+                                           Margin="0,8,0,0"
+                                           Foreground="#D7E4F3"
+                                           Text="{Binding VoiceAssistantMissingDataText}"
+                                           TextWrapping="Wrap"
+                                           ToolTip="{Binding VoiceAssistantMissingDataDetailText}" />
                             </Grid>
                         </Border>
 
-                        <Border Grid.Column="1"
+                        <Border Grid.Row="1"
+                                Grid.Column="1"
                                 Margin="16,0,0,0"
                                 Padding="14"
                                 CornerRadius="8"

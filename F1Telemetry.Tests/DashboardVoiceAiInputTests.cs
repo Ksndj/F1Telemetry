@@ -271,11 +271,61 @@ public sealed class DashboardVoiceAiInputTests
             Assert.NotNull(harness.AiService.Contexts[0].StrategyQuestionContext);
             Assert.Equal(VoiceQuestionIntent.ERS_STRATEGY, harness.AiService.Contexts[0].StrategyQuestionContext!.Intent);
             Assert.Single(harness.ViewModel.RaceAssistantHistory);
+            Assert.Equal("ERS策略", harness.ViewModel.VoiceAssistantIntentText);
+            Assert.Equal("等待遥测", harness.ViewModel.VoiceAssistantModeText);
+            Assert.Equal("低", harness.ViewModel.VoiceAssistantConfidenceText);
+            Assert.Equal("当前未接入实时遥测，仅能给通用建议。", harness.ViewModel.VoiceAssistantTelemetryNoticeText);
+            Assert.Equal("未播报：缺少实时遥测", harness.ViewModel.VoiceAssistantStatusText);
+            Assert.Equal("ERS策略", harness.ViewModel.RaceAssistantHistory[0].Intent);
+            Assert.Equal("低", harness.ViewModel.RaceAssistantHistory[0].Confidence);
         }
         finally
         {
             harness.ViewModel.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Verifies race-assistant logs are user-facing and do not expose raw enum fields.
+    /// </summary>
+    [Fact]
+    public void AskEngineerCommand_RaceAssistantLog_DoesNotExposeTechnicalFields()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            harness.ViewModel.VoiceAssistantQuestionText = "现在进站吗";
+            harness.ViewModel.AskEngineerCommand.Execute(null);
+            PumpDispatcherUntil(
+                () => harness.ViewModel.AiTtsLogs.Any(log => log.Category == "RaceAssistant"),
+                TimeSpan.FromSeconds(2));
+
+            var raceAssistantLog = harness.ViewModel.AiTtsLogs.First(log => log.Category == "RaceAssistant").Message;
+            Assert.Contains("问工程师", raceAssistantLog, StringComparison.Ordinal);
+            Assert.DoesNotContain("intent=", raceAssistantLog, StringComparison.Ordinal);
+            Assert.DoesNotContain("mode=", raceAssistantLog, StringComparison.Ordinal);
+            Assert.DoesNotContain("ttsQueued=", raceAssistantLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies older in-memory history rows with enum names are formatted when read by the UI.
+    /// </summary>
+    [Fact]
+    public void RaceAssistantHistoryItem_FormatsLegacyEnumText()
+    {
+        var item = new RaceAssistantHistoryItemViewModel
+        {
+            Intent = "PIT_DECISION",
+            Confidence = "Low"
+        };
+
+        Assert.Equal("进站判断", item.Intent);
+        Assert.Equal("低", item.Confidence);
     }
 
     /// <summary>
