@@ -90,4 +90,52 @@ public sealed record AIAnalysisResult
     /// </summary>
     [JsonPropertyName("ttsText")]
     public string TtsText { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the race-assistant advice type when the response is an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("adviceType")]
+    public string AdviceType { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the race-assistant advice reason.
+    /// </summary>
+    [JsonPropertyName("reason")]
+    public string Reason { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the recommended action for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("recommendedAction")]
+    public string RecommendedAction { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the confidence band for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("confidence")]
+    public string Confidence { get; init; } = "-";
+
+    /// <summary>
+    /// Gets the risk level for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("riskLevel")]
+    public string RiskLevel { get; init; } = "-";
+
+    /// <summary>
+    /// Gets required data fields for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("requiredData")]
+    public IReadOnlyList<string> RequiredData { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets missing data fields for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("missingData")]
+    public IReadOnlyList<string> MissingData { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets parser or rule warnings for an interactive strategy answer.
+    /// </summary>
+    [JsonPropertyName("warnings")]
+    public IReadOnlyList<string> Warnings { get; init; } = Array.Empty<string>();
 }

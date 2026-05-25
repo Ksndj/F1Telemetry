@@ -94,6 +94,11 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
                 return CreateFailure(AIErrorMessageFormatter.ParseFailure);
             }
 
+            if (context.StrategyQuestionContext is not null)
+            {
+                return ParseRaceAssistantResult(content);
+            }
+
             var result = JsonSerializer.Deserialize<AIAnalysisResult>(content);
             if (result is null)
             {
@@ -265,6 +270,34 @@ public sealed class DeepSeekAnalysisService : IAIAnalysisService
     private static bool ContainsRefuelingAdvice(string text)
     {
         return RefuelingAdviceSignals.Any(signal => text.Contains(signal, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static AIAnalysisResult ParseRaceAssistantResult(string content)
+    {
+        var parseResult = new StrategyAdviceJsonParser().Parse(content);
+        if (!parseResult.IsSuccess)
+        {
+            return CreateFailure(parseResult.ErrorMessage);
+        }
+
+        var advice = parseResult.Advice;
+        return new AIAnalysisResult
+        {
+            IsSuccess = true,
+            ErrorMessage = string.Empty,
+            Summary = NormalizeResultText(advice.Summary),
+            StrategyReview = NormalizeResultText(advice.Reason),
+            Tts = NormalizeTtsText(advice.Tts),
+            TtsText = NormalizeTtsText(advice.Tts),
+            AdviceType = advice.AdviceType.ToString(),
+            Reason = NormalizeResultText(advice.Reason),
+            RecommendedAction = NormalizeResultText(advice.RecommendedAction),
+            Confidence = advice.Confidence.ToString(),
+            RiskLevel = advice.RiskLevel.ToString(),
+            RequiredData = advice.RequiredData,
+            MissingData = advice.MissingData,
+            Warnings = advice.Warnings
+        };
     }
 
     private static AIAnalysisResult CreateFailure(string errorMessage)

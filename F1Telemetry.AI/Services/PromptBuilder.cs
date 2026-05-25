@@ -17,6 +17,11 @@ public sealed class PromptBuilder
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        if (context.StrategyQuestionContext is not null)
+        {
+            return BuildRaceAssistantMessages(context.StrategyQuestionContext);
+        }
+
         var systemMessage = """
 You are an F1 race engineer creating a compact post-race F1 25 summary.
 Return only valid JSON and no extra text.
@@ -38,6 +43,104 @@ ERS must be written in MJ, never as a large integer joule value.
             SystemMessage = systemMessage,
             UserMessage = userMessage
         };
+    }
+
+    private static AIPromptMessages BuildRaceAssistantMessages(StrategyQuestionContext context)
+    {
+        var systemMessage = """
+你是 F1 25 比赛工程师，正在回答车手的实时策略问题。
+Return only valid JSON and no extra text.
+JSON must contain exactly these keys: adviceType, summary, reason, recommendedAction, confidence, riskLevel, requiredData, missingData, tts.
+Allowed adviceType values: PitWindow, TyreManagement, FuelSaving, ErsManagement, Attack, Defense, Undercut, Overcut, SafetyCar, SetupFeedback, Corner, Damage, GeneralStatus, PostRaceReview, Unknown.
+Allowed confidence values: Low, Medium, High.
+Allowed riskLevel values: Unknown, Low, Medium, High.
+回答必须基于给定摘要，不编造没有的数据。
+比赛中只给短建议；tts 必须是不超过 35 个中文字符的一句话。
+所有策略建议必须带 confidence；高风险建议必须带 riskLevel。
+不得使用“必须进站”“一定 undercut 成功”等绝对化命令。
+高置信规则信号不能被覆盖，只能综合表达。
+如果数据质量过旧或缺失，confidence 必须降低并写入 missingData。
+换胎建议必须检查 weather、trackWetness、tyreInventory；没有天气或湿度数据时，不允许建议半雨胎或全雨胎。
+赛制约束：Practice 只回答练习/轮胎/油耗/设置/长距离趋势；Qualifying 不回答正赛进站/undercut/overcut；Race 可回答进站/攻防/燃油/ERS/策略风险；PostRace 可详细复盘。
+TTS 只能来自 tts 字段，不要把长 reason 放进 tts。
+""";
+
+        return new AIPromptMessages
+        {
+            SystemMessage = systemMessage,
+            UserMessage = BuildRaceAssistantUserMessage(context)
+        };
+    }
+
+    private static string BuildRaceAssistantUserMessage(StrategyQuestionContext context)
+    {
+        var snapshot = context.Snapshot;
+        var builder = new StringBuilder();
+        builder.AppendLine("Race assistant question context:");
+        builder.AppendLine($"SessionUid: {context.SessionUid?.ToString() ?? "n/a"}");
+        builder.AppendLine($"Mode: {context.Mode}");
+        builder.AppendLine($"Intent: {context.Intent}");
+        builder.AppendLine($"Question: {context.Question}");
+        builder.AppendLine($"Intent template: {context.IntentPromptTemplate}");
+        builder.AppendLine();
+
+        builder.AppendLine("Snapshot:");
+        builder.AppendLine($"Session mode: {snapshot.SessionMode}");
+        builder.AppendLine($"Lap: {FormatNullable(snapshot.CurrentLap)}/{FormatNullable(snapshot.TotalLaps)}");
+        builder.AppendLine($"Position: {FormatNullable(snapshot.Position)}");
+        builder.AppendLine($"Current tyre: {snapshot.CurrentTyre}");
+        builder.AppendLine($"Tyre age laps: {FormatNullable(snapshot.TyreAgeLaps)}");
+        builder.AppendLine($"Tyre wear percent: {FormatNullable(snapshot.TyreWearPercent)}");
+        builder.AppendLine($"Fuel remaining laps: {FormatNullable(snapshot.FuelRemainingLaps)}");
+        builder.AppendLine($"ERS store energy: {EnergyFormatter.FormatErs(snapshot.ErsStoreEnergy)}");
+        builder.AppendLine($"Gap to front ms: {FormatNullable(snapshot.GapToFrontMs)}");
+        builder.AppendLine($"Gap to behind ms: {FormatNullable(snapshot.GapToBehindMs)}");
+        builder.AppendLine($"Weather: {snapshot.WeatherSummary}");
+        builder.AppendLine($"Track wetness: {FormatNullable(snapshot.TrackWetness)}");
+        builder.AppendLine($"Tyre inventory: {snapshot.TyreInventorySummary}");
+        builder.AppendLine($"Damage: {snapshot.DamageSummary}");
+        builder.AppendLine();
+
+        builder.AppendLine("Snapshot quality:");
+        builder.AppendLine(snapshot.Quality.Summary);
+        builder.AppendLine($"Quality missingData: {string.Join(", ", snapshot.Quality.MissingData)}");
+        builder.AppendLine($"Max recommended confidence: {snapshot.Quality.MaxRecommendedConfidence}");
+        builder.AppendLine();
+
+        builder.AppendLine("RecentLapTrendSummary:");
+        builder.AppendLine($"Lap count: {snapshot.RecentLapTrend.LapCount}");
+        builder.AppendLine($"Lap time trend: {snapshot.RecentLapTrend.LapTimeTrend}");
+        builder.AppendLine($"Tyre wear trend: {snapshot.RecentLapTrend.TyreWearTrend}");
+        builder.AppendLine($"Fuel trend: {snapshot.RecentLapTrend.FuelTrend}");
+        builder.AppendLine($"ERS trend: {snapshot.RecentLapTrend.ErsTrend}");
+        builder.AppendLine();
+
+        builder.AppendLine("Rule signals:");
+        foreach (var signal in snapshot.RuleSignals)
+        {
+            builder.AppendLine($"- {signal.SignalType}: adviceType={signal.AdviceType}, confidence={signal.Confidence}, risk={signal.RiskLevel}, summary={signal.Summary}, action={signal.RecommendedAction}, missing=[{string.Join(", ", signal.MissingData)}]");
+        }
+
+        builder.AppendLine();
+        builder.AppendLine("PitDecisionSignal:");
+        builder.AppendLine($"- confidence={snapshot.PitDecision.Signal.Confidence}, summary={snapshot.PitDecision.Signal.Summary}, action={snapshot.PitDecision.Signal.RecommendedAction}, missing=[{string.Join(", ", snapshot.PitDecision.Inputs.MissingData)}]");
+        builder.AppendLine("SafetyCarPitOpportunitySignal:");
+        builder.AppendLine($"- confidence={snapshot.SafetyCarPitOpportunity.Signal.Confidence}, summary={snapshot.SafetyCarPitOpportunity.Signal.Summary}, action={snapshot.SafetyCarPitOpportunity.Signal.RecommendedAction}, missing=[{string.Join(", ", snapshot.SafetyCarPitOpportunity.Inputs.MissingData)}]");
+        builder.AppendLine();
+
+        if (snapshot.RecentEvents.Count > 0)
+        {
+            builder.AppendLine("Recent events:");
+            foreach (var message in snapshot.RecentEvents.Take(8))
+            {
+                builder.AppendLine($"- {message}");
+            }
+        }
+
+        builder.AppendLine($"RequiredData: {string.Join(", ", context.RequiredData)}");
+        builder.AppendLine($"MissingData: {string.Join(", ", context.MissingData)}");
+        builder.AppendLine("Do not mention raw UDP. Do not invent missing values.");
+        return builder.ToString();
     }
 
     private static string BuildUserMessage(AIAnalysisContext context)

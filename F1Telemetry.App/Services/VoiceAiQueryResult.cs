@@ -1,3 +1,5 @@
+using F1Telemetry.AI.Models;
+
 namespace F1Telemetry.App.Services;
 
 /// <summary>
@@ -16,6 +18,26 @@ public sealed record VoiceAiQueryResult
     public string RecognizedQuestion { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the session UID used by the answered request.
+    /// </summary>
+    public ulong? SessionUid { get; init; }
+
+    /// <summary>
+    /// Gets the recognized question intent.
+    /// </summary>
+    public VoiceQuestionIntent Intent { get; init; } = VoiceQuestionIntent.UNKNOWN;
+
+    /// <summary>
+    /// Gets the assistant mode used for the answer.
+    /// </summary>
+    public RaceAssistantMode Mode { get; init; } = RaceAssistantMode.Practice;
+
+    /// <summary>
+    /// Gets the structured strategy advice.
+    /// </summary>
+    public StrategyAdviceResult? Advice { get; init; }
+
+    /// <summary>
     /// Gets the short answer selected for TTS playback.
     /// </summary>
     public string SpeechText { get; init; } = string.Empty;
@@ -29,4 +51,14 @@ public sealed record VoiceAiQueryResult
     /// Gets the short user-facing failure reason.
     /// </summary>
     public string ErrorMessage { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets a value indicating whether the result was ignored because the session changed.
+    /// </summary>
+    public bool WasIgnoredBecauseSessionChanged { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request was canceled before completion.
+    /// </summary>
+    public bool WasCanceled { get; init; }
 }

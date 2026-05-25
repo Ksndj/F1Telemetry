@@ -1,6 +1,7 @@
 using F1Telemetry.AI.Interfaces;
 using F1Telemetry.AI.Models;
 using F1Telemetry.AI.Services;
+using F1Telemetry.Analytics.Strategy;
 using F1Telemetry.App.Services;
 using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
@@ -55,6 +56,86 @@ public sealed class VoiceAiQueryServiceTests
         Assert.Empty(ai.Contexts);
     }
 
+    /// <summary>
+    /// Verifies cancellation stops an in-flight strategy answer before TTS.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenCanceled_PropagatesCancellation()
+    {
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new BlockingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+        using var cts = new CancellationTokenSource();
+
+        var task = service.AskTextAsync(CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:cancel"), cts.Token);
+        await ai.Started.Task;
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
+
+    /// <summary>
+    /// Verifies stale session answers are ignored after the AI returns.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenSessionUidChanges_IgnoresOldAnswer()
+    {
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+        var request = CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:session") with
+        {
+            CaptureCurrentSessionUid = () => 999
+        };
+
+        var result = await service.AskTextAsync(request);
+
+        Assert.False(result.IsSuccess);
+        Assert.True(result.WasIgnoredBecauseSessionChanged);
+        Assert.Equal("会话已变化，已忽略旧回答", result.ErrorMessage);
+        Assert.False(result.WasQueuedForSpeech);
+    }
+
+    /// <summary>
+    /// Verifies network or API failures still produce rule-based fallback advice.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenAiFails_UsesRuleBasedFallback()
+    {
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new FailingAiAnalysisService(AIErrorMessageFormatter.NetworkError);
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("ERS怎么用", adviceKey: "voice-ai:fallback"));
+
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Advice);
+        Assert.True(result.Advice!.IsFallback);
+        Assert.Contains("省电", result.SpeechText, StringComparison.Ordinal);
+        Assert.True(result.WasQueuedForSpeech);
+    }
+
+    /// <summary>
+    /// Verifies invalid structured AI output is surfaced as a failure.
+    /// </summary>
+    [Fact]
+    public async Task AskTextAsync_WhenAiReturnsInvalidFormat_ShowsFailureReason()
+    {
+        var speech = new StubSpeechRecognitionService(string.Empty);
+        var ai = new FailingAiAnalysisService("AI 返回格式无效");
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+
+        var result = await service.AskTextAsync(CreateStrategyRequest("现在进站吗", adviceKey: "voice-ai:invalid"));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("AI 返回格式无效", result.ErrorMessage);
+        Assert.False(result.WasQueuedForSpeech);
+    }
+
     private static VoiceAiQueryRequest CreateRequest()
     {
         return new VoiceAiQueryRequest
@@ -87,6 +168,59 @@ public sealed class VoiceAiQueryServiceTests
         };
     }
 
+    private static VoiceAiQueryRequest CreateStrategyRequest(string question, string adviceKey)
+    {
+        var context = new StrategyQuestionContext
+        {
+            SessionUid = 123,
+            Question = question,
+            Intent = question.Contains("ERS", StringComparison.OrdinalIgnoreCase)
+                ? VoiceQuestionIntent.ERS_STRATEGY
+                : VoiceQuestionIntent.PIT_DECISION,
+            Mode = RaceAssistantMode.RaceStintManagement,
+            RequiredData = ["ers-store-energy", "tyre-wear"],
+            Snapshot = new RaceAssistantSnapshot
+            {
+                SessionUid = 123,
+                Mode = RaceAssistantMode.RaceStintManagement,
+                Quality = new SnapshotQuality { MaxRecommendedConfidence = StrategyAdviceConfidence.High },
+                RuleSignals =
+                [
+                    new StrategyRuleSignal
+                    {
+                        SignalType = "low-ers",
+                        AdviceType = RaceAssistantAdviceType.ErsManagement,
+                        Summary = "ERS 储能偏低。",
+                        RecommendedAction = "ERS偏低，直道先省电。",
+                        Confidence = StrategyAdviceConfidence.High,
+                        RiskLevel = StrategyRiskLevel.Medium,
+                        RequiredData = ["ers-store-energy"]
+                    }
+                ]
+            }
+        };
+
+        return new VoiceAiQueryRequest
+        {
+            BaseContext = new AIAnalysisContext(),
+            AiSettings = new AISettings
+            {
+                AiEnabled = true,
+                ApiKey = "test-key"
+            },
+            TtsOptions = new TtsOptions
+            {
+                TtsEnabled = true,
+                CooldownSeconds = 1
+            },
+            AdviceKey = adviceKey,
+            QuestionText = question,
+            StrategyQuestionContext = context,
+            CaptureCurrentSessionUid = () => 123,
+            EnableTtsAnswer = true
+        };
+    }
+
     private sealed class StubSpeechRecognitionService : ISpeechRecognitionService
     {
         private readonly string _recognizedText;
@@ -115,8 +249,43 @@ public sealed class VoiceAiQueryServiceTests
             return Task.FromResult(new AIAnalysisResult
             {
                 IsSuccess = true,
-                Tts = "继续保胎两圈，等窗口再进站。"
+                Tts = "继续保胎两圈，等窗口再进站。",
+                Summary = "胎速稳定",
+                RecommendedAction = "暂不进",
+                Confidence = "High",
+                RiskLevel = "Low",
+                AdviceType = "PitWindow"
             });
+        }
+    }
+
+    private sealed class FailingAiAnalysisService(string errorMessage) : IAIAnalysisService
+    {
+        public Task<AIAnalysisResult> AnalyzeAsync(
+            AIAnalysisContext context,
+            AISettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AIAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = errorMessage
+            });
+        }
+    }
+
+    private sealed class BlockingAiAnalysisService : IAIAnalysisService
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<AIAnalysisResult> AnalyzeAsync(
+            AIAnalysisContext context,
+            AISettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            Started.TrySetResult();
+            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            return new AIAnalysisResult { IsSuccess = true, Tts = "不应返回。" };
         }
     }
 

@@ -14,6 +14,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -337,6 +338,190 @@
             </Border>
 
             <Border Grid.Row="2"
+                    Grid.ColumnSpan="2"
+                    Margin="0,16,0,0"
+                    Padding="20"
+                    CornerRadius="8"
+                    Background="#0F1B2E">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel>
+                        <TextBlock FontSize="22"
+                                   FontWeight="SemiBold"
+                                   Foreground="White"
+                                   Text="问工程师" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Foreground="#9AB0C9"
+                                   Text="{Binding VoiceAssistantStatusText}"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1"
+                                HorizontalAlignment="Right"
+                                Orientation="Horizontal">
+                        <CheckBox Margin="0,0,16,0"
+                                  VerticalAlignment="Center"
+                                  Content="启用"
+                                  Foreground="#D7E4F3"
+                                  IsChecked="{Binding VoiceAssistantEnabled}" />
+                        <CheckBox VerticalAlignment="Center"
+                                  Content="播报回答"
+                                  Foreground="#D7E4F3"
+                                  IsChecked="{Binding VoiceAssistantEnableTtsAnswer}" />
+                    </StackPanel>
+
+                    <Grid Grid.Row="1"
+                          Grid.ColumnSpan="2"
+                          Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox MinHeight="38"
+                                 Padding="10,7"
+                                 Text="{Binding VoiceAssistantQuestionText, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="1"
+                                MinWidth="96"
+                                Margin="10,0,0,0"
+                                Padding="14,8"
+                                Command="{Binding AskRaceAssistantQuestionCommand}"
+                                Content="发送" />
+                        <Button Grid.Column="2"
+                                MinWidth="96"
+                                Margin="8,0,0,0"
+                                Padding="14,8"
+                                Command="{Binding ToggleRaceAssistantVoiceCommand}"
+                                Content="问工程师" />
+                        <Button Grid.Column="3"
+                                MinWidth="80"
+                                Margin="8,0,0,0"
+                                Padding="14,8"
+                                Command="{Binding CancelRaceAssistantQuestionCommand}"
+                                Content="取消" />
+                    </Grid>
+
+                    <Grid Grid.Row="2"
+                          Grid.ColumnSpan="2"
+                          Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.1*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Border Padding="14"
+                                CornerRadius="8"
+                                Background="#132743">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="112" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Foreground="#7FA5D8" Text="识别文本" />
+                                <TextBlock Grid.Column="1"
+                                           Foreground="#D7E4F3"
+                                           Text="{Binding VoiceAssistantRecognizedText}"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="1" Margin="0,8,0,0" Foreground="#7FA5D8" Text="意图类型" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Foreground="#D7E4F3" Text="{Binding VoiceAssistantIntentText}" />
+                                <TextBlock Grid.Row="2" Margin="0,8,0,0" Foreground="#7FA5D8" Text="模式" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Foreground="#D7E4F3" Text="{Binding VoiceAssistantModeText}" />
+                                <TextBlock Grid.Row="3" Margin="0,8,0,0" Foreground="#7FA5D8" Text="策略类型" />
+                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Foreground="#D7E4F3" Text="{Binding VoiceAssistantAdviceTypeText}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="4" Margin="0,8,0,0" Foreground="#7FA5D8" Text="建议摘要" />
+                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Foreground="White" Text="{Binding VoiceAssistantSummaryText}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="5" Margin="0,8,0,0" Foreground="#7FA5D8" Text="建议动作" />
+                                <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Foreground="White" Text="{Binding VoiceAssistantRecommendedActionText}" TextWrapping="Wrap" />
+                                <TextBlock Grid.Row="6" Margin="0,8,0,0" Foreground="#7FA5D8" Text="置信度 / 风险" />
+                                <StackPanel Grid.Row="6"
+                                            Grid.Column="1"
+                                            Margin="0,8,0,0"
+                                            Orientation="Horizontal">
+                                    <TextBlock Foreground="#D7E4F3"
+                                               Text="{Binding VoiceAssistantConfidenceText}" />
+                                    <TextBlock Foreground="#7FA5D8"
+                                               Text=" / " />
+                                    <TextBlock Foreground="#D7E4F3"
+                                               Text="{Binding VoiceAssistantRiskLevelText}" />
+                                </StackPanel>
+                                <TextBlock Grid.Row="7" Margin="0,8,0,0" Foreground="#7FA5D8" Text="缺失数据" />
+                                <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,8,0,0" Foreground="#D7E4F3" Text="{Binding VoiceAssistantMissingDataText}" TextWrapping="Wrap" />
+                            </Grid>
+                        </Border>
+
+                        <Border Grid.Column="1"
+                                Margin="16,0,0,0"
+                                Padding="14"
+                                CornerRadius="8"
+                                Background="#132743">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Foreground="#7FA5D8"
+                                           Text="原因" />
+                                <TextBlock Grid.Row="1"
+                                           Margin="0,8,0,0"
+                                           Foreground="#D7E4F3"
+                                           Text="{Binding VoiceAssistantReasonText}"
+                                           TextWrapping="Wrap" />
+                                <ItemsControl Grid.Row="2"
+                                              Margin="0,16,0,0"
+                                              ItemsSource="{Binding RaceAssistantHistory}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Margin="0,0,0,8"
+                                                    Padding="10"
+                                                    CornerRadius="8"
+                                                    Background="#0F1B2E">
+                                                <StackPanel>
+                                                    <TextBlock Foreground="#7FA5D8"
+                                                               Text="{Binding Intent}" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="White"
+                                                               Text="{Binding Question}"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="#D7E4F3"
+                                                               Text="{Binding Answer}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="3"
                     Grid.ColumnSpan="2"
                     Margin="0,16,0,0"
                     Padding="20"

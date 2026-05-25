@@ -255,6 +255,55 @@ public sealed class DashboardVoiceAiInputTests
         }
     }
 
+    /// <summary>
+    /// Verifies the typed engineer question path submits a strategy context.
+    /// </summary>
+    [Fact]
+    public void AskEngineerCommand_WithTypedQuestion_SubmitsStrategyContext()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            harness.ViewModel.VoiceAssistantQuestionText = "ERS怎么用";
+            harness.ViewModel.AskEngineerCommand.Execute(null);
+            PumpDispatcherUntil(() => harness.AiService.Contexts.Count == 1, TimeSpan.FromSeconds(2));
+
+            Assert.NotNull(harness.AiService.Contexts[0].StrategyQuestionContext);
+            Assert.Equal(VoiceQuestionIntent.ERS_STRATEGY, harness.AiService.Contexts[0].StrategyQuestionContext!.Intent);
+            Assert.Single(harness.ViewModel.RaceAssistantHistory);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies repeated typed questions are throttled before a second AI request.
+    /// </summary>
+    [Fact]
+    public void AskEngineerCommand_RepeatedQuestion_IsRateLimited()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            harness.ViewModel.VoiceAssistantQuestionText = "后车能守住吗";
+            harness.ViewModel.AskEngineerCommand.Execute(null);
+            PumpDispatcherUntil(() => harness.AiService.Contexts.Count == 1, TimeSpan.FromSeconds(2));
+
+            harness.ViewModel.AskEngineerCommand.Execute(null);
+            PumpDispatcherUntil(
+                () => harness.ViewModel.VoiceAssistantStatusText.Contains("重复提问", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(2));
+
+            Assert.Single(harness.AiService.Contexts);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
     private static DashboardVoiceAiHarness CreateHarness(VoiceAiOptions? voiceAiOptions = null)
     {
         var settingsStore = new FakeAppSettingsStore(voiceAiOptions ?? new VoiceAiOptions { Enabled = true });
