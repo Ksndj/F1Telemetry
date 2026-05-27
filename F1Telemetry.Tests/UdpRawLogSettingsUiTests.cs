@@ -9,6 +9,16 @@ namespace F1Telemetry.Tests;
 /// </summary>
 public sealed class UdpRawLogSettingsUiTests
 {
+    private static readonly string[] RuntimeReadOnlyLogStatusProperties =
+    [
+        "AppLogDirectoryText",
+        "AppLogLastFileSizeText",
+        "AppLogLastWriteTimeText",
+        "RaceAssistantLogDirectoryText",
+        "RaceAssistantLogLastFileSizeText",
+        "RaceAssistantLogLastWriteTimeText"
+    ];
+
     /// <summary>
     /// Verifies SettingsView binds to the raw UDP log toggle and status fields.
     /// </summary>
@@ -63,6 +73,49 @@ public sealed class UdpRawLogSettingsUiTests
 
         Assert.Contains("{Binding UdpRawLogWrittenPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
         Assert.Contains("{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies read-only runtime log status fields use one-way bindings so Settings can load without WPF source updates.
+    /// </summary>
+    [Fact]
+    public void SettingsView_UsesOneWayBindingsForReadOnlyRuntimeLogStatusFields()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        foreach (var propertyName in RuntimeReadOnlyLogStatusProperties)
+        {
+            Assert.Contains($"{{Binding {propertyName}, Mode=OneWay}}", xaml, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain(
+            "{Binding RaceAssistantLogLastFileSizeText, Mode=TwoWay",
+            xaml,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "{Binding RaceAssistantLogLastFileSizeText, Mode=OneWayToSource",
+            xaml,
+            StringComparison.Ordinal);
+
+        foreach (var textBox in document.Descendants().Where(element => element.Name.LocalName == "TextBox"))
+        {
+            var textBinding = textBox.Attributes()
+                .FirstOrDefault(attribute => attribute.Name.LocalName == "Text")
+                ?.Value;
+            if (string.IsNullOrWhiteSpace(textBinding))
+            {
+                continue;
+            }
+
+            foreach (var propertyName in RuntimeReadOnlyLogStatusProperties)
+            {
+                if (textBinding.Contains(propertyName, StringComparison.Ordinal))
+                {
+                    Assert.Contains("Mode=OneWay", textBinding, StringComparison.Ordinal);
+                }
+            }
+        }
     }
 
     /// <summary>
