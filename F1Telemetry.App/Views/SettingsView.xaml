@@ -135,7 +135,7 @@
                         <TextBlock Foreground="#7FA5D8" Text="App 日志目录" />
                         <TextBlock Grid.Column="1"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogDirectoryText}"
+                                   Text="{Binding AppLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="1"
@@ -157,7 +157,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogLastFileSizeText}" />
+                                   Text="{Binding AppLogLastFileSizeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
@@ -167,7 +167,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogLastWriteTimeText}" />
+                                   Text="{Binding AppLogLastWriteTimeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
@@ -177,7 +177,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding RaceAssistantLogDirectoryText}"
+                                   Text="{Binding RaceAssistantLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="5"
@@ -199,9 +199,9 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3">
-                            <Run Text="{Binding RaceAssistantLogLastFileSizeText}" />
+                            <Run Text="{Binding RaceAssistantLogLastFileSizeText, Mode=OneWay}" />
                             <Run Text=" · " />
-                            <Run Text="{Binding RaceAssistantLogLastWriteTimeText}" />
+                            <Run Text="{Binding RaceAssistantLogLastWriteTimeText, Mode=OneWay}" />
                         </TextBlock>
 
                         <TextBlock Grid.Column="2"
