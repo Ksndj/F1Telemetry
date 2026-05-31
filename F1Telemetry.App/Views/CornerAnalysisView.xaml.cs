@@ -51,9 +51,9 @@ public partial class CornerAnalysisView : UserControl
             return;
         }
 
-        CornerAnalysisListColumn.Width = new GridLength(isWide ? 5d : 1d, GridUnitType.Star);
-        CornerAnalysisMainGapColumn.Width = new GridLength(isWide ? 14d : 12d);
-        CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 4d : 1d, GridUnitType.Star);
+        CornerAnalysisListColumn.Width = new GridLength(isWide ? 2d : 1d, GridUnitType.Star);
+        CornerAnalysisMainGapColumn.Width = new GridLength(isWide ? 10d : 12d);
+        CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 3d : 1d, GridUnitType.Star);
         CornerAnalysisMainGapRow.Height = new GridLength(0d);
 
         Grid.SetRow(CornerAnalysisListPanel, 0);
@@ -85,8 +85,8 @@ public partial class CornerAnalysisView : UserControl
 
         PlaceRightPanel(CornerAnalysisDetailPanel, row: 0, column: 0, columnSpan: 1);
         PlaceRightPanel(CornerAnalysisTrackMapPanel, row: 0, column: 2, columnSpan: 1);
-        PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 2, column: 0, columnSpan: 3);
-        PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 4, column: 0, columnSpan: 3);
+        PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 2, column: 0, columnSpan: 1);
+        PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 2, column: 2, columnSpan: 1);
     }
 
     private static void PlaceRightPanel(UIElement panel, int row, int column, int columnSpan)

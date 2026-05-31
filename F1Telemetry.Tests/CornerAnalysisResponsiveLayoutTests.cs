@@ -36,8 +36,8 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("CornerAnalysisMainGapRow", xaml, StringComparison.Ordinal);
         Assert.Contains("WideLayoutBreakpoint = 1300d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("NarrowLayoutBreakpoint = 1000d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 5d : 1d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 4d : 1d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 2d : 1d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 3d : 1d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
     }
 
@@ -67,7 +67,8 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("x:Name=\"CornerAnalysisTableScrollViewer\"", xaml, StringComparison.Ordinal);
         Assert.Contains("HorizontalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisListPanel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MaxHeight=\"520\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"360\"", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Top\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"640\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=\"920\"", xaml, StringComparison.Ordinal);
@@ -89,7 +90,27 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("x:Name=\"CornerAnalysisEngineerAdvicePanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("PlaceRightPanel(CornerAnalysisTrackMapPanel, row: 2", codeBehind, StringComparison.Ordinal);
         Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 4", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 2, column: 0, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 2, column: 2, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that the wide view uses denser card heights so maximized windows show the full analysis area.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_UsesDenseWideScreenInformationLayout()
+    {
+        var xaml = ReadCornerAnalysisViewXaml();
+
+        Assert.Contains("MinHeight=\"68\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Viewbox Height=\"118\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<RowDefinition Height=\"72\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<UniformGrid Columns=\"3\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"36\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"520\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Height=\"170\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Height=\"96\"", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>
