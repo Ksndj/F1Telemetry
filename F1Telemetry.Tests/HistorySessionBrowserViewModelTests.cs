@@ -65,17 +65,17 @@ public sealed class HistorySessionBrowserViewModelTests
     }
 
     /// <summary>
-    /// Verifies stored weekend context keeps sprint races from displaying as grand prix races.
+    /// Verifies the raw sprint session type displays as sprint race.
     /// </summary>
     [Fact]
-    public async Task RefreshSessionsAsync_WithSprintWeekendContext_DisplaysSprintRace()
+    public async Task RefreshSessionsAsync_WithSprintRawType_DisplaysSprintRace()
     {
         var sprintSession = CreateSession("session-sprint", DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
         {
-            SessionType = 15,
+            SessionType = 16,
             TotalLaps = 10,
             NumSessionsInWeekend = 7,
-            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+            WeekendStructure = [1, 10, 16, 5, 6, 7, 15]
         };
         var viewModel = new HistorySessionBrowserViewModel(
             new FakeSessionRepository { Sessions = [sprintSession] },
@@ -85,6 +85,31 @@ public sealed class HistorySessionBrowserViewModelTests
 
         Assert.Equal("冲刺赛", viewModel.SelectedSession?.SessionTypeText);
         Assert.Contains("冲刺赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies Miami 50% race history rows keep raw Race sessions as grand prix races.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithMiamiHalfRace_DisplaysRace()
+    {
+        var raceSession = CreateSession("session-miami-race", DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
+        {
+            TrackId = 30,
+            SessionType = 15,
+            TotalLaps = 29,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+        };
+        var viewModel = new HistorySessionBrowserViewModel(
+            new FakeSessionRepository { Sessions = [raceSession] },
+            new FakeLapRepository());
+
+        await viewModel.RefreshSessionsAsync();
+
+        Assert.Equal("正赛", viewModel.SelectedSession?.SessionTypeText);
+        Assert.Contains("迈阿密 · 正赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("冲刺赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
     }
 
     /// <summary>

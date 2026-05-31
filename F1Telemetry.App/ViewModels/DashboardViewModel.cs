@@ -143,8 +143,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _logSettingsStatusText = "日志设置待加载。";
     private string _trackText = "等待 Session 包。";
     private string _sessionTypeText = "未知赛制";
+    private string _sessionTypeTooltipText = "rawSessionType：未知";
     private string _lapText = "-";
     private string _weatherText = "-";
+    private string _weatherTooltipText = "天气：未知";
     private string _playerName = "等待玩家车辆状态。";
     private string _playerCurrentLapText = "-";
     private string _playerLastLapText = "-";
@@ -176,6 +178,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private long _lastPacketsPerSecondSampleCount;
     private DateTimeOffset _lastPacketsPerSecondSampleAt;
     private string? _lastEventCode;
+    private string? _lastSessionTypeWarningKey;
     private bool _aiEnabled;
     private string _aiBaseUrl = "https://api.deepseek.com";
     private string _aiModel = "deepseek-chat";
@@ -2248,6 +2251,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the session type debug tooltip.
+    /// </summary>
+    public string SessionTypeTooltipText
+    {
+        get => _sessionTypeTooltipText;
+        private set => SetProperty(ref _sessionTypeTooltipText, value);
+    }
+
+    /// <summary>
     /// Gets the current lap summary.
     /// </summary>
     public string LapText
@@ -2263,6 +2275,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _weatherText;
         private set => SetProperty(ref _weatherText, value);
+    }
+
+    /// <summary>
+    /// Gets the complete weather tooltip text.
+    /// </summary>
+    public string WeatherTooltipText
+    {
+        get => _weatherTooltipText;
+        private set => SetProperty(ref _weatherTooltipText, value);
     }
 
     /// <summary>
@@ -3383,12 +3404,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var sessionState = _sessionStateStore.CaptureState();
         var playerCar = sessionState.PlayerCar;
         var sessionMode = ResolveSessionMode(sessionState);
+        var trackText = BuildTrackText(sessionState.TrackId);
+        var sessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode);
 
-        TrackText = BuildTrackText(sessionState.TrackId);
-        SessionTypeText = SessionModeFormatter.FormatDisplayName(sessionMode);
+        TrackText = trackText;
+        SessionTypeText = sessionTypeText;
+        SessionTypeTooltipText = BuildSessionTypeTooltipText(sessionState, sessionMode, sessionTypeText, trackText);
         OverviewSessionFocusText = SessionModeFormatter.FormatFocus(sessionMode);
         WeatherText = BuildWeatherText(sessionState);
+        WeatherTooltipText = BuildWeatherTooltipText(sessionState);
         LapText = BuildLapText(sessionState, playerCar);
+        LogSuspiciousSessionTypeIfNeeded(sessionState, sessionMode, sessionTypeText, trackText);
         UpdatePlayerCard(sessionState, playerCar);
         RebuildOpponentCars(sessionState.Opponents, playerCar);
         RefreshLapHistory();
@@ -4425,6 +4451,33 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastEventCode = eventCode;
         var display = RawEventCodeLogFormatter.Format(eventCode);
         EnqueueEventLog(display.Category, display.Message);
+    }
+
+    private void LogSuspiciousSessionTypeIfNeeded(
+        SessionState sessionState,
+        SessionMode sessionMode,
+        string displaySessionType,
+        string trackName)
+    {
+        if (!SessionModeFormatter.ShouldWarnRaceDistanceSprintMismatch(sessionMode, sessionState.TotalLaps))
+        {
+            return;
+        }
+
+        var warningKey = $"{_activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}:{sessionState.SessionType?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{sessionState.TotalLaps?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{trackName}";
+        if (string.Equals(warningKey, _lastSessionTypeWarningKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastSessionTypeWarningKey = warningKey;
+        var message = "赛制与总圈数疑似不一致，请检查 sessionType 映射。"
+            + $" rawSessionType={FormatNullableByte(sessionState.SessionType)}"
+            + $" rawSessionTypeName={SessionModeFormatter.FormatRawSessionTypeName(sessionState.SessionType)}"
+            + $" displaySessionType={displaySessionType}"
+            + $" totalLaps={FormatNullableByte(sessionState.TotalLaps)}"
+            + $" trackName={trackName}";
+        EnqueueEventLog("System", message, "Warning", sessionUid: _activeSessionUid);
     }
 
     private void EnqueueEventLog(
@@ -5769,14 +5822,45 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
     }
 
+    private static string FormatCurrentWeather(byte? weather, string unknownText)
+    {
+        return weather switch
+        {
+            0 => "晴",
+            1 => "少云",
+            2 => "阴",
+            3 => "小雨",
+            4 => "大雨",
+            5 => "风暴",
+            null => unknownText,
+            _ => $"天气 {weather.Value}"
+        };
+    }
+
     private static string FormatNullableTemperature(sbyte? value)
     {
         return value.HasValue ? FormatTemperature(value.Value) : "-";
     }
 
+    private static string FormatCompactTemperature(sbyte? value)
+    {
+        return value.HasValue
+            ? string.Format(CultureInfo.InvariantCulture, "{0}°", value.Value)
+            : "-";
+    }
+
     private static string FormatTemperature(sbyte value)
     {
         return string.Format(CultureInfo.InvariantCulture, "{0}°C", value);
+    }
+
+    private static string FormatRainPercentage(SessionState sessionState)
+    {
+        var sample = sessionState.WeatherForecastSamples.FirstOrDefault(sample => sample.SessionType == sessionState.SessionType)
+            ?? sessionState.WeatherForecastSamples.FirstOrDefault();
+        return sample is null
+            ? "未知"
+            : string.Format(CultureInfo.InvariantCulture, "{0}%", sample.RainPercentage);
     }
 
     private static string FormatNullableByte(byte? value)
@@ -6201,24 +6285,40 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private static string BuildWeatherText(SessionState sessionState)
     {
-        var weatherText = sessionState.Weather switch
-        {
-            0 => "晴",
-            1 => "少云",
-            2 => "阴",
-            3 => "小雨",
-            4 => "大雨",
-            5 => "风暴",
-            null => "-",
-            _ => $"天气 {sessionState.Weather}"
-        };
+        var weatherText = FormatCurrentWeather(sessionState.Weather, unknownText: "-");
 
         if (sessionState.TrackTemperature is null && sessionState.AirTemperature is null)
         {
             return weatherText;
         }
 
-        return $"{weatherText} · 赛道 {sessionState.TrackTemperature?.ToString() ?? "-"}°C · 空气 {sessionState.AirTemperature?.ToString() ?? "-"}°C";
+        return $"{weatherText} · 赛道{FormatCompactTemperature(sessionState.TrackTemperature)} · 空气{FormatCompactTemperature(sessionState.AirTemperature)}";
+    }
+
+    private static string BuildWeatherTooltipText(SessionState sessionState)
+    {
+        return string.Join(
+            Environment.NewLine,
+            $"天气：{FormatCurrentWeather(sessionState.Weather, unknownText: "未知")}",
+            $"赛道温度：{FormatNullableTemperature(sessionState.TrackTemperature)}",
+            $"空气温度：{FormatNullableTemperature(sessionState.AirTemperature)}",
+            $"降雨概率：{FormatRainPercentage(sessionState)}",
+            "路面状态：未知");
+    }
+
+    private static string BuildSessionTypeTooltipText(
+        SessionState sessionState,
+        SessionMode sessionMode,
+        string displaySessionType,
+        string trackName)
+    {
+        return string.Join(
+            Environment.NewLine,
+            $"rawSessionType：{FormatNullableByte(sessionState.SessionType)}",
+            $"rawSessionTypeName：{SessionModeFormatter.FormatRawSessionTypeName(sessionState.SessionType)}",
+            $"displaySessionType：{displaySessionType}",
+            $"totalLaps：{FormatNullableByte(sessionState.TotalLaps)}",
+            $"trackName：{trackName}");
     }
 
     private static string BuildLapText(SessionState sessionState, CarSnapshot? playerCar)

@@ -38,12 +38,50 @@ public static class SessionModeFormatter
         byte? totalLaps,
         IReadOnlyList<byte>? weekendStructure)
     {
-        if (IsSprintRaceFromWeekendStructure(sessionType, totalLaps, weekendStructure))
-        {
-            return SessionMode.SprintRace;
-        }
-
         return Resolve(sessionType);
+    }
+
+    /// <summary>
+    /// Formats the raw session type identifier as an English debug name.
+    /// </summary>
+    /// <param name="sessionType">The raw session type identifier from the session packet.</param>
+    /// <returns>The raw session type debug name.</returns>
+    public static string FormatRawSessionTypeName(byte? sessionType)
+    {
+        return sessionType switch
+        {
+            1 => "Practice 1",
+            2 => "Practice 2",
+            3 => "Practice 3",
+            4 => "Short Practice",
+            5 => "Qualifying 1",
+            6 => "Qualifying 2",
+            7 => "Qualifying 3",
+            8 => "Short Qualifying",
+            9 => "One-Shot Qualifying",
+            10 => "Sprint Qualifying 1",
+            11 => "Sprint Qualifying 2",
+            12 => "Sprint Qualifying 3",
+            13 => "Sprint Shootout",
+            14 => "Sprint Shootout Short",
+            15 => "Race",
+            16 => "Sprint",
+            17 => "Race 3",
+            18 => "Time Trial",
+            null => "Unknown",
+            _ => $"Unknown ({sessionType.Value})"
+        };
+    }
+
+    /// <summary>
+    /// Returns whether a resolved session mode and lap count should be logged as suspicious.
+    /// </summary>
+    /// <param name="sessionMode">The resolved session mode.</param>
+    /// <param name="totalLaps">The configured lap count from the session packet.</param>
+    /// <returns><see langword="true"/> when the sprint display looks inconsistent with a race-length lap count.</returns>
+    public static bool ShouldWarnRaceDistanceSprintMismatch(SessionMode sessionMode, byte? totalLaps)
+    {
+        return sessionMode == SessionMode.SprintRace && totalLaps is >= 26;
     }
 
     /// <summary>
@@ -116,39 +154,4 @@ public static class SessionModeFormatter
         return sessionMode is SessionMode.Race or SessionMode.SprintRace;
     }
 
-    private static bool IsSprintRaceFromWeekendStructure(
-        byte? sessionType,
-        byte? totalLaps,
-        IReadOnlyList<byte>? weekendStructure)
-    {
-        if (sessionType != 15 || weekendStructure is null || weekendStructure.Count == 0)
-        {
-            return false;
-        }
-
-        var activeWeekendSessions = weekendStructure.Where(value => value != 0).ToArray();
-        if (!activeWeekendSessions.Any(IsSprintQualifyingSessionType))
-        {
-            return false;
-        }
-
-        var raceIndex = Array.IndexOf(activeWeekendSessions, sessionType.Value);
-        var hasLaterGrandPrixRace = raceIndex >= 0
-            && activeWeekendSessions
-                .Skip(raceIndex + 1)
-                .Any(IsGrandPrixRaceSessionType);
-        var looksLikeSprintDistance = totalLaps is > 0 and <= 25;
-
-        return hasLaterGrandPrixRace || looksLikeSprintDistance;
-    }
-
-    private static bool IsSprintQualifyingSessionType(byte sessionType)
-    {
-        return sessionType is >= 10 and <= 14;
-    }
-
-    private static bool IsGrandPrixRaceSessionType(byte sessionType)
-    {
-        return sessionType is 16 or 17;
-    }
 }
