@@ -8,4 +8,7 @@ script = ""
 [[actions]]
 name = "运行"
 icon = "run"
-command = "dotnet run --project F1Telemetry.App\\F1Telemetry.App.csproj --no-restore"
+command = '''
+cd "C:\Users\10670\OneDrive\文档\F1遥测"
+dotnet run --project .\F1Telemetry.App\F1Telemetry.App.csproj
+'''
