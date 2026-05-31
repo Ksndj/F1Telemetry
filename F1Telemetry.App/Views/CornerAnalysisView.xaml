@@ -1001,8 +1001,9 @@
                                            Foreground="#FBBF24"
                                            Text="{Binding CornerAnalysis.EngineerAdviceNoticeText}"
                                            TextWrapping="Wrap" />
-                                <UniformGrid Columns="3">
-                                    <Border Margin="0,0,6,0"
+                                <StackPanel x:Name="CornerAnalysisEngineerAdviceCardsPanel">
+                                    <Border Margin="0,0,0,6"
+                                            HorizontalAlignment="Stretch"
                                             Padding="8"
                                             CornerRadius="10"
                                             Background="#171532"
@@ -1013,13 +1014,13 @@
                                             <TextBlock Margin="0,4,0,0"
                                                        Foreground="#F8FAFC"
                                                        FontWeight="SemiBold"
-                                                       MaxHeight="36"
                                                        Text="{Binding CornerAnalysis.EngineerPrimaryProblemText}"
-                                                       TextTrimming="CharacterEllipsis"
+                                                       TextTrimming="None"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
-                                    <Border Margin="3,0,3,0"
+                                    <Border Margin="0,0,0,6"
+                                            HorizontalAlignment="Stretch"
                                             Padding="8"
                                             CornerRadius="10"
                                             Background="#0B2431"
@@ -1030,13 +1031,13 @@
                                             <TextBlock Margin="0,4,0,0"
                                                        Foreground="#D7E4F3"
                                                        FontWeight="SemiBold"
-                                                       MaxHeight="36"
                                                        Text="{Binding CornerAnalysis.EngineerDrivingActionText}"
-                                                       TextTrimming="CharacterEllipsis"
+                                                       TextTrimming="None"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
-                                    <Border Margin="6,0,0,0"
+                                    <Border Margin="0"
+                                            HorizontalAlignment="Stretch"
                                             Padding="8"
                                             CornerRadius="10"
                                             Background="#0D2A24"
@@ -1047,13 +1048,12 @@
                                             <TextBlock Margin="0,4,0,0"
                                                        Foreground="#D7E4F3"
                                                        FontWeight="SemiBold"
-                                                       MaxHeight="36"
                                                        Text="{Binding CornerAnalysis.EngineerNextLapFocusText}"
-                                                       TextTrimming="CharacterEllipsis"
+                                                       TextTrimming="None"
                                                        TextWrapping="Wrap" />
                                         </StackPanel>
                                     </Border>
-                                </UniformGrid>
+                                </StackPanel>
                                 <TextBlock Margin="0,6,0,0"
                                            Style="{StaticResource MutedTextStyle}"
                                            Text="{Binding CornerAnalysis.EngineerAdviceStatusText}" />

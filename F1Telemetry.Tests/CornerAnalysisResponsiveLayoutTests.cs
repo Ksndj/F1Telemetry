@@ -106,11 +106,38 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("MinHeight=\"68\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<Viewbox Height=\"118\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<RowDefinition Height=\"72\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<UniformGrid Columns=\"3\">", xaml, StringComparison.Ordinal);
-        Assert.Contains("MaxHeight=\"36\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CornerAnalysisEngineerAdviceCardsPanel\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"36\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxHeight=\"520\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Height=\"170\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Height=\"96\"", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that cached engineer advice can wrap instead of being ellipsized in compact cards.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_EngineerAdviceTextWrapsWithoutEllipsis()
+    {
+        var xaml = ReadCornerAnalysisViewXaml();
+
+        Assert.Contains("Text=\"{Binding CornerAnalysis.EngineerPrimaryProblemText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CornerAnalysis.EngineerDrivingActionText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CornerAnalysis.EngineerNextLapFocusText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CornerAnalysisEngineerAdviceCardsPanel\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerAnalysisEngineerAdviceWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding CornerAnalysis.EngineerPrimaryProblemText}\"\r\n                                                       TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding CornerAnalysis.EngineerDrivingActionText}\"\r\n                                                       TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"{Binding CornerAnalysis.EngineerNextLapFocusText}\"\r\n                                                       TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+
+        var start = xaml.IndexOf("x:Name=\"CornerAnalysisEngineerAdviceCardsPanel\"", StringComparison.Ordinal);
+        var end = xaml.IndexOf("Text=\"{Binding CornerAnalysis.EngineerAdviceStatusText}\"", start, StringComparison.Ordinal);
+        Assert.True(start >= 0 && end > start);
+        var engineerAdviceCards = xaml[start..end];
+        Assert.Contains("TextTrimming=\"None\"", engineerAdviceCards, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=\"280\"", engineerAdviceCards, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight", engineerAdviceCards, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxLines", engineerAdviceCards, StringComparison.Ordinal);
     }
 
     /// <summary>

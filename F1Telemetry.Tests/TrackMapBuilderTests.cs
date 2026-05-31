@@ -285,7 +285,9 @@ public sealed class TrackMapBuilderTests
         Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("<Viewbox Height=\"118\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<RowDefinition Height=\"72\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<UniformGrid Columns=\"3\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisEngineerAdviceCardsPanel", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerAnalysisEngineerAdviceWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"36\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"640\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=\"920\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("<Button Width=\"104\"", xaml, StringComparison.Ordinal);
