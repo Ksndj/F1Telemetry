@@ -10,14 +10,15 @@
         Title="{Binding AppTitleText}"
         Width="1380"
         Height="860"
-        MinWidth="920"
-        MinHeight="620"
+        MinWidth="1000"
+        MinHeight="650"
         WindowState="Normal"
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="True"
         UseLayoutRounding="True"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
+        SizeChanged="Window_SizeChanged"
         StateChanged="Window_StateChanged"
         Closing="Window_Closing"
         Closed="Window_Closed">
@@ -120,7 +121,7 @@
         </Style>
 
         <Style x:Key="ShellTelemetryCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="Height" Value="42" />
+            <Setter Property="MinHeight" Value="42" />
             <Setter Property="Padding" Value="12,8" />
             <Setter Property="Margin" Value="0,0,8,6" />
             <Setter Property="CornerRadius" Value="8" />
@@ -245,6 +246,7 @@
                          Background="Transparent"
                          BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
                          ItemContainerStyle="{StaticResource ShellNavigationItemStyle}"
                          ItemsSource="{Binding ShellNavigationItems}"
                          SelectedItem="{Binding SelectedShellNavigationItem, Mode=TwoWay}">
@@ -354,8 +356,8 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <WrapPanel>
-                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                <WrapPanel x:Name="TopStatusWrapPanel">
+                    <Border MinWidth="150" MaxWidth="210" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -368,7 +370,7 @@
                                        Text="{Binding ConnectionStateText}" />
                         </Grid>
                     </Border>
-                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border MinWidth="150" MaxWidth="210" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -381,7 +383,7 @@
                                        Text="{Binding TrackText}" />
                         </Grid>
                     </Border>
-                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border MinWidth="150" MaxWidth="210" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -394,7 +396,7 @@
                                        Text="{Binding SessionTypeText}" />
                         </Grid>
                     </Border>
-                    <Border MinWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border MinWidth="150" MaxWidth="210" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -407,7 +409,7 @@
                                        Text="{Binding LapText}" />
                         </Grid>
                     </Border>
-                    <Border MinWidth="116" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border MinWidth="116" MaxWidth="170" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -420,7 +422,7 @@
                                        Text="{Binding WeatherText}" />
                         </Grid>
                     </Border>
-                    <Border MinWidth="108" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border MinWidth="108" MaxWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -438,17 +440,20 @@
                             <TextBlock Margin="0,0,10,0"
                                        Style="{StaticResource ShellTelemetryLabelStyle}"
                                        Text="监听端口" />
-                            <TextBox Width="118"
+                            <TextBox MinWidth="96"
+                                     MaxWidth="118"
                                      Height="30"
                                      Margin="0,0,10,0"
                                      Padding="10,4"
                                      Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button Width="96"
+                            <Button MinWidth="86"
+                                    MaxWidth="104"
                                     Height="30"
                                     Margin="0,0,8,0"
                                     Command="{Binding StartListeningCommand}"
                                     Content="开始监听" />
-                            <Button Width="96"
+                            <Button MinWidth="86"
+                                    MaxWidth="104"
                                     Height="30"
                                     Command="{Binding StopListeningCommand}"
                                     Content="停止监听" />
@@ -470,53 +475,57 @@
             </Grid>
         </Border>
 
-        <ContentControl x:Name="ContentHost"
-                        Grid.Row="1"
-                        Grid.Column="1"
-                        Margin="16,0,20,20"
-                        ClipToBounds="True"
-                        Content="{Binding}">
-            <ContentControl.Style>
-                <Style TargetType="{x:Type ContentControl}">
-                    <Setter Property="ContentTemplate" Value="{StaticResource OverviewContentTemplate}" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsChartsSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource ChartsContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsLapHistorySelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource LapHistoryContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsPostRaceReviewSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource PostRaceReviewContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsSessionComparisonSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource SessionComparisonContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsCornerAnalysisSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource CornerAnalysisContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsOpponentsSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource OpponentsContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsLogsSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource LogsContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsAiTtsSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource AiTtsContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsSettingsSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource SettingsContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsPlaceholderNavigationSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource PlaceholderContentTemplate}" />
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding IsLegacyDashboardSelected}" Value="True">
-                            <Setter Property="ContentTemplate" Value="{StaticResource LegacyDashboardContentTemplate}" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </ContentControl.Style>
-        </ContentControl>
+        <ScrollViewer x:Name="ContentHostScrollViewer"
+                      Grid.Row="1"
+                      Grid.Column="1"
+                      Margin="16,0,20,20"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto"
+                      PreviewMouseWheel="ContentHostScrollViewer_PreviewMouseWheel">
+            <ContentControl x:Name="ContentHost"
+                            Content="{Binding}">
+                <ContentControl.Style>
+                    <Style TargetType="{x:Type ContentControl}">
+                        <Setter Property="ContentTemplate" Value="{StaticResource OverviewContentTemplate}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsChartsSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource ChartsContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLapHistorySelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource LapHistoryContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsPostRaceReviewSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource PostRaceReviewContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSessionComparisonSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource SessionComparisonContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsCornerAnalysisSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource CornerAnalysisContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsOpponentsSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource OpponentsContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLogsSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource LogsContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsAiTtsSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource AiTtsContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsSettingsSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource SettingsContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsPlaceholderNavigationSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource PlaceholderContentTemplate}" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding IsLegacyDashboardSelected}" Value="True">
+                                <Setter Property="ContentTemplate" Value="{StaticResource LegacyDashboardContentTemplate}" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ContentControl.Style>
+            </ContentControl>
+        </ScrollViewer>
 
         <Border x:Name="WindowStateToast"
                 Grid.ColumnSpan="2"

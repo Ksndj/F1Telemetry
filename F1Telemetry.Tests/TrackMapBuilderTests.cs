@@ -231,9 +231,13 @@ public sealed class TrackMapBuilderTests
         var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
 
         Assert.Contains("CornerAnalysisMainGrid", xaml, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisPageScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisTableScrollViewer", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisRightDetails", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("CornerAnalysisMainScrollViewer", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Grid.IsSharedSizeScope=\"True\"", xaml, StringComparison.Ordinal);
         Assert.Contains("SharedSizeGroup=\"CornerWarningColumn\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisHeader", xaml, StringComparison.Ordinal);
@@ -245,12 +249,59 @@ public sealed class TrackMapBuilderTests
         Assert.Contains("参考图状态", xaml, StringComparison.Ordinal);
         Assert.Contains("数据质量提示", xaml, StringComparison.Ordinal);
         Assert.Contains("AI 分析备注", xaml, StringComparison.Ordinal);
-        Assert.Contains("MaxHeight=\"132\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"132\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TrackMapEmptyStateText", xaml, StringComparison.Ordinal);
         Assert.Contains("HasDrawableTrackMap", xaml, StringComparison.Ordinal);
         Assert.Contains("HasSpeedChart", xaml, StringComparison.Ordinal);
         Assert.Contains("HasBrakeChart", xaml, StringComparison.Ordinal);
         Assert.Contains("HasThrottleChart", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the corner-analysis page declares adaptive containers for narrow shell widths.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_UsesResponsiveContainersForSummaryFiltersAndDetails()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+        var codeBehind = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml.cs"));
+
+        Assert.Contains("CornerAnalysisSummaryWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisFilterWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisNotesWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisListColumn", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"360\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisDetailsColumn", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisDetailPanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisTrackMapPanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisVisualEvidencePanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisEngineerAdvicePanel", xaml, StringComparison.Ordinal);
+        Assert.Contains("NarrowLayoutBreakpoint = 1000d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("WideLayoutBreakpoint = 1300d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 2d : 1d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 3d : 1d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 2, column: 2, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("<Viewbox Height=\"118\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<RowDefinition Height=\"72\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisEngineerAdviceCardsPanel", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("CornerAnalysisEngineerAdviceWrapPanel", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxHeight=\"36\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinWidth=\"640\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=\"920\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Button Width=\"104\"", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies read-only corner-analysis bindings remain one-way after layout refactoring.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_ReadOnlyFieldsKeepOneWayBindings()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+
+        Assert.Contains("Text=\"{Binding CornerAnalysis.ReferencePickerText, Mode=OneWay}\"", xaml, StringComparison.Ordinal);
     }
 
     private static IReadOnlyList<LapSample> CreateRectangleSamples(int lapNumber, int count, float width, float height)
