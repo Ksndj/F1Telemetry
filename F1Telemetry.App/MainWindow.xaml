@@ -450,29 +450,40 @@
                                        Text="{Binding PacketsPerSecond}" />
                         </Grid>
                     </Border>
-                    <Border MaxWidth="340" Style="{StaticResource ShellTelemetryCardStyle}">
-                        <WrapPanel VerticalAlignment="Center">
-                            <TextBlock Margin="0,0,10,0"
+                    <Border x:Name="UdpPortStatusChip"
+                            Style="{StaticResource ShellTelemetryCardStyle}">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="104" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="96" />
+                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="96" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock VerticalAlignment="Center"
                                        Style="{StaticResource ShellTelemetryLabelStyle}"
                                        Text="监听端口" />
-                            <TextBox MinWidth="96"
-                                     MaxWidth="118"
+                            <TextBox Grid.Column="2"
+                                     Width="104"
                                      Height="30"
-                                     Margin="0,0,10,0"
+                                     VerticalAlignment="Center"
                                      Padding="10,4"
                                      Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                            <Button MinWidth="86"
-                                    MaxWidth="104"
+                            <Button Grid.Column="4"
+                                    Width="96"
                                     Height="30"
-                                    Margin="0,0,8,0"
+                                    VerticalAlignment="Center"
                                     Command="{Binding StartListeningCommand}"
                                     Content="开始监听" />
-                            <Button MinWidth="86"
-                                    MaxWidth="104"
+                            <Button Grid.Column="6"
+                                    Width="96"
                                     Height="30"
+                                    VerticalAlignment="Center"
                                     Command="{Binding StopListeningCommand}"
                                     Content="停止监听" />
-                        </WrapPanel>
+                        </Grid>
                     </Border>
                 </WrapPanel>
 

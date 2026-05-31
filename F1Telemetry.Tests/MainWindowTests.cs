@@ -374,10 +374,9 @@ public sealed class MainWindowTests
         Assert.Contains("ToolTip=\"{Binding WeatherTooltipText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MaxWidth=\"230\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinWidth=\"96\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MaxWidth=\"118\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain(" Width=\"118\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain(" Width=\"96\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UdpPortStatusChip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"104\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"96\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
 
@@ -385,6 +384,10 @@ public sealed class MainWindowTests
         Assert.Contains("ToolTip=\"{Binding SessionTypeTooltipText}\"", sessionTypeChip, StringComparison.Ordinal);
         Assert.Contains("Text=\"赛制\"", sessionTypeChip, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"连接状态\"", sessionTypeChip, StringComparison.Ordinal);
+
+        var udpPortChip = ExtractNamedBorderBlock(xaml, "UdpPortStatusChip");
+        Assert.DoesNotContain("<WrapPanel", udpPortChip, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=", udpPortChip, StringComparison.Ordinal);
     }
 
     /// <summary>

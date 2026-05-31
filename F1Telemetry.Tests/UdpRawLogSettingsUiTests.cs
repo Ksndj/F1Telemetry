@@ -20,6 +20,51 @@ public sealed class UdpRawLogSettingsUiTests
     ];
 
     /// <summary>
+    /// Verifies the shell UDP port controls stay together as one non-wrapping top-status item.
+    /// </summary>
+    [Fact]
+    public void MainWindow_UdpPortStatusChip_UsesNonWrappingGrid()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "MainWindow.xaml"));
+        var topStatusWrapPanel = FindElementByName(document, "TopStatusWrapPanel");
+        var udpPortChip = Assert.Single(topStatusWrapPanel.Elements(), element => HasName(element, "UdpPortStatusChip"));
+        var udpPortChipXaml = udpPortChip.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Equal("Border", udpPortChip.Name.LocalName);
+        Assert.DoesNotContain("MaxWidth=", udpPortChipXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<WrapPanel", udpPortChipXaml, StringComparison.Ordinal);
+
+        var layoutGrid = Assert.Single(udpPortChip.Elements(), element => element.Name.LocalName == "Grid");
+        Assert.Equal("Center", layoutGrid.Attribute("VerticalAlignment")?.Value);
+        Assert.Equal(7, layoutGrid.Descendants().Count(element => element.Name.LocalName == "ColumnDefinition"));
+
+        Assert.Contains("Text=\"监听端口\"", udpPortChipXaml, StringComparison.Ordinal);
+        Assert.Equal(3, CountOccurrences(udpPortChipXaml, "Width=\"8\""));
+
+        var portTextBox = Assert.Single(layoutGrid.Descendants(), element => element.Name.LocalName == "TextBox");
+        Assert.Equal("104", portTextBox.Attribute("Width")?.Value);
+        Assert.Equal("30", portTextBox.Attribute("Height")?.Value);
+        Assert.Equal("Center", portTextBox.Attribute("VerticalAlignment")?.Value);
+        Assert.Equal(
+            "{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            portTextBox.Attribute("Text")?.Value);
+
+        var buttons = layoutGrid.Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .ToArray();
+        Assert.Equal(2, buttons.Length);
+        Assert.All(buttons, button =>
+        {
+            Assert.Equal("96", button.Attribute("Width")?.Value);
+            Assert.Equal("30", button.Attribute("Height")?.Value);
+            Assert.Equal("Center", button.Attribute("VerticalAlignment")?.Value);
+            Assert.Null(button.Attribute("IsEnabled"));
+        });
+        Assert.Contains(buttons, button => button.Attribute("Command")?.Value == "{Binding StartListeningCommand}");
+        Assert.Contains(buttons, button => button.Attribute("Command")?.Value == "{Binding StopListeningCommand}");
+    }
+
+    /// <summary>
     /// Verifies SettingsView binds to the raw UDP log toggle and status fields.
     /// </summary>
     [Fact]
@@ -196,5 +241,28 @@ public sealed class UdpRawLogSettingsUiTests
         }
 
         throw new FileNotFoundException($"Could not find repository file: {Path.Combine(pathParts)}");
+    }
+
+    private static XElement FindElementByName(XDocument document, string name)
+    {
+        return Assert.Single(document.Descendants(), element => HasName(element, name));
+    }
+
+    private static bool HasName(XElement element, string name)
+    {
+        return element.Attributes().Any(attribute => attribute.Name.LocalName == "Name" && attribute.Value == name);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }
