@@ -78,4 +78,9 @@ public sealed record VoiceAiQueryRequest
     /// Gets the completed microphone recording to recognize.
     /// </summary>
     public VoiceRecordingResult Recording { get; init; } = new();
+
+    /// <summary>
+    /// Gets the microphone preprocessing and recognition quality settings.
+    /// </summary>
+    public VoiceInputAudioSettings AudioSettings { get; init; } = new();
 }

@@ -140,8 +140,45 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Contains("VoiceAiMicrophoneTestLevel", xaml, StringComparison.Ordinal);
         Assert.Contains("VoiceAiMicrophoneStatusText", xaml, StringComparison.Ordinal);
         Assert.Contains("VoiceAiStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiNoiseReductionEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiHighPassFilterEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiNoiseGateEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiVadEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiAutoGainEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiNoiseGateThresholdDbText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMaxRecordingSecondsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiMinRecognitionConfidenceText", xaml, StringComparison.Ordinal);
+        Assert.Contains("VoiceAiRecognitionStatusDetailText", xaml, StringComparison.Ordinal);
         Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies read-only log status display bindings stay one-way on the Settings page.
+    /// </summary>
+    [Fact]
+    public void SettingsView_UsesOneWayBindingsForReadOnlyRuntimeLogStatus()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+
+        var readOnlyBindings = new[]
+        {
+            "AppLogDirectoryText",
+            "AppLogLastFileSizeText",
+            "AppLogLastWriteTimeText",
+            "RaceAssistantLogDirectoryText",
+            "RaceAssistantLogLastFileSizeText",
+            "RaceAssistantLogLastWriteTimeText"
+        };
+
+        foreach (var binding in readOnlyBindings)
+        {
+            Assert.Contains($"{{Binding {binding}, Mode=OneWay}}", xaml, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("RaceAssistantLogLastFileSizeText, Mode=TwoWay", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("RaceAssistantLogLastFileSizeText, Mode=OneWayToSource", xaml, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(params string[] pathParts)

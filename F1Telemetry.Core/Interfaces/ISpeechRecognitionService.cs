@@ -12,5 +12,5 @@ public interface ISpeechRecognitionService
     /// </summary>
     /// <param name="recording">The completed microphone recording.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task<string> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default);
+    Task<SpeechRecognitionResult> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default);
 }

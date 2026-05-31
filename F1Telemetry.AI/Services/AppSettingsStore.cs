@@ -384,7 +384,8 @@ public sealed class AppSettingsStore : IAppSettingsStore
                     MicrophoneDeviceId = ReadString(voiceAiElement, "microphoneDeviceId"),
                     MicrophoneDeviceName = ReadString(voiceAiElement, "microphoneDeviceName"),
                     Hotkey = ReadString(voiceAiElement, "hotkey", VoiceAiOptions.NoHotkey),
-                    AssistantSettings = ReadVoiceAssistantSettings(rootElement, voiceAiElement)
+                    AssistantSettings = ReadVoiceAssistantSettings(rootElement, voiceAiElement),
+                    AudioSettings = ReadVoiceInputAudioSettings(voiceAiElement)
                 });
         }
         catch
@@ -425,6 +426,37 @@ public sealed class AppSettingsStore : IAppSettingsStore
         catch
         {
             return new VoiceAssistantSettings();
+        }
+    }
+
+    private static VoiceInputAudioSettings ReadVoiceInputAudioSettings(JsonElement voiceAiElement)
+    {
+        if (!voiceAiElement.TryGetProperty("audioSettings", out var audioElement))
+        {
+            return new VoiceInputAudioSettings();
+        }
+
+        try
+        {
+            return new VoiceInputAudioSettings
+            {
+                EnableNoiseReduction = ReadBool(audioElement, "enableNoiseReduction", defaultValue: true),
+                EnableHighPassFilter = ReadBool(audioElement, "enableHighPassFilter", defaultValue: true),
+                HighPassCutoffHz = ReadDouble(audioElement, "highPassCutoffHz", 120d),
+                EnableNoiseGate = ReadBool(audioElement, "enableNoiseGate", defaultValue: true),
+                NoiseGateThresholdDb = ReadDouble(audioElement, "noiseGateThresholdDb", -40d),
+                EnableVad = ReadBool(audioElement, "enableVad", defaultValue: true),
+                PreSpeechPaddingMs = ReadInt(audioElement, "preSpeechPaddingMs", 150),
+                PostSpeechPaddingMs = ReadInt(audioElement, "postSpeechPaddingMs", 250),
+                EnableAutoGain = ReadBool(audioElement, "enableAutoGain", defaultValue: true),
+                MaxRecordingSeconds = ReadInt(audioElement, "maxRecordingSeconds", 8),
+                MinSpeechDurationMs = ReadInt(audioElement, "minSpeechDurationMs", 300),
+                MinRecognitionConfidence = ReadDouble(audioElement, "minRecognitionConfidence", 0.35d)
+            }.Normalize();
+        }
+        catch
+        {
+            return new VoiceInputAudioSettings();
         }
     }
 
@@ -471,6 +503,7 @@ public sealed class AppSettingsStore : IAppSettingsStore
             MicrophoneDeviceId = options.MicrophoneDeviceId?.Trim() ?? string.Empty,
             MicrophoneDeviceName = options.MicrophoneDeviceName?.Trim() ?? string.Empty,
             Hotkey = string.IsNullOrWhiteSpace(hotkey) ? VoiceAiOptions.NoHotkey : hotkey,
+            AudioSettings = options.AudioSettings.Normalize(),
             AssistantSettings = assistantSettings with
             {
                 EnableVoiceAssistant = options.Enabled || assistantSettings.EnableVoiceAssistant
@@ -664,6 +697,18 @@ public sealed class AppSettingsStore : IAppSettingsStore
         if (element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number)
         {
             return property.GetInt32();
+        }
+
+        return defaultValue;
+    }
+
+    private static double ReadDouble(JsonElement element, string propertyName, double defaultValue)
+    {
+        if (element.TryGetProperty(propertyName, out var property) &&
+            property.ValueKind == JsonValueKind.Number &&
+            property.TryGetDouble(out var value))
+        {
+            return value;
         }
 
         return defaultValue;

@@ -49,7 +49,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxOverviewEventSummaryChars = 40;
     private const int MaxPostRaceAiLaps = 15;
     private const int VoiceAiBindingCaptureSeconds = 15;
-    private const int VoiceAiMaxRecordingSeconds = 20;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
     private static readonly TimeSpan VoiceAiBindingCaptureArmingDelay = TimeSpan.FromMilliseconds(400);
@@ -207,6 +206,19 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _voiceAiMicrophoneDeviceName = string.Empty;
     private string _voiceAiMicrophoneStatusText = "尚未测试麦克风";
     private double _voiceAiMicrophoneTestLevel;
+    private bool _voiceAiNoiseReductionEnabled = true;
+    private bool _voiceAiHighPassFilterEnabled = true;
+    private string _voiceAiHighPassCutoffHzText = "120";
+    private bool _voiceAiNoiseGateEnabled = true;
+    private string _voiceAiNoiseGateThresholdDbText = "-40";
+    private bool _voiceAiVadEnabled = true;
+    private string _voiceAiPreSpeechPaddingMsText = "150";
+    private string _voiceAiPostSpeechPaddingMsText = "250";
+    private bool _voiceAiAutoGainEnabled = true;
+    private string _voiceAiMaxRecordingSecondsText = "8";
+    private string _voiceAiMinSpeechDurationMsText = "300";
+    private string _voiceAiMinRecognitionConfidenceText = "0.35";
+    private string _voiceAiRecognitionStatusDetailText = "录音时长 - · 人声时长 - · 检测到语音 - · 识别文本 - · 识别置信度 - · 失败原因 -";
     private bool _voiceAiBindingCaptureActive;
     private bool _voiceAiRawInputReady;
     private string _voiceAiRawInputStatusText = "方向盘 Raw Input 等待窗口注册。";
@@ -1310,6 +1322,195 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _voiceAiMicrophoneTestLevel;
         private set => SetProperty(ref _voiceAiMicrophoneTestLevel, Math.Clamp(value, 0d, 1d));
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether microphone preprocessing is enabled.
+    /// </summary>
+    public bool VoiceAiNoiseReductionEnabled
+    {
+        get => _voiceAiNoiseReductionEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiNoiseReductionEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the wind-noise high-pass filter is enabled.
+    /// </summary>
+    public bool VoiceAiHighPassFilterEnabled
+    {
+        get => _voiceAiHighPassFilterEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiHighPassFilterEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the high-pass filter cutoff text in hertz.
+    /// </summary>
+    public string VoiceAiHighPassCutoffHzText
+    {
+        get => _voiceAiHighPassCutoffHzText;
+        set
+        {
+            if (SetProperty(ref _voiceAiHighPassCutoffHzText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the microphone noise gate is enabled.
+    /// </summary>
+    public bool VoiceAiNoiseGateEnabled
+    {
+        get => _voiceAiNoiseGateEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiNoiseGateEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the noise gate threshold text in dBFS.
+    /// </summary>
+    public string VoiceAiNoiseGateThresholdDbText
+    {
+        get => _voiceAiNoiseGateThresholdDbText;
+        set
+        {
+            if (SetProperty(ref _voiceAiNoiseGateThresholdDbText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether voice activity detection is enabled.
+    /// </summary>
+    public bool VoiceAiVadEnabled
+    {
+        get => _voiceAiVadEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiVadEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the VAD pre-speech padding text in milliseconds.
+    /// </summary>
+    public string VoiceAiPreSpeechPaddingMsText
+    {
+        get => _voiceAiPreSpeechPaddingMsText;
+        set
+        {
+            if (SetProperty(ref _voiceAiPreSpeechPaddingMsText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the VAD post-speech padding text in milliseconds.
+    /// </summary>
+    public string VoiceAiPostSpeechPaddingMsText
+    {
+        get => _voiceAiPostSpeechPaddingMsText;
+        set
+        {
+            if (SetProperty(ref _voiceAiPostSpeechPaddingMsText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether automatic microphone gain is enabled.
+    /// </summary>
+    public bool VoiceAiAutoGainEnabled
+    {
+        get => _voiceAiAutoGainEnabled;
+        set
+        {
+            if (SetProperty(ref _voiceAiAutoGainEnabled, value))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the maximum recording duration text in seconds.
+    /// </summary>
+    public string VoiceAiMaxRecordingSecondsText
+    {
+        get => _voiceAiMaxRecordingSecondsText;
+        set
+        {
+            if (SetProperty(ref _voiceAiMaxRecordingSecondsText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the minimum speech duration text in milliseconds.
+    /// </summary>
+    public string VoiceAiMinSpeechDurationMsText
+    {
+        get => _voiceAiMinSpeechDurationMsText;
+        set
+        {
+            if (SetProperty(ref _voiceAiMinSpeechDurationMsText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the minimum speech recognition confidence text.
+    /// </summary>
+    public string VoiceAiMinRecognitionConfidenceText
+    {
+        get => _voiceAiMinRecognitionConfidenceText;
+        set
+        {
+            if (SetProperty(ref _voiceAiMinRecognitionConfidenceText, value?.Trim() ?? string.Empty))
+            {
+                QueuePersistVoiceAiOptions();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the latest microphone preprocessing and recognition status details.
+    /// </summary>
+    public string VoiceAiRecognitionStatusDetailText
+    {
+        get => _voiceAiRecognitionStatusDetailText;
+        private set => SetProperty(ref _voiceAiRecognitionStatusDetailText, value);
     }
 
     /// <summary>
@@ -3420,14 +3621,6 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
 
             VoiceAiMicrophoneTestLevel = recording.PeakLevel;
-            if (!recording.HasInput || recording.WaveBytes.Length == 0)
-            {
-                VoiceAiStatusText = "未检测到语音输入";
-                VoiceAssistantStatusText = "失败：识别失败";
-                EnqueueAiTtsLog("VoiceAI", "语音 AI 已取消：未检测到语音输入。");
-                return;
-            }
-
             await RunVoiceAiQueryAsync(recording);
         }
         catch (OperationCanceledException)
@@ -3559,6 +3752,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             SessionType = SessionModeFormatter.FormatDisplayName(ResolveSessionMode(sessionState)),
             UdpRawLogFile = _udpRawLogWriter.Status.CurrentFilePath,
             Recording = recording,
+            AudioSettings = BuildVoiceInputAudioSettings(),
             BuildStrategyQuestionContext = question =>
             {
                 if (!TryReserveVoiceAssistantQuestion(question, out var cooldownMessage))
@@ -3693,6 +3887,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         VoiceAssistantRecognizedText = result.RecognizedQuestion;
         VoiceAssistantIntentText = RaceAssistantDisplayFormatter.FormatIntent(result.Intent);
         VoiceAssistantModeText = RaceAssistantDisplayFormatter.FormatMode(result.Mode);
+        VoiceAiRecognitionStatusDetailText = FormatVoiceInputRecognitionStatus(result);
+        EnqueueVoiceInputMetricsLog(result);
         VoiceAssistantTelemetryNoticeText = IsTelemetryLimitedMode(result.Mode)
             ? "当前未接入实时遥测，仅能给通用建议。"
             : string.Empty;
@@ -3746,6 +3942,59 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         EnqueueAiTtsLog("VoiceAI", $"问题：{result.RecognizedQuestion}", questionId: result.QuestionId, sessionUid: result.SessionUid);
         EnqueueAiTtsLog("RaceAssistant", FormatRaceAssistantUserLog(result, advice), questionId: result.QuestionId, sessionUid: result.SessionUid);
+    }
+
+    private static string FormatVoiceInputRecognitionStatus(VoiceAiQueryResult? result)
+    {
+        if (result is null)
+        {
+            return "录音时长 - · 人声时长 - · 检测到语音 - · 识别文本 - · 识别置信度 - · 失败原因 -";
+        }
+
+        var recognizedText = string.IsNullOrWhiteSpace(result.RecognizedQuestion) ? "-" : result.RecognizedQuestion;
+        var failureReason = string.IsNullOrWhiteSpace(result.RecognitionFailedReason)
+            ? string.IsNullOrWhiteSpace(result.ErrorMessage) ? "-" : result.ErrorMessage
+            : result.RecognitionFailedReason;
+        return string.Join(
+            " · ",
+            $"录音时长 {result.RecordingDurationMs} ms",
+            $"人声时长 {result.SpeechDurationMs} ms",
+            $"检测到语音 {(result.VadDetected ? "是" : "否")}",
+            $"识别文本 {recognizedText}",
+            $"识别置信度 {result.RecognitionConfidence:0.00}",
+            $"失败原因 {failureReason}");
+    }
+
+    private void EnqueueVoiceInputMetricsLog(VoiceAiQueryResult result)
+    {
+        if (result.RecordingDurationMs <= 0 &&
+            result.SpeechDurationMs <= 0 &&
+            !result.PreprocessingEnabled &&
+            result.RawRmsDb == 0d &&
+            result.ProcessedRmsDb == 0d &&
+            result.PeakDb == 0d)
+        {
+            return;
+        }
+
+        var reason = string.IsNullOrWhiteSpace(result.RecognitionFailedReason)
+            ? "-"
+            : result.RecognitionFailedReason;
+        EnqueueAiTtsLog(
+            "VoiceAI",
+            string.Join(
+                " ",
+                $"recordingDurationMs={result.RecordingDurationMs}",
+                $"speechDurationMs={result.SpeechDurationMs}",
+                $"vadDetected={result.VadDetected}",
+                $"preprocessingEnabled={result.PreprocessingEnabled}",
+                $"recognitionFailedReason={reason}",
+                $"rawRmsDb={result.RawRmsDb:0.0}",
+                $"processedRmsDb={result.ProcessedRmsDb:0.0}",
+                $"peakDb={result.PeakDb:0.0}",
+                $"wasClipped={result.WasClipped}"),
+            questionId: result.QuestionId,
+            sessionUid: result.SessionUid);
     }
 
     private static bool IsTelemetryLimitedMode(RaceAssistantMode mode)
@@ -4031,12 +4280,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(VoiceAiMaxRecordingSeconds), cancellationToken);
+            var maxRecordingSeconds = BuildVoiceInputAudioSettings().MaxRecordingSeconds;
+            await Task.Delay(TimeSpan.FromSeconds(maxRecordingSeconds), cancellationToken);
             await _dispatcher.InvokeAsync(() =>
             {
                 if (IsVoiceAiRecording)
                 {
-                    VoiceAiStatusText = "录音已达到 20 秒，正在自动提交";
+                    VoiceAiStatusText = $"录音已达到 {maxRecordingSeconds} 秒，正在自动提交";
                     VoiceAssistantStatusText = "正在识别";
                     _ = StopVoiceAiRecordingAndAskAsync();
                 }
@@ -4321,6 +4571,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             VoiceAiTalkMode = settings.VoiceAi.TalkMode;
             VoiceAiMicrophoneDeviceId = settings.VoiceAi.MicrophoneDeviceId;
             ApplyVoiceAssistantSettings(settings.VoiceAi.AssistantSettings);
+            ApplyVoiceInputAudioSettings(settings.VoiceAi.AudioSettings);
             if (!string.IsNullOrWhiteSpace(settings.VoiceAi.MicrophoneDeviceName))
             {
                 VoiceAiMicrophoneDeviceName = settings.VoiceAi.MicrophoneDeviceName;
@@ -4387,6 +4638,23 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         VoiceAssistantEnableTtsAnswer = normalized.EnableTtsAnswer;
         VoiceAssistantMaxAnswerLength = normalized.MaxAnswerLength;
         VoiceAssistantRepeatQuestionCooldownSeconds = normalized.RepeatQuestionCooldownSeconds;
+    }
+
+    private void ApplyVoiceInputAudioSettings(VoiceInputAudioSettings settings)
+    {
+        var normalized = settings.Normalize();
+        VoiceAiNoiseReductionEnabled = normalized.EnableNoiseReduction;
+        VoiceAiHighPassFilterEnabled = normalized.EnableHighPassFilter;
+        VoiceAiHighPassCutoffHzText = normalized.HighPassCutoffHz.ToString("0.##", CultureInfo.InvariantCulture);
+        VoiceAiNoiseGateEnabled = normalized.EnableNoiseGate;
+        VoiceAiNoiseGateThresholdDbText = normalized.NoiseGateThresholdDb.ToString("0.##", CultureInfo.InvariantCulture);
+        VoiceAiVadEnabled = normalized.EnableVad;
+        VoiceAiPreSpeechPaddingMsText = normalized.PreSpeechPaddingMs.ToString(CultureInfo.InvariantCulture);
+        VoiceAiPostSpeechPaddingMsText = normalized.PostSpeechPaddingMs.ToString(CultureInfo.InvariantCulture);
+        VoiceAiAutoGainEnabled = normalized.EnableAutoGain;
+        VoiceAiMaxRecordingSecondsText = normalized.MaxRecordingSeconds.ToString(CultureInfo.InvariantCulture);
+        VoiceAiMinSpeechDurationMsText = normalized.MinSpeechDurationMs.ToString(CultureInfo.InvariantCulture);
+        VoiceAiMinRecognitionConfidenceText = normalized.MinRecognitionConfidence.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
     private void ApplyLoadedLogSettings(LogSettings settings)
@@ -4842,16 +5110,24 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         try
         {
             IsVoiceAiMicrophoneTesting = true;
-            VoiceAiMicrophoneStatusText = "正在测试麦克风 3 秒...";
+            var testDuration = TimeSpan.FromSeconds(Math.Min(3, BuildVoiceInputAudioSettings().MaxRecordingSeconds));
+            VoiceAiMicrophoneStatusText = $"正在测试麦克风 {testDuration.TotalSeconds:0} 秒...";
             VoiceAiMicrophoneTestLevel = 0d;
-            var result = await _microphoneService.TestInputAsync(
-                VoiceAiMicrophoneDeviceId,
-                TimeSpan.FromSeconds(3),
+            VoiceAiRecognitionStatusDetailText = FormatVoiceInputRecognitionStatus(null);
+            using var session = _microphoneService.StartRecording(VoiceAiMicrophoneDeviceId);
+            await Task.Delay(testDuration, _lifecycleCts.Token);
+            var recording = await session.StopAsync(_lifecycleCts.Token);
+            VoiceAiMicrophoneTestLevel = recording.PeakLevel;
+            var result = await _voiceAiQueryService.RecognizeOnlyAsync(
+                recording,
+                BuildVoiceInputAudioSettings(),
                 _lifecycleCts.Token);
-            VoiceAiMicrophoneTestLevel = result.PeakLevel;
-            VoiceAiMicrophoneStatusText = string.IsNullOrWhiteSpace(result.StatusText)
-                ? (result.HasInput ? "麦克风输入正常" : "未检测到明显麦克风输入")
-                : result.StatusText;
+            VoiceAiRecognitionStatusDetailText = FormatVoiceInputRecognitionStatus(result);
+            VoiceAiMicrophoneStatusText = result.IsSuccess
+                ? "麦克风识别测试完成"
+                : string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? "未检测到清晰语音"
+                    : result.ErrorMessage;
         }
         catch (OperationCanceledException)
         {
@@ -5620,6 +5896,33 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             : fallback;
     }
 
+    private static double ParseFiniteDouble(string value, double fallback)
+    {
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) &&
+               double.IsFinite(parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private VoiceInputAudioSettings BuildVoiceInputAudioSettings()
+    {
+        return new VoiceInputAudioSettings
+        {
+            EnableNoiseReduction = VoiceAiNoiseReductionEnabled,
+            EnableHighPassFilter = VoiceAiHighPassFilterEnabled,
+            HighPassCutoffHz = ParseFiniteDouble(VoiceAiHighPassCutoffHzText, 120d),
+            EnableNoiseGate = VoiceAiNoiseGateEnabled,
+            NoiseGateThresholdDb = ParseFiniteDouble(VoiceAiNoiseGateThresholdDbText, -40d),
+            EnableVad = VoiceAiVadEnabled,
+            PreSpeechPaddingMs = ParsePositiveInt(VoiceAiPreSpeechPaddingMsText, 150),
+            PostSpeechPaddingMs = ParsePositiveInt(VoiceAiPostSpeechPaddingMsText, 250),
+            EnableAutoGain = VoiceAiAutoGainEnabled,
+            MaxRecordingSeconds = ParsePositiveInt(VoiceAiMaxRecordingSecondsText, 8),
+            MinSpeechDurationMs = ParsePositiveInt(VoiceAiMinSpeechDurationMsText, 300),
+            MinRecognitionConfidence = ParseFiniteDouble(VoiceAiMinRecognitionConfidenceText, 0.35d)
+        }.Normalize();
+    }
+
     private VoiceAiOptions BuildVoiceAiOptions()
     {
         return new VoiceAiOptions
@@ -5638,7 +5941,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
                 MaxAnswerLength = VoiceAssistantMaxAnswerLength,
                 RepeatQuestionCooldownSeconds = VoiceAssistantRepeatQuestionCooldownSeconds
-            }
+            },
+            AudioSettings = BuildVoiceInputAudioSettings()
         };
     }
 

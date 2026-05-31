@@ -50,6 +50,18 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceId);
         Assert.Equal(string.Empty, settings.VoiceAi.MicrophoneDeviceName);
         Assert.Equal(VoiceAiOptions.NoHotkey, settings.VoiceAi.Hotkey);
+        Assert.True(settings.VoiceAi.AudioSettings.EnableNoiseReduction);
+        Assert.True(settings.VoiceAi.AudioSettings.EnableHighPassFilter);
+        Assert.Equal(120d, settings.VoiceAi.AudioSettings.HighPassCutoffHz);
+        Assert.True(settings.VoiceAi.AudioSettings.EnableNoiseGate);
+        Assert.Equal(-40d, settings.VoiceAi.AudioSettings.NoiseGateThresholdDb);
+        Assert.True(settings.VoiceAi.AudioSettings.EnableVad);
+        Assert.Equal(150, settings.VoiceAi.AudioSettings.PreSpeechPaddingMs);
+        Assert.Equal(250, settings.VoiceAi.AudioSettings.PostSpeechPaddingMs);
+        Assert.True(settings.VoiceAi.AudioSettings.EnableAutoGain);
+        Assert.Equal(8, settings.VoiceAi.AudioSettings.MaxRecordingSeconds);
+        Assert.Equal(300, settings.VoiceAi.AudioSettings.MinSpeechDurationMs);
+        Assert.Equal(0.35d, settings.VoiceAi.AudioSettings.MinRecognitionConfidence);
         Assert.False(settings.VoiceAssistantSettings.EnableVoiceAssistant);
         Assert.True(settings.VoiceAssistantSettings.EnableTtsAnswer);
         Assert.Equal(240, settings.VoiceAssistantSettings.MaxAnswerLength);
@@ -630,6 +642,21 @@ public sealed class AppSettingsStoreTests
                     EnableTtsAnswer = false,
                     MaxAnswerLength = 180,
                     RepeatQuestionCooldownSeconds = 18
+                },
+                AudioSettings = new VoiceInputAudioSettings
+                {
+                    EnableNoiseReduction = false,
+                    EnableHighPassFilter = false,
+                    HighPassCutoffHz = 160d,
+                    EnableNoiseGate = true,
+                    NoiseGateThresholdDb = -45d,
+                    EnableVad = true,
+                    PreSpeechPaddingMs = 180,
+                    PostSpeechPaddingMs = 300,
+                    EnableAutoGain = false,
+                    MaxRecordingSeconds = 6,
+                    MinSpeechDurationMs = 250,
+                    MinRecognitionConfidence = 0.42d
                 }
             });
 
@@ -650,6 +677,16 @@ public sealed class AppSettingsStoreTests
         Assert.Equal(180, persisted.VoiceAssistantSettings.MaxAnswerLength);
         Assert.Equal(18, persisted.VoiceAssistantSettings.RepeatQuestionCooldownSeconds);
         Assert.False(persisted.VoiceAi.AssistantSettings.EnableTtsAnswer);
+        Assert.False(persisted.VoiceAi.AudioSettings.EnableNoiseReduction);
+        Assert.False(persisted.VoiceAi.AudioSettings.EnableHighPassFilter);
+        Assert.Equal(160d, persisted.VoiceAi.AudioSettings.HighPassCutoffHz);
+        Assert.Equal(-45d, persisted.VoiceAi.AudioSettings.NoiseGateThresholdDb);
+        Assert.Equal(180, persisted.VoiceAi.AudioSettings.PreSpeechPaddingMs);
+        Assert.Equal(300, persisted.VoiceAi.AudioSettings.PostSpeechPaddingMs);
+        Assert.False(persisted.VoiceAi.AudioSettings.EnableAutoGain);
+        Assert.Equal(6, persisted.VoiceAi.AudioSettings.MaxRecordingSeconds);
+        Assert.Equal(250, persisted.VoiceAi.AudioSettings.MinSpeechDurationMs);
+        Assert.Equal(0.42d, persisted.VoiceAi.AudioSettings.MinRecognitionConfidence);
         Assert.Equal("configured", persisted.Ai.ApiKey);
         Assert.True(persisted.Tts.TtsEnabled);
         Assert.Equal(20778, persisted.Udp.ListenPort);
@@ -662,6 +699,13 @@ public sealed class AppSettingsStoreTests
         Assert.Equal((int)VoiceAiInputBindingKind.RawInputHidButton, voiceAiJson.GetProperty("inputBinding").GetProperty("kind").GetInt32());
         Assert.Equal(7, voiceAiJson.GetProperty("inputBinding").GetProperty("buttonIndex").GetInt32());
         Assert.Equal("方向盘/手柄设备 · 按钮 7", voiceAiJson.GetProperty("inputBinding").GetProperty("displayText").GetString());
+        var audioJson = voiceAiJson.GetProperty("audioSettings");
+        Assert.False(audioJson.GetProperty("enableNoiseReduction").GetBoolean());
+        Assert.False(audioJson.GetProperty("enableHighPassFilter").GetBoolean());
+        Assert.Equal(160d, audioJson.GetProperty("highPassCutoffHz").GetDouble());
+        Assert.Equal(-45d, audioJson.GetProperty("noiseGateThresholdDb").GetDouble());
+        Assert.Equal(6, audioJson.GetProperty("maxRecordingSeconds").GetInt32());
+        Assert.Equal(0.42d, audioJson.GetProperty("minRecognitionConfidence").GetDouble());
         Assert.False(voiceAiJson.GetProperty("assistantSettings").GetProperty("enableTtsAnswer").GetBoolean());
         Assert.False(json.RootElement.GetProperty("voiceAssistantSettings").GetProperty("enableTtsAnswer").GetBoolean());
     }

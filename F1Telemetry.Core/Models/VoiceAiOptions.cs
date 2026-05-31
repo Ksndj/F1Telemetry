@@ -44,6 +44,11 @@ public sealed record VoiceAiOptions
     /// Gets the race-assistant voice/text question settings.
     /// </summary>
     public VoiceAssistantSettings AssistantSettings { get; init; } = new();
+
+    /// <summary>
+    /// Gets the microphone audio preprocessing and recognition quality settings.
+    /// </summary>
+    public VoiceInputAudioSettings AudioSettings { get; init; } = new();
 }
 
 /// <summary>

@@ -71,4 +71,54 @@ public sealed record VoiceAiQueryResult
     /// Gets a value indicating whether the request was canceled before completion.
     /// </summary>
     public bool WasCanceled { get; init; }
+
+    /// <summary>
+    /// Gets the raw microphone recording duration in milliseconds.
+    /// </summary>
+    public int RecordingDurationMs { get; init; }
+
+    /// <summary>
+    /// Gets the detected speech duration in milliseconds.
+    /// </summary>
+    public int SpeechDurationMs { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether voice activity was detected.
+    /// </summary>
+    public bool VadDetected { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether microphone preprocessing was enabled.
+    /// </summary>
+    public bool PreprocessingEnabled { get; init; }
+
+    /// <summary>
+    /// Gets the VoiceAI recognition failure reason key.
+    /// </summary>
+    public string RecognitionFailedReason { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the raw microphone RMS level in dBFS.
+    /// </summary>
+    public double RawRmsDb { get; init; }
+
+    /// <summary>
+    /// Gets the processed microphone RMS level in dBFS.
+    /// </summary>
+    public double ProcessedRmsDb { get; init; }
+
+    /// <summary>
+    /// Gets the processed microphone peak level in dBFS.
+    /// </summary>
+    public double PeakDb { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether peak limiting clipped the processed audio.
+    /// </summary>
+    public bool WasClipped { get; init; }
+
+    /// <summary>
+    /// Gets the speech recognition confidence between 0 and 1.
+    /// </summary>
+    public double RecognitionConfidence { get; init; }
 }
