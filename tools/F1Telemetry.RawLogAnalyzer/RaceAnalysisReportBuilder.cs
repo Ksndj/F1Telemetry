@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using F1Telemetry.Core.Formatting;
+using F1Telemetry.Core.Models;
 using F1Telemetry.Udp.Packets;
 
 namespace F1Telemetry.RawLogAnalyzer;
@@ -9,7 +11,6 @@ namespace F1Telemetry.RawLogAnalyzer;
 /// </summary>
 public static class RaceAnalysisReportBuilder
 {
-    private const int RaceSessionType = 15;
     private const int MaxAiInputPreviewCharacters = 8000;
     private const int MaxAiKeyEvents = 15;
 
@@ -110,7 +111,8 @@ public static class RaceAnalysisReportBuilder
     public static bool IsValidRaceSession(RawLogSessionSummary session)
     {
         ArgumentNullException.ThrowIfNull(session);
-        return session.SessionUid != 0 && session.SessionType == RaceSessionType;
+        return session.SessionUid != 0
+            && ResolveSessionMode(session.SessionType) == SessionMode.Race;
     }
 
     private static IReadOnlyList<string> BuildWarnings(RawLogAnalysisResult result, RawLogSessionSummary session)
@@ -194,7 +196,7 @@ public static class RaceAnalysisReportBuilder
             TrackName: GetTrackName(sessionSummary.TrackId),
             TrackId: sessionSummary.TrackId,
             SessionType: sessionSummary.SessionType,
-            IsRaceSession: sessionSummary.SessionType == RaceSessionType,
+            IsRaceSession: ResolveSessionMode(sessionSummary.SessionType) == SessionMode.Race,
             TotalLaps: sessionSummary.TotalLaps,
             CompletedLaps: playerRaceSummary.CompletedLaps,
             GridPosition: playerRaceSummary.GridPosition,
@@ -321,7 +323,7 @@ public static class RaceAnalysisReportBuilder
         bool keyEventsTruncated)
     {
         var warnings = new List<string>();
-        if (sessionSummary.SessionType != RaceSessionType)
+        if (ResolveSessionMode(sessionSummary.SessionType) != SessionMode.Race)
         {
             warnings.Add("非正赛样本，仅供调试");
         }
@@ -556,6 +558,16 @@ public static class RaceAnalysisReportBuilder
         return value < 0
             ? "unknown"
             : value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static SessionMode ResolveSessionMode(int sessionType)
+    {
+        return SessionModeFormatter.Resolve(ToByte(sessionType));
+    }
+
+    private static byte? ToByte(int value)
+    {
+        return value is >= byte.MinValue and <= byte.MaxValue ? (byte)value : null;
     }
 
     private sealed record KeyEventCandidate(RaceEventTimelineEntry Entry, int Index);

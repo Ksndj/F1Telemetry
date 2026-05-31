@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.Formatting;
 using F1Telemetry.App.ViewModels;
+using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Models;
 using Xunit;
 
@@ -41,6 +42,10 @@ public sealed class DisplaySemanticFormatterTests
     [InlineData(1, "练习赛")]
     [InlineData(5, "排位赛")]
     [InlineData(10, "冲刺排位")]
+    [InlineData(11, "冲刺排位")]
+    [InlineData(12, "冲刺排位")]
+    [InlineData(13, "冲刺排位")]
+    [InlineData(14, "冲刺排位")]
     [InlineData(16, "冲刺赛")]
     [InlineData(15, "正赛")]
     [InlineData(18, "时间试跑 / 计时赛")]
@@ -51,14 +56,53 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
-    /// Verifies sprint-weekend context is used when displaying ambiguous race sessions.
+    /// Verifies sprint-weekend context does not override a raw Race session type.
     /// </summary>
     [Fact]
-    public void SessionTypeFormatter_Format_WithSprintWeekendContext_ReturnsSprintRace()
+    public void SessionTypeFormatter_Format_WithRaceRawTypeAndSprintWeekendContext_ReturnsRace()
     {
         var text = SessionTypeFormatter.Format(15, 10, [1, 10, 15, 5, 6, 7, 17]);
 
+        Assert.Equal("正赛", text);
+    }
+
+    /// <summary>
+    /// Verifies the dedicated sprint raw value still displays as sprint race.
+    /// </summary>
+    [Fact]
+    public void SessionTypeFormatter_Format_WithSprintRawType_ReturnsSprintRace()
+    {
+        var text = SessionTypeFormatter.Format(16, 10, [1, 10, 16, 5, 6, 7, 15]);
+
         Assert.Equal("冲刺赛", text);
+    }
+
+    /// <summary>
+    /// Verifies Miami 50% races display as grand prix races across shared formatter inputs.
+    /// </summary>
+    [Fact]
+    public void SessionTypeFormatter_Format_MiamiHalfRace_ReturnsRace()
+    {
+        var text = SessionTypeFormatter.Format(15, 29, [1, 10, 15, 5, 6, 7, 17]);
+
+        Assert.Equal("正赛", text);
+        Assert.DoesNotContain("冲刺赛", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies raw F1 25 session type names remain available for tooltips and logs.
+    /// </summary>
+    [Theory]
+    [InlineData(15, "Race")]
+    [InlineData(16, "Sprint")]
+    [InlineData(10, "Sprint")]
+    [InlineData(5, "Qualifying")]
+    [InlineData(1, "Practice")]
+    public void SessionModeFormatter_FormatRawSessionTypeName_ReturnsDebugName(byte sessionType, string expected)
+    {
+        var text = SessionModeFormatter.FormatRawSessionTypeName(sessionType);
+
+        Assert.Contains(expected, text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -182,6 +226,7 @@ public sealed class DisplaySemanticFormatterTests
     public void DashboardViewModel_ExposesSessionTypeText()
     {
         Assert.NotNull(typeof(DashboardViewModel).GetProperty("SessionTypeText"));
+        Assert.NotNull(typeof(DashboardViewModel).GetProperty("SessionTypeTooltipText"));
     }
 
     /// <summary>
@@ -215,8 +260,54 @@ public sealed class DisplaySemanticFormatterTests
         });
 
         Assert.Contains(expected, text, StringComparison.Ordinal);
-        Assert.Contains("赛道 16°C", text, StringComparison.Ordinal);
-        Assert.Contains("空气 14°C", text, StringComparison.Ordinal);
+        Assert.Contains("赛道16°", text, StringComparison.Ordinal);
+        Assert.Contains("空气14°", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("°C", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies weather tooltip text preserves complete weather details.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_BuildWeatherTooltipText_IncludesCompleteDetails()
+    {
+        var text = InvokeDashboardWeatherTooltipText(new SessionState
+        {
+            Weather = 0,
+            TrackTemperature = 40,
+            AirTemperature = 32
+        });
+
+        Assert.Contains("天气：晴", text, StringComparison.Ordinal);
+        Assert.Contains("赛道温度：40°C", text, StringComparison.Ordinal);
+        Assert.Contains("空气温度：32°C", text, StringComparison.Ordinal);
+        Assert.Contains("降雨概率：未知", text, StringComparison.Ordinal);
+        Assert.Contains("路面状态：未知", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies session type tooltip text keeps raw and display values together.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_BuildSessionTypeTooltipText_IncludesDebugFields()
+    {
+        var text = InvokeDashboardSessionTypeTooltipText(
+            new SessionState
+            {
+                TrackId = 30,
+                SessionType = 15,
+                TotalLaps = 29,
+                WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+            },
+            SessionMode.Race,
+            "正赛",
+            "迈阿密");
+
+        Assert.Contains("rawSessionType：15", text, StringComparison.Ordinal);
+        Assert.Contains("rawSessionTypeName：Race", text, StringComparison.Ordinal);
+        Assert.Contains("displaySessionType：正赛", text, StringComparison.Ordinal);
+        Assert.Contains("totalLaps：29", text, StringComparison.Ordinal);
+        Assert.Contains("trackName：迈阿密", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -386,6 +477,24 @@ public sealed class DisplaySemanticFormatterTests
         var method = typeof(DashboardViewModel).GetMethod("BuildWeatherText", BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState }));
+    }
+
+    private static string InvokeDashboardWeatherTooltipText(SessionState sessionState)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildWeatherTooltipText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState }));
+    }
+
+    private static string InvokeDashboardSessionTypeTooltipText(
+        SessionState sessionState,
+        SessionMode sessionMode,
+        string displaySessionType,
+        string trackName)
+    {
+        var method = typeof(DashboardViewModel).GetMethod("BuildSessionTypeTooltipText", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+        return Assert.IsType<string>(method!.Invoke(null, new object?[] { sessionState, sessionMode, displaySessionType, trackName }));
     }
 
     private static string InvokeDashboardPlayerGapText(SessionState sessionState, CarSnapshot playerCar)

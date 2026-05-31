@@ -24,6 +24,10 @@ public sealed class SessionAwareRaceAssistantTests
     [InlineData(1, SessionMode.Practice)]
     [InlineData(5, SessionMode.Qualifying)]
     [InlineData(10, SessionMode.SprintQualifying)]
+    [InlineData(11, SessionMode.SprintQualifying)]
+    [InlineData(12, SessionMode.SprintQualifying)]
+    [InlineData(13, SessionMode.SprintQualifying)]
+    [InlineData(14, SessionMode.SprintQualifying)]
     [InlineData(16, SessionMode.SprintRace)]
     [InlineData(15, SessionMode.Race)]
     [InlineData(17, SessionMode.Race)]
@@ -35,17 +39,31 @@ public sealed class SessionAwareRaceAssistantTests
     }
 
     /// <summary>
-    /// Verifies sprint-weekend context disambiguates F1 25 Race packets that represent sprint races.
+    /// Verifies sprint-weekend context cannot override a raw Race session type.
     /// </summary>
     [Fact]
-    public void SessionModeFormatter_Resolve_WithSprintWeekendContext_ReturnsSprintRace()
+    public void SessionModeFormatter_Resolve_WithRaceRawTypeAndSprintWeekendContext_ReturnsRace()
     {
         var mode = SessionModeFormatter.Resolve(
             sessionType: 15,
             totalLaps: 10,
             weekendStructure: [1, 10, 15, 5, 6, 7, 17]);
 
-        Assert.Equal(SessionMode.SprintRace, mode);
+        Assert.Equal(SessionMode.Race, mode);
+    }
+
+    /// <summary>
+    /// Verifies Miami 50% grand prix races are not reclassified as sprint races by weekend context.
+    /// </summary>
+    [Fact]
+    public void SessionModeFormatter_Resolve_MiamiHalfRace_ReturnsRace()
+    {
+        var mode = SessionModeFormatter.Resolve(
+            sessionType: 15,
+            totalLaps: 29,
+            weekendStructure: [1, 10, 15, 5, 6, 7, 17]);
+
+        Assert.Equal(SessionMode.Race, mode);
     }
 
     /// <summary>

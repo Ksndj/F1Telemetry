@@ -103,6 +103,35 @@ public sealed class PostRaceReviewViewModelTests
     }
 
     /// <summary>
+    /// Verifies Miami 50% race review rows keep raw Race sessions as grand prix races.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_WithMiamiHalfRace_DisplaysRace()
+    {
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions =
+            [
+                CreateSession("session-miami-race") with
+                {
+                    TrackId = 30,
+                    SessionType = 15,
+                    TotalLaps = 29,
+                    NumSessionsInWeekend = 7,
+                    WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+                }
+            ]
+        };
+        var viewModel = CreateViewModel(sessionRepository, new FakeLapRepository());
+
+        await viewModel.RefreshAsync();
+
+        Assert.Equal("正赛", viewModel.SelectedSession?.SessionTypeText);
+        Assert.Contains("迈阿密 · 正赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("冲刺赛", viewModel.SelectedSession?.SummaryText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies repository return order is normalized for review display.
     /// </summary>
     [Fact]

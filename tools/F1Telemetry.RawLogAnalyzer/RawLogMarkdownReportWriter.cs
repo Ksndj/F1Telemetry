@@ -1,13 +1,13 @@
 using System.Globalization;
 using System.Text;
+using F1Telemetry.Core.Formatting;
+using F1Telemetry.Core.Models;
 using F1Telemetry.Udp.Packets;
 
 namespace F1Telemetry.RawLogAnalyzer;
 
 internal static class RawLogMarkdownReportWriter
 {
-    private const int RaceSessionType = 15;
-
     public static string Build(RawLogAnalysisResult result)
     {
         if (result.RaceReport is null)
@@ -51,6 +51,8 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine($"- SessionUid: {summary.SessionUid}");
         builder.AppendLine($"- TrackId: {FormatNullable(summary.TrackId)}");
         builder.AppendLine($"- SessionType: {FormatNullable(summary.SessionType)}");
+        builder.AppendLine($"- SessionTypeDisplay: {SessionModeFormatter.FormatDisplayName(ResolveSessionMode(summary.SessionType))}");
+        builder.AppendLine($"- RawSessionTypeName: {SessionModeFormatter.FormatRawSessionTypeName(ToByte(summary.SessionType))}");
         builder.AppendLine($"- Total laps: {FormatNullable(summary.TotalLaps)}");
         builder.AppendLine($"- Player car index: {FormatNullable(summary.PlayerCarIndex)}");
         builder.AppendLine($"- Time range UTC: {FormatTimestamp(summary.FirstSeenUtc)} -> {FormatTimestamp(summary.LastSeenUtc)}");
@@ -276,7 +278,7 @@ internal static class RawLogMarkdownReportWriter
         builder.AppendLine("## Race Event Timeline");
         builder.AppendLine();
 
-        if (report.SessionSummary.SessionType != RaceSessionType)
+        if (ResolveSessionMode(report.SessionSummary.SessionType) != SessionMode.Race)
         {
             builder.AppendLine("- Notes: 非正赛样本，事件线仅供调试");
             builder.AppendLine();
@@ -316,7 +318,7 @@ internal static class RawLogMarkdownReportWriter
     {
         builder.AppendLine("## AI Race Summary Input");
         builder.AppendLine();
-        if (report.SessionSummary.SessionType != RaceSessionType)
+        if (ResolveSessionMode(report.SessionSummary.SessionType) != SessionMode.Race)
         {
             builder.AppendLine("- Notes: 非正赛样本，仅供调试");
             builder.AppendLine();
@@ -432,5 +434,15 @@ internal static class RawLogMarkdownReportWriter
         return timestamp is null || timestamp == DateTimeOffset.MinValue
             ? "unknown"
             : timestamp.Value.ToString("O", CultureInfo.InvariantCulture);
+    }
+
+    private static SessionMode ResolveSessionMode(int sessionType)
+    {
+        return SessionModeFormatter.Resolve(ToByte(sessionType));
+    }
+
+    private static byte? ToByte(int value)
+    {
+        return value is >= byte.MinValue and <= byte.MaxValue ? (byte)value : null;
     }
 }

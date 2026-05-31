@@ -55,23 +55,44 @@ public sealed class SessionComparisonViewModelTests
     }
 
     /// <summary>
-    /// Verifies comparison rows use stored sprint-weekend context for ambiguous race sessions.
+    /// Verifies comparison rows use the raw sprint session type for sprint races.
     /// </summary>
     [Fact]
-    public void SessionComparisonSessionItemViewModel_WithSprintWeekendContext_DisplaysSprintRace()
+    public void SessionComparisonSessionItemViewModel_WithSprintRawType_DisplaysSprintRace()
     {
         var session = CreateSession("session-sprint", 10, DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
         {
-            SessionType = 15,
+            SessionType = 16,
             TotalLaps = 10,
             NumSessionsInWeekend = 7,
-            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+            WeekendStructure = [1, 10, 16, 5, 6, 7, 15]
         };
 
         var item = new SessionComparisonSessionItemViewModel(session);
 
         Assert.Equal("冲刺赛", item.SessionTypeText);
         Assert.Contains("冲刺赛", item.SummaryText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies Miami 50% race comparison rows keep raw Race sessions as grand prix races.
+    /// </summary>
+    [Fact]
+    public void SessionComparisonSessionItemViewModel_WithMiamiHalfRace_DisplaysRace()
+    {
+        var session = CreateSession("session-miami-race", 30, DateTimeOffset.Parse("2026-05-17T16:59:00Z")) with
+        {
+            SessionType = 15,
+            TotalLaps = 29,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17]
+        };
+
+        var item = new SessionComparisonSessionItemViewModel(session);
+
+        Assert.Equal("正赛", item.SessionTypeText);
+        Assert.Contains("迈阿密 · 正赛", item.SummaryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("冲刺赛", item.SummaryText, StringComparison.Ordinal);
     }
 
     /// <summary>

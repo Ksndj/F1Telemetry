@@ -129,7 +129,40 @@ public sealed class PostRaceReviewReportBuilderTests
         Assert.DoesNotContain(".jsonl", combined, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Verifies reports reuse formatted session text for Miami 50% race sessions.
+    /// </summary>
+    [Fact]
+    public void BuildReports_WithMiamiHalfRace_DisplaysRace()
+    {
+        var builder = new PostRaceReviewReportBuilder();
+        var session = new HistorySessionItemViewModel(new StoredSession
+        {
+            Id = "session-miami-race",
+            SessionUid = "uid-session-miami-race",
+            TrackId = 30,
+            SessionType = 15,
+            TotalLaps = 29,
+            NumSessionsInWeekend = 7,
+            WeekendStructure = [1, 10, 15, 5, 6, 7, 17],
+            StartedAt = DateTimeOffset.Parse("2026-05-17T16:59:00Z"),
+            EndedAt = DateTimeOffset.Parse("2026-05-17T17:45:00Z")
+        });
+        var data = CreateReportData(session: session);
+
+        var markdown = builder.BuildMarkdown(data);
+        var json = builder.BuildJson(data);
+        using var jsonDocument = JsonDocument.Parse(json);
+
+        Assert.Contains("赛制：正赛", markdown, StringComparison.Ordinal);
+        Assert.Contains("迈阿密", markdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("冲刺赛", markdown, StringComparison.Ordinal);
+        Assert.Equal("正赛", jsonDocument.RootElement.GetProperty("session").GetProperty("sessionType").GetString());
+        Assert.DoesNotContain("冲刺赛", json, StringComparison.Ordinal);
+    }
+
     private static PostRaceReviewReportData CreateReportData(
+        HistorySessionItemViewModel? session = null,
         IReadOnlyList<StoredLap>? laps = null,
         IReadOnlyList<StoredEvent>? events = null,
         IReadOnlyList<StoredAiReport>? reports = null,
@@ -137,7 +170,7 @@ public sealed class PostRaceReviewReportBuilderTests
         IReadOnlyList<PostRaceReviewMetricRowViewModel>? summaryMetrics = null,
         IReadOnlyList<PostRaceReviewStintRowViewModel>? stints = null)
     {
-        var session = new HistorySessionItemViewModel(new StoredSession
+        session ??= new HistorySessionItemViewModel(new StoredSession
         {
             Id = "session-a",
             SessionUid = "uid-session-a",

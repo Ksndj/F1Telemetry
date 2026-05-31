@@ -368,12 +368,26 @@ public sealed class MainWindowTests
         Assert.Contains("天气", xaml, StringComparison.Ordinal);
         Assert.Contains("UDP PPS", xaml, StringComparison.Ordinal);
         Assert.Contains("监听端口", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinWidth=\"96\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MaxWidth=\"118\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain(" Width=\"118\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain(" Width=\"96\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SessionTypeStatusChip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding SessionTypeTooltipText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"WeatherStatusChip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding WeatherTooltipText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"230\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"UdpPortStatusChip\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"104\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"96\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
+
+        var sessionTypeChip = ExtractNamedBorderBlock(xaml, "SessionTypeStatusChip");
+        Assert.Contains("ToolTip=\"{Binding SessionTypeTooltipText}\"", sessionTypeChip, StringComparison.Ordinal);
+        Assert.Contains("Text=\"赛制\"", sessionTypeChip, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"连接状态\"", sessionTypeChip, StringComparison.Ordinal);
+
+        var udpPortChip = ExtractNamedBorderBlock(xaml, "UdpPortStatusChip");
+        Assert.DoesNotContain("<WrapPanel", udpPortChip, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=", udpPortChip, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -784,5 +798,16 @@ public sealed class MainWindowTests
         }
 
         throw new DirectoryNotFoundException("Could not find repository root.");
+    }
+
+    private static string ExtractNamedBorderBlock(string xaml, string name)
+    {
+        var start = xaml.IndexOf($"x:Name=\"{name}\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Expected to find {name}.");
+
+        var end = xaml.IndexOf("</Border>", start, StringComparison.Ordinal);
+        Assert.True(end > start, $"Expected to find the closing Border for {name}.");
+
+        return xaml[start..end];
     }
 }

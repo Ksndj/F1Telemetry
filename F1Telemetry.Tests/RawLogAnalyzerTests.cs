@@ -79,6 +79,8 @@ public sealed class RawLogAnalyzerTests
         Assert.Contains("## Data Quality Warnings", markdown);
         Assert.Contains("SessionUid: 1001", markdown);
         Assert.Contains("TrackId: 9", markdown);
+        Assert.Contains("SessionTypeDisplay: 正赛", markdown);
+        Assert.Contains("RawSessionTypeName: Race", markdown);
         Assert.Contains("Final position: 4", markdown);
         Assert.DoesNotContain("payloadBase64", markdown, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(statusPayload, markdown, StringComparison.Ordinal);
