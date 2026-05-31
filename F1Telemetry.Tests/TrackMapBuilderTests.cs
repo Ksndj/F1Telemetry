@@ -271,7 +271,7 @@ public sealed class TrackMapBuilderTests
         Assert.Contains("CornerAnalysisNotesWrapPanel", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisListColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("MaxHeight=\"360\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailsColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailPanel", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisTrackMapPanel", xaml, StringComparison.Ordinal);

@@ -67,9 +67,9 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("x:Name=\"CornerAnalysisTableScrollViewer\"", xaml, StringComparison.Ordinal);
         Assert.Contains("HorizontalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisListPanel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
         Assert.Contains("MaxHeight=\"360\"", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalAlignment=\"Top\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("MinHeight=\"180\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"640\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=\"920\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StringFormat=共 {0} 个弯角", xaml, StringComparison.Ordinal);

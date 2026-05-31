@@ -361,7 +361,6 @@
                 <Border x:Name="CornerAnalysisListPanel"
                         Grid.Row="0"
                         Grid.Column="0"
-                        MinHeight="180"
                         MaxHeight="360"
                         VerticalAlignment="Top"
                         Style="{StaticResource PanelStyle}">
