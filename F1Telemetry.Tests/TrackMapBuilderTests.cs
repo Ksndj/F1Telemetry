@@ -270,6 +270,7 @@ public sealed class TrackMapBuilderTests
         Assert.Contains("CornerAnalysisFilterWrapPanel", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisNotesWrapPanel", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisListColumn", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxHeight=\"520\"", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailsColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailPanel", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisTrackMapPanel", xaml, StringComparison.Ordinal);
@@ -277,6 +278,7 @@ public sealed class TrackMapBuilderTests
         Assert.Contains("CornerAnalysisEngineerAdvicePanel", xaml, StringComparison.Ordinal);
         Assert.Contains("NarrowLayoutBreakpoint = 1000d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("WideLayoutBreakpoint = 1300d", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 5d : 1d", codeBehind, StringComparison.Ordinal);
         Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("MinWidth=\"640\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=\"920\"", xaml, StringComparison.Ordinal);

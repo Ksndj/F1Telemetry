@@ -402,6 +402,23 @@ public sealed class MainWindowTests
     }
 
     /// <summary>
+    /// Verifies that the shell forwards wheel input to the page scroll host.
+    /// </summary>
+    [Fact]
+    public void MainWindow_ContentHostRoutesMouseWheelToPageScroll()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml.cs"));
+
+        Assert.Contains("PreviewMouseWheel=\"ContentHostScrollViewer_PreviewMouseWheel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CanScrollVertically", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("FindScrollableChild", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("e.Handled = true", codeBehind, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that narrow shell widths trigger the icon-only sidebar path.
     /// </summary>
     [Fact]

@@ -480,7 +480,8 @@
                       Grid.Column="1"
                       Margin="16,0,20,20"
                       HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Auto">
+                      VerticalScrollBarVisibility="Auto"
+                      PreviewMouseWheel="ContentHostScrollViewer_PreviewMouseWheel">
             <ContentControl x:Name="ContentHost"
                             Content="{Binding}">
                 <ContentControl.Style>

@@ -348,9 +348,9 @@
             <Grid x:Name="CornerAnalysisMainGrid"
                   Grid.Row="6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="CornerAnalysisListColumn" Width="3*" />
+                    <ColumnDefinition x:Name="CornerAnalysisListColumn" Width="5*" />
                     <ColumnDefinition x:Name="CornerAnalysisMainGapColumn" Width="14" />
-                    <ColumnDefinition x:Name="CornerAnalysisDetailsColumn" Width="2*" />
+                    <ColumnDefinition x:Name="CornerAnalysisDetailsColumn" Width="4*" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -361,6 +361,9 @@
                 <Border x:Name="CornerAnalysisListPanel"
                         Grid.Row="0"
                         Grid.Column="0"
+                        MinHeight="220"
+                        MaxHeight="520"
+                        VerticalAlignment="Top"
                         Style="{StaticResource PanelStyle}">
                     <Grid>
                         <Grid.RowDefinitions>

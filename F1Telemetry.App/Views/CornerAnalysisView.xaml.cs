@@ -51,9 +51,9 @@ public partial class CornerAnalysisView : UserControl
             return;
         }
 
-        CornerAnalysisListColumn.Width = new GridLength(isWide ? 13d : 3d, GridUnitType.Star);
+        CornerAnalysisListColumn.Width = new GridLength(isWide ? 5d : 1d, GridUnitType.Star);
         CornerAnalysisMainGapColumn.Width = new GridLength(isWide ? 14d : 12d);
-        CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 8d : 2d, GridUnitType.Star);
+        CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 4d : 1d, GridUnitType.Star);
         CornerAnalysisMainGapRow.Height = new GridLength(0d);
 
         Grid.SetRow(CornerAnalysisListPanel, 0);

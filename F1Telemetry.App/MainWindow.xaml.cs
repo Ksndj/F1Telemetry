@@ -2,7 +2,9 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using System.Windows.Media.Animation;
+using System.Windows.Input;
 using System.Windows.Threading;
 using F1Telemetry.App.Services;
 using F1Telemetry.App.ViewModels;
@@ -43,6 +45,19 @@ public partial class MainWindow : Window
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         ApplyShellViewportWidth(e.NewSize.Width);
+    }
+
+    private void ContentHostScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ScrollViewer scrollViewer
+            || FindScrollableChild(e.OriginalSource as DependencyObject, scrollViewer, e.Delta) is not null
+            || !CanScrollVertically(scrollViewer, e.Delta))
+        {
+            return;
+        }
+
+        scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta);
+        e.Handled = true;
     }
 
     private void Window_StateChanged(object sender, EventArgs e)
@@ -108,6 +123,36 @@ public partial class MainWindow : Window
         {
             dashboard.ApplyShellViewportWidth(viewportWidth);
         }
+    }
+
+    private static bool CanScrollVertically(System.Windows.Controls.ScrollViewer scrollViewer, int wheelDelta)
+    {
+        return wheelDelta < 0
+            ? scrollViewer.VerticalOffset < scrollViewer.ScrollableHeight
+            : scrollViewer.VerticalOffset > 0d;
+    }
+
+    private static System.Windows.Controls.ScrollViewer? FindScrollableChild(
+        DependencyObject? source,
+        System.Windows.Controls.ScrollViewer host,
+        int wheelDelta)
+    {
+        for (var current = source; current is not null && !ReferenceEquals(current, host); current = GetParent(current))
+        {
+            if (current is System.Windows.Controls.ScrollViewer scrollViewer && CanScrollVertically(scrollViewer, wheelDelta))
+            {
+                return scrollViewer;
+            }
+        }
+
+        return null;
+    }
+
+    private static DependencyObject? GetParent(DependencyObject source)
+    {
+        return source is Visual or Visual3D
+            ? VisualTreeHelper.GetParent(source) ?? LogicalTreeHelper.GetParent(source)
+            : LogicalTreeHelper.GetParent(source);
     }
 
     private void InitializeVoiceAiInputHook()
