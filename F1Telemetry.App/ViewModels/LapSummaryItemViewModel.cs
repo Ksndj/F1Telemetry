@@ -13,6 +13,16 @@ public sealed class LapSummaryItemViewModel
     private const string FastestSector1Foreground = "#50E3A4";
     private const string FastestSector2Foreground = "#58A6FF";
     private const string FastestSector3Foreground = "#F6C453";
+    private const int MinimumDerivedSampleCount = 2;
+
+    private sealed record DerivedStoredLapMetrics(
+        double? AverageSpeedKph,
+        float? FuelUsedLitres,
+        float? ErsUsed,
+        float? TyreWearDelta,
+        string? StartTyre,
+        string? EndTyre,
+        string? PitWindowText);
 
     /// <summary>
     /// Gets the completed lap number.
@@ -166,10 +176,10 @@ public sealed class LapSummaryItemViewModel
             Sector1Text = sector1Text,
             Sector2Text = sector2Text,
             Sector3Text = sector3Text,
-            AverageSpeedText = summary.AverageSpeedKph is null ? "-" : $"{summary.AverageSpeedKph:0} km/h",
-            FuelUsedLitresText = summary.FuelUsedLitres is null ? "-" : $"{summary.FuelUsedLitres:0.00} L",
-            ErsUsedText = summary.ErsUsed is null ? "-" : $"{summary.ErsUsed.Value / 1_000_000f:0.00} MJ",
-            TyreWearDeltaText = summary.TyreWearDelta is null ? "-" : $"{summary.TyreWearDelta:0.0}%",
+            AverageSpeedText = FormatAverageSpeed(summary.AverageSpeedKph),
+            FuelUsedLitresText = FormatFuelUsed(summary.FuelUsedLitres),
+            ErsUsedText = FormatErsUsed(summary.ErsUsed),
+            TyreWearDeltaText = FormatTyreWearDelta(summary.TyreWearDelta),
             ValidityText = summary.IsValid ? "有效" : "无效",
             IsValid = summary.IsValid,
             StartTyre = summary.StartTyre,
@@ -192,11 +202,42 @@ public sealed class LapSummaryItemViewModel
         bool isFastestSector2 = false,
         bool isFastestSector3 = false)
     {
+        return FromStoredLap(lap, null, isFastestSector1, isFastestSector2, isFastestSector3);
+    }
+
+    /// <summary>
+    /// Creates a UI row from the specified stored lap row and optional display-only lap samples.
+    /// </summary>
+    /// <param name="lap">The stored lap row to project.</param>
+    /// <param name="samples">The optional stored samples used only to enrich missing display fields.</param>
+    /// <param name="isFastestSector1">Whether this row owns the fastest sector 1 time.</param>
+    /// <param name="isFastestSector2">Whether this row owns the fastest sector 2 time.</param>
+    /// <param name="isFastestSector3">Whether this row owns the fastest sector 3 time.</param>
+    public static LapSummaryItemViewModel FromStoredLap(
+        StoredLap lap,
+        IReadOnlyList<StoredLapSample>? samples,
+        bool isFastestSector1 = false,
+        bool isFastestSector2 = false,
+        bool isFastestSector3 = false)
+    {
         ArgumentNullException.ThrowIfNull(lap);
 
         var sector1Text = FormatLapTime(lap.Sector1TimeInMs);
         var sector2Text = FormatLapTime(lap.Sector2TimeInMs);
         var sector3Text = FormatLapTime(ResolveStoredSector3Time(lap));
+        var derived = DeriveStoredLapMetrics(samples);
+        var averageSpeedKph = IsPositiveFinite(lap.AverageSpeedKph)
+            ? lap.AverageSpeedKph
+            : derived?.AverageSpeedKph;
+        var fuelUsedLitres = IsFiniteNonNegative(lap.FuelUsedLitres)
+            ? lap.FuelUsedLitres
+            : derived?.FuelUsedLitres;
+        var ersUsed = IsFiniteNonNegative(lap.ErsUsed)
+            ? lap.ErsUsed
+            : derived?.ErsUsed;
+        var tyreWearDelta = derived?.TyreWearDelta;
+        var startTyre = SelectStoredTyre(lap.StartTyre, derived?.StartTyre);
+        var endTyre = SelectStoredTyre(lap.EndTyre, derived?.EndTyre);
 
         return new LapSummaryItemViewModel
         {
@@ -211,16 +252,16 @@ public sealed class LapSummaryItemViewModel
             IsFastestSector1 = isFastestSector1,
             IsFastestSector2 = isFastestSector2,
             IsFastestSector3 = isFastestSector3,
-            AverageSpeedText = lap.AverageSpeedKph is null ? "-" : $"{lap.AverageSpeedKph:0} km/h",
-            FuelUsedLitresText = lap.FuelUsedLitres is null ? "-" : $"{lap.FuelUsedLitres:0.00} L",
-            ErsUsedText = lap.ErsUsed is null ? "-" : $"{lap.ErsUsed.Value / 1_000_000f:0.00} MJ",
-            TyreWearDeltaText = "-",
+            AverageSpeedText = FormatAverageSpeed(averageSpeedKph),
+            FuelUsedLitresText = FormatFuelUsed(fuelUsedLitres),
+            ErsUsedText = FormatErsUsed(ersUsed),
+            TyreWearDeltaText = FormatTyreWearDelta(tyreWearDelta),
             ValidityText = lap.IsValid ? "有效" : "无效",
             IsValid = lap.IsValid,
-            StartTyre = lap.StartTyre,
-            EndTyre = lap.EndTyre,
-            TyreWindowText = FormatStoredTyreWindow(lap.StartTyre, lap.EndTyre),
-            PitWindowText = "-"
+            StartTyre = startTyre,
+            EndTyre = endTyre,
+            TyreWindowText = FormatStoredTyreWindow(startTyre, endTyre),
+            PitWindowText = derived?.PitWindowText ?? "-"
         };
     }
 
@@ -237,7 +278,47 @@ public sealed class LapSummaryItemViewModel
 
     private static string FormatPitState(bool inPit)
     {
-        return inPit ? "Pit" : "Track";
+        return inPit ? "进站" : "赛道";
+    }
+
+    private static string FormatAverageSpeed(double? averageSpeedKph)
+    {
+        if (averageSpeedKph is not { } speed || speed <= 0 || !double.IsFinite(speed))
+        {
+            return "-";
+        }
+
+        return $"{speed:0} km/h";
+    }
+
+    private static string FormatFuelUsed(float? fuelUsedLitres)
+    {
+        if (fuelUsedLitres is not { } fuel || fuel < 0 || !float.IsFinite(fuel))
+        {
+            return "-";
+        }
+
+        return $"{fuel:0.00} L";
+    }
+
+    private static string FormatErsUsed(float? ersUsed)
+    {
+        if (ersUsed is not { } energy || energy < 0 || !float.IsFinite(energy))
+        {
+            return "-";
+        }
+
+        return $"{energy / 1_000_000f:0.00} MJ";
+    }
+
+    private static string FormatTyreWearDelta(float? tyreWearDelta)
+    {
+        if (tyreWearDelta is not { } wearDelta || wearDelta < 0 || !float.IsFinite(wearDelta))
+        {
+            return "-";
+        }
+
+        return $"{wearDelta:0.0}%";
     }
 
     private static string FormatLapTime(int? milliseconds)
@@ -298,6 +379,259 @@ public sealed class LapSummaryItemViewModel
 
         var sector12 = sector1.Value + sector2.Value;
         return lapTime.Value > sector12 ? lapTime.Value - sector12 : sector3;
+    }
+
+    private static DerivedStoredLapMetrics? DeriveStoredLapMetrics(IReadOnlyList<StoredLapSample>? samples)
+    {
+        if (samples is null || samples.Count < MinimumDerivedSampleCount)
+        {
+            return null;
+        }
+
+        var orderedSamples = samples
+            .OrderBy(sample => sample.SampleIndex)
+            .ThenBy(sample => sample.SampledAt)
+            .ThenBy(sample => sample.Id)
+            .ToArray();
+        if (orderedSamples.Length < MinimumDerivedSampleCount)
+        {
+            return null;
+        }
+
+        var tyreWindow = TryDeriveTyreWindow(orderedSamples);
+        return new DerivedStoredLapMetrics(
+            DeriveAverageSpeed(orderedSamples),
+            DeriveEndpointConsumption(orderedSamples, sample => sample.FuelRemainingLitres),
+            DeriveEndpointConsumption(orderedSamples, sample => sample.ErsStoreEnergy),
+            DeriveTyreWearDelta(orderedSamples),
+            tyreWindow?.StartTyre,
+            tyreWindow?.EndTyre,
+            TryDerivePitWindow(orderedSamples));
+    }
+
+    private static double? DeriveAverageSpeed(IReadOnlyList<StoredLapSample> samples)
+    {
+        var speedSamples = samples
+            .Select(sample => sample.SpeedKph)
+            .Where(IsPositiveFinite)
+            .Select(speed => speed.GetValueOrDefault())
+            .ToArray();
+
+        return speedSamples.Length >= MinimumDerivedSampleCount
+            ? speedSamples.Average()
+            : null;
+    }
+
+    private static float? DeriveEndpointConsumption(
+        IReadOnlyList<StoredLapSample> samples,
+        Func<StoredLapSample, float?> selector)
+    {
+        var start = selector(samples[0]);
+        var end = selector(samples[^1]);
+        if (start is not { } startValue
+            || end is not { } endValue
+            || startValue < 0
+            || endValue < 0
+            || !float.IsFinite(startValue)
+            || !float.IsFinite(endValue))
+        {
+            return null;
+        }
+
+        var delta = startValue - endValue;
+        return delta >= 0 && float.IsFinite(delta) ? delta : null;
+    }
+
+    private static float? DeriveTyreWearDelta(IReadOnlyList<StoredLapSample> samples)
+    {
+        var scalarDelta = DeriveEndpointIncrease(samples, sample => sample.TyreWear);
+        if (scalarDelta is not null)
+        {
+            return scalarDelta;
+        }
+
+        var wheelDeltas = new[]
+        {
+            DeriveEndpointIncrease(samples, sample => sample.TyreWearFrontLeft),
+            DeriveEndpointIncrease(samples, sample => sample.TyreWearFrontRight),
+            DeriveEndpointIncrease(samples, sample => sample.TyreWearRearLeft),
+            DeriveEndpointIncrease(samples, sample => sample.TyreWearRearRight)
+        };
+
+        return wheelDeltas.All(delta => delta is not null)
+            ? wheelDeltas.Average(delta => delta!.Value)
+            : null;
+    }
+
+    private static float? DeriveEndpointIncrease(
+        IReadOnlyList<StoredLapSample> samples,
+        Func<StoredLapSample, float?> selector)
+    {
+        var start = selector(samples[0]);
+        var end = selector(samples[^1]);
+        if (start is not { } startValue
+            || end is not { } endValue
+            || startValue < 0
+            || endValue < 0
+            || !float.IsFinite(startValue)
+            || !float.IsFinite(endValue))
+        {
+            return null;
+        }
+
+        var delta = endValue - startValue;
+        return delta >= 0 && float.IsFinite(delta) ? delta : null;
+    }
+
+    private static (string StartTyre, string EndTyre)? TryDeriveTyreWindow(IReadOnlyList<StoredLapSample> samples)
+    {
+        if (!TryReadTyreCompound(samples[0], out var startCompound)
+            || !TryReadTyreCompound(samples[^1], out var endCompound))
+        {
+            return null;
+        }
+
+        if (!TyreCompoundCompatible(startCompound, endCompound))
+        {
+            return null;
+        }
+
+        foreach (var sample in samples)
+        {
+            if (!TryReadTyreCompound(sample, out var compound))
+            {
+                if (sample.VisualTyreCompound is not null || sample.ActualTyreCompound is not null)
+                {
+                    return null;
+                }
+
+                continue;
+            }
+
+            if (!TyreCompoundCompatible(compound, startCompound) && !TyreCompoundCompatible(compound, endCompound))
+            {
+                return null;
+            }
+        }
+
+        return (FormatRawTyreCompound(startCompound), FormatRawTyreCompound(endCompound));
+    }
+
+    private static bool TryReadTyreCompound(StoredLapSample sample, out (int? Visual, int? Actual) compound)
+    {
+        compound = default;
+        var visual = NormalizeCompound(sample.VisualTyreCompound);
+        var actual = NormalizeCompound(sample.ActualTyreCompound);
+        if ((sample.VisualTyreCompound is not null && visual is null)
+            || (sample.ActualTyreCompound is not null && actual is null)
+            || (visual is null && actual is null))
+        {
+            return false;
+        }
+
+        compound = (visual, actual);
+        return true;
+    }
+
+    private static int? NormalizeCompound(int? compound)
+    {
+        return compound is > 0 and <= byte.MaxValue
+            ? compound.Value
+            : null;
+    }
+
+    private static bool TyreCompoundCompatible((int? Visual, int? Actual) sample, (int? Visual, int? Actual) reference)
+    {
+        var comparedAnyKnownAxis = false;
+        var visualMatches = sample.Visual is null || reference.Visual is null || sample.Visual == reference.Visual;
+        var actualMatches = sample.Actual is null || reference.Actual is null || sample.Actual == reference.Actual;
+        comparedAnyKnownAxis |= sample.Visual is not null && reference.Visual is not null;
+        comparedAnyKnownAxis |= sample.Actual is not null && reference.Actual is not null;
+        return comparedAnyKnownAxis && visualMatches && actualMatches;
+    }
+
+    private static string FormatRawTyreCompound((int? Visual, int? Actual) compound)
+    {
+        var parts = new List<string>(capacity: 2);
+        if (compound.Visual is not null)
+        {
+            parts.Add($"V{compound.Visual.Value}");
+        }
+
+        if (compound.Actual is not null)
+        {
+            parts.Add($"A{compound.Actual.Value}");
+        }
+
+        return string.Join(" / ", parts);
+    }
+
+    private static string? TryDerivePitWindow(IReadOnlyList<StoredLapSample> samples)
+    {
+        if (!TryReadPitStatus(samples[0].PitStatus, out var startPitStatus)
+            || !TryReadPitStatus(samples[^1].PitStatus, out var endPitStatus))
+        {
+            return null;
+        }
+
+        var transitionCount = 0;
+        var previousPitStatus = startPitStatus;
+        foreach (var sample in samples)
+        {
+            if (!TryReadPitStatus(sample.PitStatus, out var pitStatus))
+            {
+                return null;
+            }
+
+            if (pitStatus != previousPitStatus)
+            {
+                transitionCount++;
+                previousPitStatus = pitStatus;
+            }
+
+            if ((pitStatus != startPitStatus && pitStatus != endPitStatus) || transitionCount > 1)
+            {
+                return null;
+            }
+        }
+
+        return $"{PitStatusFormatter.Format(startPitStatus, null)} -> {PitStatusFormatter.Format(endPitStatus, null)}";
+    }
+
+    private static bool TryReadPitStatus(int? pitStatus, out byte normalizedPitStatus)
+    {
+        if (pitStatus is >= 0 and <= byte.MaxValue)
+        {
+            normalizedPitStatus = (byte)pitStatus.Value;
+            return normalizedPitStatus <= 2;
+        }
+
+        normalizedPitStatus = 0;
+        return false;
+    }
+
+    private static string SelectStoredTyre(string? storedTyre, string? derivedTyre)
+    {
+        return IsUsableStoredTyre(storedTyre)
+            ? storedTyre!.Trim()
+            : IsUsableStoredTyre(derivedTyre)
+                ? derivedTyre!.Trim()
+                : "-";
+    }
+
+    private static bool IsUsableStoredTyre(string? tyre)
+    {
+        return !string.IsNullOrWhiteSpace(tyre) && tyre.Trim() != "-" && tyre.Any(char.IsDigit);
+    }
+
+    private static bool IsPositiveFinite(double? value)
+    {
+        return value is { } number && number > 0 && double.IsFinite(number);
+    }
+
+    private static bool IsFiniteNonNegative(float? value)
+    {
+        return value is { } number && number >= 0 && float.IsFinite(number);
     }
 
     private static string FormatStoredTyreWindow(string? startTyre, string? endTyre)

@@ -16,6 +16,7 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     private const int MaxRecentLaps = 200;
     private readonly ISessionRepository _sessionRepository;
     private readonly ILapRepository _lapRepository;
+    private readonly ILapSampleRepository? _lapSampleRepository;
     private readonly IHistorySessionDeletionConfirmationService _deletionConfirmationService;
     private readonly RelayCommand _refreshSessionsCommand;
     private readonly RelayCommand<HistorySessionItemViewModel> _deleteSessionCommand;
@@ -34,13 +35,16 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
     /// <param name="sessionRepository">The session repository.</param>
     /// <param name="lapRepository">The lap repository.</param>
     /// <param name="deletionConfirmationService">The optional deletion confirmation service.</param>
+    /// <param name="lapSampleRepository">The optional lap-sample repository used for display-only history enrichment.</param>
     public HistorySessionBrowserViewModel(
         ISessionRepository sessionRepository,
         ILapRepository lapRepository,
-        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null)
+        IHistorySessionDeletionConfirmationService? deletionConfirmationService = null,
+        ILapSampleRepository? lapSampleRepository = null)
     {
         _sessionRepository = sessionRepository ?? throw new ArgumentNullException(nameof(sessionRepository));
         _lapRepository = lapRepository ?? throw new ArgumentNullException(nameof(lapRepository));
+        _lapSampleRepository = lapSampleRepository;
         _deletionConfirmationService = deletionConfirmationService ?? new MessageBoxHistorySessionDeletionConfirmationService();
         _refreshSessionsCommand = new RelayCommand(() => _ = RefreshSessionsAsync(), () => !IsDeletingSession);
         _deleteSessionCommand = new RelayCommand<HistorySessionItemViewModel>(
@@ -277,15 +281,34 @@ public sealed class HistorySessionBrowserViewModel : ViewModelBase
             }
 
             var orderedLaps = laps.OrderBy(lap => lap.LapNumber).ThenBy(lap => lap.CreatedAt).ThenBy(lap => lap.Id).ToArray();
+            var samplesByLap = new Dictionary<int, IReadOnlyList<StoredLapSample>>();
+            if (_lapSampleRepository is not null && orderedLaps.Length > 0)
+            {
+                var sessionSamples = await _lapSampleRepository.GetForSessionAsync(selectedSession.SessionId, cancellationToken);
+                if (!IsCurrentLapLoad(loadVersion, selectedSession))
+                {
+                    return;
+                }
+
+                samplesByLap = sessionSamples
+                    .Where(sample => sample.LapNumber > 0)
+                    .GroupBy(sample => sample.LapNumber)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => (IReadOnlyList<StoredLapSample>)group.ToArray());
+            }
+
             var fastestSector1 = FindFastestSectorTime(orderedLaps, lap => lap.Sector1TimeInMs);
             var fastestSector2 = FindFastestSectorTime(orderedLaps, lap => lap.Sector2TimeInMs);
             var fastestSector3 = FindFastestSectorTime(orderedLaps, LapSummaryItemViewModel.ResolveStoredSector3Time);
 
             foreach (var lap in orderedLaps)
             {
+                samplesByLap.TryGetValue(lap.LapNumber, out var lapSamples);
                 HistoryLaps.Add(
                     LapSummaryItemViewModel.FromStoredLap(
                         lap,
+                        lapSamples,
                         IsFastestSector(lap.Sector1TimeInMs, fastestSector1),
                         IsFastestSector(lap.Sector2TimeInMs, fastestSector2),
                         IsFastestSector(LapSummaryItemViewModel.ResolveStoredSector3Time(lap), fastestSector3)));

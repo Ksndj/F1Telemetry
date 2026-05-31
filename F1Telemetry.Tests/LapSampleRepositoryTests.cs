@@ -125,6 +125,37 @@ public sealed class LapSampleRepositoryTests
     }
 
     /// <summary>
+    /// Verifies session-level sample loading returns all lap samples in lap and capture order.
+    /// </summary>
+    [Fact]
+    public async Task GetForSessionAsync_ReturnsSamplesOrderedByLapAndCaptureSequence()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-batch");
+        await SeedSessionAsync(databaseService, "other-session");
+        ILapSampleRepository repository = new LapSampleRepository(databaseService);
+
+        await repository.AddRangeAsync(
+            [
+                CreateSample("session-batch", lapNumber: 2, sampleIndex: 2, rearLeft: 12f, rearRight: 12f, frontLeft: 11f, frontRight: 11f, visualTyreCompound: 17) with { PitStatus = 0 },
+                CreateSample("session-batch", lapNumber: 1, sampleIndex: 2, rearLeft: 10f, rearRight: 10f, frontLeft: 9f, frontRight: 9f, visualTyreCompound: 16) with { PitStatus = 1 },
+                CreateSample("session-batch", lapNumber: 2, sampleIndex: 1, rearLeft: 11f, rearRight: 11f, frontLeft: 10f, frontRight: 10f, visualTyreCompound: 17) with { PitStatus = 0 },
+                CreateSample("session-batch", lapNumber: 1, sampleIndex: 1, rearLeft: 9f, rearRight: 9f, frontLeft: 8f, frontRight: 8f, visualTyreCompound: 16) with { PitStatus = 1 },
+                CreateSample("other-session", lapNumber: 1, sampleIndex: 1, rearLeft: 99f, rearRight: 99f, frontLeft: 99f, frontRight: 99f)
+            ]);
+
+        var samples = await repository.GetForSessionAsync("session-batch");
+
+        Assert.Equal(new[] { 1, 1, 2, 2 }, samples.Select(sample => sample.LapNumber));
+        Assert.Equal(new[] { 1, 2, 1, 2 }, samples.Select(sample => sample.SampleIndex));
+        Assert.All(samples, sample => Assert.Equal("session-batch", sample.SessionId));
+        Assert.Equal(new[] { 16, 16, 17, 17 }, samples.Select(sample => sample.VisualTyreCompound.GetValueOrDefault()));
+        Assert.Equal(new[] { 1, 1, 0, 0 }, samples.Select(sample => sample.PitStatus.GetValueOrDefault()));
+    }
+
+    /// <summary>
     /// Verifies tyre wear trend lookup selects the last complete four-wheel sample for each lap.
     /// </summary>
     [Fact]

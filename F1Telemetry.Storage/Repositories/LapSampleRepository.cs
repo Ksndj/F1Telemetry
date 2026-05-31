@@ -177,47 +177,60 @@ public sealed class LapSampleRepository : ILapSampleRepository
                 command.Parameters.AddWithValue("@lap_number", lapNumber);
 
                 using var reader = await command.ExecuteReaderAsync(innerCancellationToken);
-                var results = new List<StoredLapSample>();
-                while (await reader.ReadAsync(innerCancellationToken))
-                {
-                    results.Add(
-                        new StoredLapSample
-                        {
-                            Id = reader.GetInt64(0),
-                            SessionId = reader.GetString(1),
-                            SampleIndex = reader.GetInt32(2),
-                            SampledAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(3)),
-                            FrameIdentifier = reader.GetInt64(4),
-                            LapNumber = reader.GetInt32(5),
-                            LapDistance = reader.IsDBNull(6) ? null : reader.GetFloat(6),
-                            TotalDistance = reader.IsDBNull(7) ? null : reader.GetFloat(7),
-                            CurrentLapTimeInMs = reader.IsDBNull(8) ? null : reader.GetInt32(8),
-                            LastLapTimeInMs = reader.IsDBNull(9) ? null : reader.GetInt32(9),
-                            SpeedKph = reader.IsDBNull(10) ? null : reader.GetDouble(10),
-                            Throttle = reader.IsDBNull(11) ? null : reader.GetDouble(11),
-                            Brake = reader.IsDBNull(12) ? null : reader.GetDouble(12),
-                            Steering = reader.IsDBNull(13) ? null : reader.GetFloat(13),
-                            Gear = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                            FuelRemainingLitres = reader.IsDBNull(15) ? null : reader.GetFloat(15),
-                            FuelLapsRemaining = reader.IsDBNull(16) ? null : reader.GetFloat(16),
-                            ErsStoreEnergy = reader.IsDBNull(17) ? null : reader.GetFloat(17),
-                            TyreWear = reader.IsDBNull(18) ? null : reader.GetFloat(18),
-                            TyreWearFrontLeft = reader.IsDBNull(19) ? null : reader.GetFloat(19),
-                            TyreWearFrontRight = reader.IsDBNull(20) ? null : reader.GetFloat(20),
-                            TyreWearRearLeft = reader.IsDBNull(21) ? null : reader.GetFloat(21),
-                            TyreWearRearRight = reader.IsDBNull(22) ? null : reader.GetFloat(22),
-                            Position = reader.IsDBNull(23) ? null : reader.GetInt32(23),
-                            DeltaFrontInMs = reader.IsDBNull(24) ? null : reader.GetInt32(24),
-                            DeltaLeaderInMs = reader.IsDBNull(25) ? null : reader.GetInt32(25),
-                            PitStatus = reader.IsDBNull(26) ? null : reader.GetInt32(26),
-                            IsValid = SqliteStorageConverters.ReadBoolean(reader, 27),
-                            VisualTyreCompound = reader.IsDBNull(28) ? null : reader.GetInt32(28),
-                            ActualTyreCompound = reader.IsDBNull(29) ? null : reader.GetInt32(29),
-                            CreatedAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(30))
-                        });
-                }
+                return await ReadSamplesAsync(reader, innerCancellationToken);
+            },
+            cancellationToken);
+    }
 
-                return (IReadOnlyList<StoredLapSample>)results;
+    /// <inheritdoc />
+    public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        return _databaseService.ExecuteAsync(
+            async (connection, innerCancellationToken) =>
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    SELECT id,
+                           session_id,
+                           sample_index,
+                           sampled_at,
+                           frame_identifier,
+                           lap_number,
+                           lap_distance,
+                           total_distance,
+                           current_lap_time_ms,
+                           last_lap_time_ms,
+                           speed_kph,
+                           throttle,
+                           brake,
+                           steering,
+                           gear,
+                           fuel_remaining_litres,
+                           fuel_laps_remaining,
+                           ers_store_energy,
+                           tyre_wear,
+                           tyre_wear_front_left,
+                           tyre_wear_front_right,
+                           tyre_wear_rear_left,
+                           tyre_wear_rear_right,
+                           position,
+                           delta_front_ms,
+                           delta_leader_ms,
+                           pit_status,
+                           is_valid,
+                           visual_tyre_compound,
+                           actual_tyre_compound,
+                           created_at
+                    FROM lap_samples
+                    WHERE session_id = @session_id
+                    ORDER BY lap_number ASC, sample_index ASC, sampled_at ASC, id ASC;
+                    """;
+                command.Parameters.AddWithValue("@session_id", sessionId);
+
+                using var reader = await command.ExecuteReaderAsync(innerCancellationToken);
+                return await ReadSamplesAsync(reader, innerCancellationToken);
             },
             cancellationToken);
     }
@@ -295,6 +308,57 @@ public sealed class LapSampleRepository : ILapSampleRepository
                 return (IReadOnlyList<StoredLapTyreWearTrendPoint>)results;
             },
             cancellationToken);
+    }
+
+    private static async Task<IReadOnlyList<StoredLapSample>> ReadSamplesAsync(
+        Microsoft.Data.Sqlite.SqliteDataReader reader,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<StoredLapSample>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            results.Add(ReadSample(reader));
+        }
+
+        return results;
+    }
+
+    private static StoredLapSample ReadSample(Microsoft.Data.Sqlite.SqliteDataReader reader)
+    {
+        return new StoredLapSample
+        {
+            Id = reader.GetInt64(0),
+            SessionId = reader.GetString(1),
+            SampleIndex = reader.GetInt32(2),
+            SampledAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(3)),
+            FrameIdentifier = reader.GetInt64(4),
+            LapNumber = reader.GetInt32(5),
+            LapDistance = reader.IsDBNull(6) ? null : reader.GetFloat(6),
+            TotalDistance = reader.IsDBNull(7) ? null : reader.GetFloat(7),
+            CurrentLapTimeInMs = reader.IsDBNull(8) ? null : reader.GetInt32(8),
+            LastLapTimeInMs = reader.IsDBNull(9) ? null : reader.GetInt32(9),
+            SpeedKph = reader.IsDBNull(10) ? null : reader.GetDouble(10),
+            Throttle = reader.IsDBNull(11) ? null : reader.GetDouble(11),
+            Brake = reader.IsDBNull(12) ? null : reader.GetDouble(12),
+            Steering = reader.IsDBNull(13) ? null : reader.GetFloat(13),
+            Gear = reader.IsDBNull(14) ? null : reader.GetInt32(14),
+            FuelRemainingLitres = reader.IsDBNull(15) ? null : reader.GetFloat(15),
+            FuelLapsRemaining = reader.IsDBNull(16) ? null : reader.GetFloat(16),
+            ErsStoreEnergy = reader.IsDBNull(17) ? null : reader.GetFloat(17),
+            TyreWear = reader.IsDBNull(18) ? null : reader.GetFloat(18),
+            TyreWearFrontLeft = reader.IsDBNull(19) ? null : reader.GetFloat(19),
+            TyreWearFrontRight = reader.IsDBNull(20) ? null : reader.GetFloat(20),
+            TyreWearRearLeft = reader.IsDBNull(21) ? null : reader.GetFloat(21),
+            TyreWearRearRight = reader.IsDBNull(22) ? null : reader.GetFloat(22),
+            Position = reader.IsDBNull(23) ? null : reader.GetInt32(23),
+            DeltaFrontInMs = reader.IsDBNull(24) ? null : reader.GetInt32(24),
+            DeltaLeaderInMs = reader.IsDBNull(25) ? null : reader.GetInt32(25),
+            PitStatus = reader.IsDBNull(26) ? null : reader.GetInt32(26),
+            IsValid = SqliteStorageConverters.ReadBoolean(reader, 27),
+            VisualTyreCompound = reader.IsDBNull(28) ? null : reader.GetInt32(28),
+            ActualTyreCompound = reader.IsDBNull(29) ? null : reader.GetInt32(29),
+            CreatedAt = SqliteStorageConverters.FromStorageTimestamp(reader.GetString(30))
+        };
     }
 
     private static void AddSampleParameters(Microsoft.Data.Sqlite.SqliteCommand command, StoredLapSample sample)

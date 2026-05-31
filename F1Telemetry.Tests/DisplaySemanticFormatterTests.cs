@@ -5,6 +5,7 @@ using F1Telemetry.App.Formatting;
 using F1Telemetry.App.ViewModels;
 using F1Telemetry.Core.Formatting;
 using F1Telemetry.Core.Models;
+using F1Telemetry.Storage.Models;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -440,6 +441,88 @@ public sealed class DisplaySemanticFormatterTests
         Assert.DoesNotContain("A19", item.TyreWindowText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies zero fuel and ERS values remain visible in lap history rows.
+    /// </summary>
+    [Fact]
+    public void LapSummaryItemViewModel_FromStoredLap_FormatsZeroFuelAndErsAsValues()
+    {
+        var lap = new StoredLap
+        {
+            SessionId = "session-zero",
+            LapNumber = 9,
+            FuelUsedLitres = 0f,
+            ErsUsed = 0f,
+            IsValid = true,
+            StartTyre = "-",
+            EndTyre = "-",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var item = LapSummaryItemViewModel.FromStoredLap(lap);
+
+        Assert.Equal("-", item.AverageSpeedText);
+        Assert.Equal("0.00 L", item.FuelUsedLitresText);
+        Assert.Equal("0.00 MJ", item.ErsUsedText);
+    }
+
+    /// <summary>
+    /// Verifies stored lap rows can display sample-derived fields without raw tyre or pit codes.
+    /// </summary>
+    [Fact]
+    public void LapSummaryItemViewModel_FromStoredLap_DerivesSampleFieldsForDisplay()
+    {
+        var lap = new StoredLap
+        {
+            SessionId = "session-derived",
+            LapNumber = 3,
+            IsValid = true,
+            StartTyre = "-",
+            EndTyre = "-",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var samples = new[]
+        {
+            CreateStoredSample(lap.SessionId, lap.LapNumber, 0, speedKph: 200, fuel: 20f, ers: 1_200_000f, tyreWear: 10f),
+            CreateStoredSample(lap.SessionId, lap.LapNumber, 1, speedKph: 220, fuel: 19.5f, ers: 700_000f, tyreWear: 10.8f)
+        };
+
+        var item = LapSummaryItemViewModel.FromStoredLap(lap, samples);
+
+        Assert.Equal("210 km/h", item.AverageSpeedText);
+        Assert.Equal("0.50 L", item.FuelUsedLitresText);
+        Assert.Equal("0.50 MJ", item.ErsUsedText);
+        Assert.Equal("0.8%", item.TyreWearDeltaText);
+        Assert.Equal("黄胎 -> 黄胎", item.TyreWindowText);
+        Assert.Equal("赛道 -> 赛道", item.PitWindowText);
+    }
+
+    /// <summary>
+    /// Verifies ERS recharge samples are not shown as consumed energy.
+    /// </summary>
+    [Fact]
+    public void LapSummaryItemViewModel_FromStoredLap_WithErsRechargeKeepsErsMissing()
+    {
+        var lap = new StoredLap
+        {
+            SessionId = "session-recharge",
+            LapNumber = 4,
+            IsValid = true,
+            StartTyre = "-",
+            EndTyre = "-",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        var samples = new[]
+        {
+            CreateStoredSample(lap.SessionId, lap.LapNumber, 0, speedKph: 200, fuel: 20f, ers: 700_000f, tyreWear: 10f),
+            CreateStoredSample(lap.SessionId, lap.LapNumber, 1, speedKph: 220, fuel: 19.5f, ers: 1_200_000f, tyreWear: 10.8f)
+        };
+
+        var item = LapSummaryItemViewModel.FromStoredLap(lap, samples);
+
+        Assert.Equal("-", item.ErsUsedText);
+    }
+
     private static CarSnapshot CreateCar(byte? position, ushort? deltaToLeaderInMs)
     {
         return new CarSnapshot
@@ -509,5 +592,33 @@ public sealed class DisplaySemanticFormatterTests
         var method = typeof(DashboardViewModel).GetMethod("UpdatePlayerCard", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(method);
         method!.Invoke(viewModel, new object?[] { sessionState, playerCar });
+    }
+
+    private static StoredLapSample CreateStoredSample(
+        string sessionId,
+        int lapNumber,
+        int sampleIndex,
+        double speedKph,
+        float fuel,
+        float ers,
+        float tyreWear)
+    {
+        return new StoredLapSample
+        {
+            SessionId = sessionId,
+            LapNumber = lapNumber,
+            SampleIndex = sampleIndex,
+            SampledAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddSeconds(sampleIndex),
+            FrameIdentifier = sampleIndex,
+            SpeedKph = speedKph,
+            FuelRemainingLitres = fuel,
+            ErsStoreEnergy = ers,
+            TyreWear = tyreWear,
+            PitStatus = 0,
+            IsValid = true,
+            VisualTyreCompound = 17,
+            ActualTyreCompound = 20,
+            CreatedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddSeconds(sampleIndex)
+        };
     }
 }

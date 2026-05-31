@@ -278,6 +278,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string? _lastPostRaceAiSummaryKey;
     private string? _lastStagedPostRaceAiKey;
     private readonly Dictionary<string, int> _persistedLapQualityByKey = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _completedLapSideEffectKeys = new(StringComparer.Ordinal);
     private int? _lastTrendRefreshLapNumber;
     private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
     private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
@@ -3137,6 +3138,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _lastStagedPostRaceAiKey = null;
                 _realtimeCornerAdviceService.Reset();
                 _persistedLapQualityByKey.Clear();
+                _completedLapSideEffectKeys.Clear();
                 _lastTrendRefreshLapNumber = null;
                 ResetChartPanels();
             }
@@ -3183,6 +3185,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _lastStagedPostRaceAiKey = null;
             _realtimeCornerAdviceService.Reset();
             _persistedLapQualityByKey.Clear();
+            _completedLapSideEffectKeys.Clear();
             _lastTrendRefreshLapNumber = null;
             ResetChartPanels();
             StatusMessage = "UDP 监听已停止。";
@@ -3244,6 +3247,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastStagedPostRaceAiKey = null;
         _realtimeCornerAdviceService.Reset();
         _persistedLapQualityByKey.Clear();
+        _completedLapSideEffectKeys.Clear();
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
         _raceEventInsightBuffer.Reset();
@@ -3582,9 +3586,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _persistedLapQualityByKey[lapKey] = quality;
             _storagePersistenceService.EnqueueLapSummary(lap);
             var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
-            _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
-            RecordTrackMapTrajectory(lap.LapNumber, lapSamples);
-            TriggerRealtimeCornerAdvice(lap, lapSamples);
+            if (lapSamples.Count > 0 && _completedLapSideEffectKeys.Add(lapKey))
+            {
+                _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
+                RecordTrackMapTrajectory(lap.LapNumber, lapSamples);
+                TriggerRealtimeCornerAdvice(lap, lapSamples);
+            }
         }
     }
 
@@ -6547,6 +6554,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
             string sessionId,
             int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
             CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());

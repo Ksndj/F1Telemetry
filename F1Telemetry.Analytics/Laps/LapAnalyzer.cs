@@ -225,11 +225,21 @@ public sealed class LapAnalyzer : ILapAnalyzer
             summary = TryApplyOfficialTiming(summary, _latestPlayerHistory);
         }
 
-        var updated = Volatile.Read(ref _allLaps)
-            .Concat(new[] { summary })
-            .ToArray();
+        var updatedByLapNumber = new Dictionary<int, LapSummary>();
+        foreach (var persistedLap in Volatile.Read(ref _allLaps))
+        {
+            updatedByLapNumber[persistedLap.LapNumber] = updatedByLapNumber.TryGetValue(persistedLap.LapNumber, out var duplicateSummary)
+                ? MergeLapSummaries(duplicateSummary, persistedLap)
+                : persistedLap;
+        }
 
-        PublishLaps(updated);
+        updatedByLapNumber[summary.LapNumber] = updatedByLapNumber.TryGetValue(summary.LapNumber, out var existingSummary)
+            ? MergeLapSummaries(existingSummary, summary)
+            : summary;
+
+        PublishLaps(updatedByLapNumber.Values
+            .OrderBy(lap => lap.LapNumber)
+            .ToArray());
         _completedLapSamples[summary.LapNumber] = completedSamples;
     }
 
@@ -366,6 +376,53 @@ public sealed class LapAnalyzer : ILapAnalyzer
             Sector3TimeInMs = sector3Time,
             IsValid = lapHistory.IsLapValid
         };
+    }
+
+    private static LapSummary MergeLapSummaries(LapSummary existing, LapSummary incoming)
+    {
+        return incoming with
+        {
+            LapTimeInMs = SelectPositive(incoming.LapTimeInMs, existing.LapTimeInMs),
+            Sector1TimeInMs = SelectPositive(incoming.Sector1TimeInMs, existing.Sector1TimeInMs),
+            Sector2TimeInMs = SelectPositive(incoming.Sector2TimeInMs, existing.Sector2TimeInMs),
+            Sector3TimeInMs = SelectPositive(incoming.Sector3TimeInMs, existing.Sector3TimeInMs),
+            AverageSpeedKph = SelectPositiveFinite(incoming.AverageSpeedKph, existing.AverageSpeedKph),
+            FuelUsedLitres = SelectNonNegativeFinite(incoming.FuelUsedLitres, existing.FuelUsedLitres),
+            ErsUsed = SelectNonNegativeFinite(incoming.ErsUsed, existing.ErsUsed),
+            TyreWearDelta = SelectNonNegativeFinite(incoming.TyreWearDelta, existing.TyreWearDelta),
+            TyreWearDeltaPerWheel = incoming.TyreWearDeltaPerWheel ?? existing.TyreWearDeltaPerWheel,
+            StartTyre = SelectTyreLabel(incoming.StartTyre, existing.StartTyre),
+            EndTyre = SelectTyreLabel(incoming.EndTyre, existing.EndTyre),
+            StartedInPit = incoming.StartedInPit || existing.StartedInPit,
+            EndedInPit = incoming.EndedInPit || existing.EndedInPit,
+            ClosedAt = incoming.ClosedAt >= existing.ClosedAt ? incoming.ClosedAt : existing.ClosedAt
+        };
+    }
+
+    private static uint? SelectPositive(uint? incoming, uint? existing)
+    {
+        return incoming is > 0 ? incoming : existing;
+    }
+
+    private static double? SelectPositiveFinite(double? incoming, double? existing)
+    {
+        return incoming is { } incomingValue && incomingValue > 0 && double.IsFinite(incomingValue)
+            ? incoming
+            : existing;
+    }
+
+    private static float? SelectNonNegativeFinite(float? incoming, float? existing)
+    {
+        return incoming is { } incomingValue && incomingValue >= 0 && float.IsFinite(incomingValue)
+            ? incoming
+            : existing;
+    }
+
+    private static string SelectTyreLabel(string incoming, string existing)
+    {
+        return string.IsNullOrWhiteSpace(incoming) || incoming.Trim() == "-"
+            ? existing
+            : incoming;
     }
 
     private static IEnumerable<LapSummary> CreateOfficialLapSummaries(SessionHistoryPacket packet, DateTimeOffset receivedAt)

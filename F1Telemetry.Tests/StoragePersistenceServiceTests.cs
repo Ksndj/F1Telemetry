@@ -536,6 +536,18 @@ public sealed class StoragePersistenceServiceTests
                     .ToArray());
         }
 
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(
+                StoredSamples
+                    .Where(sample => sample.SessionId == sessionId)
+                    .OrderBy(sample => sample.LapNumber)
+                    .ThenBy(sample => sample.SampleIndex)
+                    .ToArray());
+        }
+
         public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
             string sessionId,
             int count,

@@ -227,6 +227,99 @@ public sealed class StorageRepositoryTests
     }
 
     /// <summary>
+    /// Verifies sparse official timing updates do not erase richer sampled telemetry from the same lap.
+    /// </summary>
+    [Fact]
+    public async Task LapRepository_AddAsync_SparseSameLapUpdatePreservesSampledMetrics()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-lap-preserve");
+        ILapRepository repository = new LapRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-lap-preserve",
+            new LapSummary
+            {
+                LapNumber = 3,
+                LapTimeInMs = 91_000,
+                Sector1TimeInMs = 30_500,
+                Sector2TimeInMs = 30_250,
+                Sector3TimeInMs = 30_250,
+                AverageSpeedKph = 211.4,
+                FuelUsedLitres = 1.64f,
+                ErsUsed = 900_000f,
+                IsValid = true,
+                StartTyre = "V17 / A20",
+                EndTyre = "V17 / A20",
+                ClosedAt = DateTimeOffset.Parse("2026-05-17T10:03:00Z")
+            });
+        await repository.AddAsync(
+            "session-lap-preserve",
+            new LapSummary
+            {
+                LapNumber = 3,
+                LapTimeInMs = 90_500,
+                Sector1TimeInMs = 30_100,
+                Sector2TimeInMs = 30_200,
+                Sector3TimeInMs = 30_200,
+                AverageSpeedKph = 0,
+                FuelUsedLitres = null,
+                ErsUsed = null,
+                IsValid = true,
+                StartTyre = "-",
+                EndTyre = string.Empty,
+                ClosedAt = DateTimeOffset.Parse("2026-05-17T10:04:00Z")
+            });
+
+        var storedLap = Assert.Single(await repository.GetRecentAsync("session-lap-preserve", 10));
+
+        Assert.Equal(90_500, storedLap.LapTimeInMs);
+        Assert.Equal(30_100, storedLap.Sector1TimeInMs);
+        Assert.Equal(30_200, storedLap.Sector2TimeInMs);
+        Assert.Equal(30_200, storedLap.Sector3TimeInMs);
+        Assert.Equal(211.4, storedLap.AverageSpeedKph);
+        Assert.Equal(1.64f, storedLap.FuelUsedLitres);
+        Assert.Equal(900_000f, storedLap.ErsUsed);
+        Assert.Equal("V17 / A20", storedLap.StartTyre);
+        Assert.Equal("V17 / A20", storedLap.EndTyre);
+    }
+
+    /// <summary>
+    /// Verifies zero fuel and ERS usage are stored as valid values rather than missing data.
+    /// </summary>
+    [Fact]
+    public async Task LapRepository_AddAsync_ZeroFuelAndErsRoundTripAsValues()
+    {
+        var rootPath = CreateRootPath();
+        await using IDatabaseService databaseService = new SqliteDatabaseService(rootPath);
+        await databaseService.InitializeAsync();
+        await SeedSessionAsync(databaseService, "session-lap-zero");
+        ILapRepository repository = new LapRepository(databaseService);
+
+        await repository.AddAsync(
+            "session-lap-zero",
+            new LapSummary
+            {
+                LapNumber = 7,
+                LapTimeInMs = 88_000,
+                AverageSpeedKph = 208.2,
+                FuelUsedLitres = 0f,
+                ErsUsed = 0f,
+                IsValid = true,
+                StartTyre = "V16 / A19",
+                EndTyre = "V16 / A19",
+                ClosedAt = DateTimeOffset.Parse("2026-05-17T10:07:00Z")
+            });
+
+        var storedLap = Assert.Single(await repository.GetRecentAsync("session-lap-zero", 10));
+
+        Assert.Equal(0f, storedLap.FuelUsedLitres);
+        Assert.Equal(0f, storedLap.ErsUsed);
+    }
+
+    /// <summary>
     /// Verifies that race events are inserted and queried in descending creation order.
     /// </summary>
     [Fact]
