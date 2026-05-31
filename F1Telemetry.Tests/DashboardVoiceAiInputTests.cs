@@ -243,11 +243,67 @@ public sealed class DashboardVoiceAiInputTests
             harness.ViewModel.ObserveVoiceAiButtonInput(
                 CreateButtonInput(isPressed: false, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
             PumpDispatcherUntil(
-                () => string.Equals(harness.ViewModel.VoiceAiStatusText, "未检测到语音输入", StringComparison.Ordinal),
+                () => string.Equals(harness.ViewModel.VoiceAiStatusText, "失败：未检测到清晰语音", StringComparison.Ordinal),
                 TimeSpan.FromSeconds(2));
 
             Assert.Empty(harness.AiService.Contexts);
-            Assert.Equal("未检测到语音输入", harness.ViewModel.VoiceAiStatusText);
+            Assert.Equal("失败：未检测到清晰语音", harness.ViewModel.VoiceAiStatusText);
+            Assert.Contains("失败原因 NoSpeechDetected", harness.ViewModel.VoiceAiRecognitionStatusDetailText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies VoiceAI audio quality settings are persisted from the dashboard settings properties.
+    /// </summary>
+    [Fact]
+    public void VoiceAiAudioSettings_SaveAndLoadThroughDashboard()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            harness.ViewModel.VoiceAiNoiseReductionEnabled = false;
+            harness.ViewModel.VoiceAiHighPassFilterEnabled = false;
+            harness.ViewModel.VoiceAiNoiseGateThresholdDbText = "-45";
+            harness.ViewModel.VoiceAiMaxRecordingSecondsText = "6";
+            harness.ViewModel.VoiceAiMinRecognitionConfidenceText = "0.42";
+
+            PumpDispatcherUntil(
+                () => harness.SettingsStore.LastVoiceAiOptions?.AudioSettings.MinRecognitionConfidence == 0.42d,
+                TimeSpan.FromSeconds(2));
+
+            var settings = harness.SettingsStore.LastVoiceAiOptions!.AudioSettings;
+            Assert.False(settings.EnableNoiseReduction);
+            Assert.False(settings.EnableHighPassFilter);
+            Assert.Equal(-45d, settings.NoiseGateThresholdDb);
+            Assert.Equal(6, settings.MaxRecordingSeconds);
+            Assert.Equal(0.42d, settings.MinRecognitionConfidence);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies the microphone test status includes recognized text and confidence.
+    /// </summary>
+    [Fact]
+    public void TestMicrophoneCommand_ShowsRecognitionTextAndConfidence()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            harness.ViewModel.TestMicrophoneCommand.Execute(null);
+            PumpDispatcherUntil(
+                () => harness.ViewModel.VoiceAiRecognitionStatusDetailText.Contains("识别文本 我现在该不该进站", StringComparison.Ordinal),
+                TimeSpan.FromSeconds(3));
+
+            Assert.Contains("识别置信度 0.90", harness.ViewModel.VoiceAiRecognitionStatusDetailText, StringComparison.Ordinal);
+            Assert.Equal("麦克风识别测试完成", harness.ViewModel.VoiceAiMicrophoneStatusText);
         }
         finally
         {
@@ -305,6 +361,37 @@ public sealed class DashboardVoiceAiInputTests
             Assert.DoesNotContain("intent=", raceAssistantLog, StringComparison.Ordinal);
             Assert.DoesNotContain("mode=", raceAssistantLog, StringComparison.Ordinal);
             Assert.DoesNotContain("ttsQueued=", raceAssistantLog, StringComparison.Ordinal);
+        }
+        finally
+        {
+            harness.ViewModel.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Verifies VoiceAI input logs include numeric metrics without raw audio content.
+    /// </summary>
+    [Fact]
+    public void VoiceAiRecording_LogMetricsDoNotIncludeRawAudio()
+    {
+        var harness = CreateHarness(CreateBoundOptions(VoiceAiTalkMode.HoldToTalk));
+        try
+        {
+            var startedAt = DateTimeOffset.UtcNow;
+            harness.ViewModel.ObserveVoiceAiButtonInput(CreateButtonInput(isPressed: true, receivedAt: startedAt));
+            harness.ViewModel.ObserveVoiceAiButtonInput(
+                CreateButtonInput(isPressed: false, receivedAt: startedAt + TimeSpan.FromMilliseconds(100)));
+            PumpDispatcherUntil(
+                () => harness.ViewModel.AiTtsLogs.Any(log => log.Message.Contains("recordingDurationMs=", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(2));
+
+            var metrics = harness.ViewModel.AiTtsLogs.First(log => log.Message.Contains("recordingDurationMs=", StringComparison.Ordinal)).Message;
+            Assert.Contains("rawRmsDb=", metrics, StringComparison.Ordinal);
+            Assert.Contains("processedRmsDb=", metrics, StringComparison.Ordinal);
+            Assert.Contains("peakDb=", metrics, StringComparison.Ordinal);
+            Assert.DoesNotContain("WaveBytes", metrics, StringComparison.Ordinal);
+            Assert.DoesNotContain("base64", metrics, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("PCM", metrics, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -393,7 +480,12 @@ public sealed class DashboardVoiceAiInputTests
             InputBinding = CreateButtonInput(isPressed: true).ToBinding(),
             TalkMode = talkMode,
             MicrophoneDeviceId = "0",
-            MicrophoneDeviceName = "Test Mic"
+            MicrophoneDeviceName = "Test Mic",
+            AudioSettings = new VoiceInputAudioSettings
+            {
+                EnableNoiseReduction = false,
+                MaxRecordingSeconds = 1
+            }
         };
     }
 
@@ -506,9 +598,13 @@ public sealed class DashboardVoiceAiInputTests
 
     private sealed class StubSpeechRecognitionService(string recognizedText) : ISpeechRecognitionService
     {
-        public Task<string> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default)
+        public Task<SpeechRecognitionResult> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(recognizedText);
+            return Task.FromResult(new SpeechRecognitionResult
+            {
+                Text = recognizedText,
+                Confidence = 0.9d
+            });
         }
     }
 

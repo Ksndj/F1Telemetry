@@ -10,7 +10,7 @@ namespace F1Telemetry.TTS.Services;
 public sealed class WindowsSpeechRecognitionService : ISpeechRecognitionService
 {
     /// <inheritdoc />
-    public Task<string> RecognizeAsync(
+    public Task<SpeechRecognitionResult> RecognizeAsync(
         VoiceRecordingResult recording,
         CancellationToken cancellationToken = default)
     {
@@ -18,13 +18,13 @@ public sealed class WindowsSpeechRecognitionService : ISpeechRecognitionService
 
         if (recording.WaveBytes.Length == 0 || !recording.HasInput)
         {
-            return Task.FromResult(string.Empty);
+            return Task.FromResult(SpeechRecognitionResult.Empty);
         }
 
         return Task.Run(() => RecognizeCore(recording.WaveBytes, cancellationToken), cancellationToken);
     }
 
-    private static string RecognizeCore(byte[] waveBytes, CancellationToken cancellationToken)
+    private static SpeechRecognitionResult RecognizeCore(byte[] waveBytes, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -36,7 +36,13 @@ public sealed class WindowsSpeechRecognitionService : ISpeechRecognitionService
             recognizer.SetInputToWaveStream(stream);
             var result = recognizer.Recognize();
             cancellationToken.ThrowIfCancellationRequested();
-            return result?.Text.Trim() ?? string.Empty;
+            return result is null
+                ? SpeechRecognitionResult.Empty
+                : new SpeechRecognitionResult
+                {
+                    Text = result.Text.Trim(),
+                    Confidence = Math.Clamp(result.Confidence, 0d, 1d)
+                };
         }
         catch (OperationCanceledException)
         {

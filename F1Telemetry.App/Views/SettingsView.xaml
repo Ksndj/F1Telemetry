@@ -32,6 +32,10 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Foreground="#7FA5D8" Text="UDP 端口" />
@@ -135,7 +139,7 @@
                         <TextBlock Foreground="#7FA5D8" Text="App 日志目录" />
                         <TextBlock Grid.Column="1"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogDirectoryText}"
+                                   Text="{Binding AppLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="1"
@@ -157,7 +161,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogLastFileSizeText}" />
+                                   Text="{Binding AppLogLastFileSizeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
@@ -167,7 +171,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding AppLogLastWriteTimeText}" />
+                                   Text="{Binding AppLogLastWriteTimeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
@@ -177,7 +181,7 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
-                                   Text="{Binding RaceAssistantLogDirectoryText}"
+                                   Text="{Binding RaceAssistantLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="5"
@@ -199,9 +203,9 @@
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3">
-                            <Run Text="{Binding RaceAssistantLogLastFileSizeText}" />
+                            <Run Text="{Binding RaceAssistantLogLastFileSizeText, Mode=OneWay}" />
                             <Run Text=" · " />
-                            <Run Text="{Binding RaceAssistantLogLastWriteTimeText}" />
+                            <Run Text="{Binding RaceAssistantLogLastWriteTimeText, Mode=OneWay}" />
                         </TextBlock>
 
                         <TextBlock Grid.Column="2"
@@ -466,15 +470,112 @@
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
+                                   Text="音频处理" />
+                        <WrapPanel Grid.Row="4"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,12,0,0">
+                            <CheckBox Margin="0,0,16,6"
+                                      Foreground="#D7E4F3"
+                                      Content="启用麦克风降噪"
+                                      IsChecked="{Binding VoiceAiNoiseReductionEnabled, Mode=TwoWay}" />
+                            <CheckBox Margin="0,0,16,6"
+                                      Foreground="#D7E4F3"
+                                      Content="启用风噪过滤"
+                                      IsChecked="{Binding VoiceAiHighPassFilterEnabled, Mode=TwoWay}" />
+                            <CheckBox Margin="0,0,16,6"
+                                      Foreground="#D7E4F3"
+                                      Content="启用噪声门"
+                                      IsChecked="{Binding VoiceAiNoiseGateEnabled, Mode=TwoWay}" />
+                            <CheckBox Margin="0,0,16,6"
+                                      Foreground="#D7E4F3"
+                                      Content="启用 VAD"
+                                      IsChecked="{Binding VoiceAiVadEnabled, Mode=TwoWay}" />
+                            <CheckBox Margin="0,0,16,6"
+                                      Foreground="#D7E4F3"
+                                      Content="启用自动增益"
+                                      IsChecked="{Binding VoiceAiAutoGainEnabled, Mode=TwoWay}" />
+                        </WrapPanel>
+
+                        <TextBlock Grid.Row="5"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="降噪参数" />
+                        <WrapPanel Grid.Row="5"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,12,0,0">
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="高通 Hz" />
+                            <TextBox Width="72"
+                                     Margin="0,0,16,0"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiHighPassCutoffHzText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="噪声门 dB" />
+                            <TextBox Width="72"
+                                     Margin="0,0,16,0"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiNoiseGateThresholdDbText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="最长秒" />
+                            <TextBox Width="64"
+                                     Margin="0,0,16,0"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiMaxRecordingSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="最低置信度" />
+                            <TextBox Width="72"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiMinRecognitionConfidenceText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </WrapPanel>
+
+                        <TextBlock Grid.Row="6"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="VAD 裁剪" />
+                        <WrapPanel Grid.Row="6"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,12,0,0">
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="前置 ms" />
+                            <TextBox Width="72"
+                                     Margin="0,0,16,0"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiPreSpeechPaddingMsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="后置 ms" />
+                            <TextBox Width="72"
+                                     Margin="0,0,16,0"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiPostSpeechPaddingMsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Margin="0,6,6,0"
+                                       Foreground="#9AB0C9"
+                                       Text="最短人声 ms" />
+                            <TextBox Width="72"
+                                     Padding="8,5"
+                                     Text="{Binding VoiceAiMinSpeechDurationMsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        </WrapPanel>
+
+                        <TextBlock Grid.Row="7"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
                                    Text="输入电平" />
-                        <ProgressBar Grid.Row="4"
+                        <ProgressBar Grid.Row="7"
                                      Grid.Column="1"
                                      Margin="0,14,12,0"
                                      Height="12"
                                      Maximum="1"
                                      Minimum="0"
                                      Value="{Binding VoiceAiMicrophoneTestLevel, Mode=OneWay}" />
-                        <TextBlock Grid.Row="4"
+                        <TextBlock Grid.Row="7"
                                    Grid.Column="2"
                                    Margin="0,12,0,0"
                                    VerticalAlignment="Center"
@@ -483,17 +584,29 @@
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
-                        <TextBlock Grid.Row="5"
+                        <TextBlock Grid.Row="8"
                                    Margin="0,12,0,0"
                                    Foreground="#7FA5D8"
                                    Text="运行状态" />
-                        <TextBlock Grid.Row="5"
+                        <TextBlock Grid.Row="8"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0"
                                    Foreground="#D7E4F3"
                                    Text="{Binding VoiceAiStatusText}"
                                    TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="9"
+                                   Margin="0,12,0,0"
+                                   Foreground="#7FA5D8"
+                                   Text="识别状态" />
+                        <TextBlock Grid.Row="9"
+                                   Grid.Column="1"
+                                   Grid.ColumnSpan="2"
+                                   Margin="0,12,0,0"
+                                   Foreground="#D7E4F3"
+                                   Text="{Binding VoiceAiRecognitionStatusDetailText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
                     </Grid>
                 </StackPanel>

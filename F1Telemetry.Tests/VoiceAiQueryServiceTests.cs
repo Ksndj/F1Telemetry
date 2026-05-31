@@ -10,6 +10,7 @@ using F1Telemetry.Core.Interfaces;
 using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Models;
 using F1Telemetry.TTS.Services;
+using NAudio.Wave;
 using Xunit;
 
 namespace F1Telemetry.Tests;
@@ -34,6 +35,7 @@ public sealed class VoiceAiQueryServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal("我现在该不该进站", result.RecognizedQuestion);
+        Assert.Equal(VoiceQuestionIntent.PIT_DECISION, result.Intent);
         Assert.Equal("继续保胎两圈，等窗口再进站。", result.SpeechText);
         Assert.True(result.WasQueuedForSpeech);
         var context = Assert.Single(ai.Contexts);
@@ -55,8 +57,62 @@ public sealed class VoiceAiQueryServiceTests
         var result = await service.AskAsync(CreateRequest());
 
         Assert.False(result.IsSuccess);
-        Assert.Equal("未识别到语音问题", result.ErrorMessage);
+        Assert.Equal("识别失败，请靠近麦克风重试", result.ErrorMessage);
+        Assert.Equal(VoiceInputAudioFailureReasons.EmptyRecognition, result.RecognitionFailedReason);
         Assert.Empty(ai.Contexts);
+    }
+
+    /// <summary>
+    /// Verifies VAD rejection stops before recognition, RaceAssistant, or TTS.
+    /// </summary>
+    [Fact]
+    public async Task AskAsync_WhenVadFindsNoSpeech_DoesNotRecognizeOrAskAi()
+    {
+        var speech = new StubSpeechRecognitionService("现在进站吗");
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+
+        var result = await service.AskAsync(CreateRequest() with
+        {
+            Recording = CreateWaveRecording(0d, TimeSpan.FromMilliseconds(700)),
+            AudioSettings = new VoiceInputAudioSettings()
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("未检测到清晰语音", result.ErrorMessage);
+        Assert.Equal(VoiceInputAudioFailureReasons.NoSpeechDetected, result.RecognitionFailedReason);
+        Assert.Equal(0, speech.CallCount);
+        Assert.Empty(ai.Contexts);
+        Assert.False(result.WasQueuedForSpeech);
+    }
+
+    /// <summary>
+    /// Verifies low-confidence recognition stops before RaceAssistant or TTS.
+    /// </summary>
+    [Fact]
+    public async Task AskAsync_WhenRecognitionConfidenceIsLow_DoesNotAskAi()
+    {
+        var speech = new StubSpeechRecognitionService("现在进站吗", confidence: 0.2d);
+        var ai = new RecordingAiAnalysisService();
+        using var queue = new TtsQueue(new RecordingTtsService(), new TtsOptions { TtsEnabled = true });
+        var service = new VoiceAiQueryService(speech, ai, new TtsMessageFactory(), queue);
+
+        var result = await service.AskAsync(CreateRequest() with
+        {
+            AudioSettings = new VoiceInputAudioSettings
+            {
+                EnableNoiseReduction = false,
+                MinRecognitionConfidence = 0.35d
+            }
+        });
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal("识别置信度偏低，请靠近麦克风重试", result.ErrorMessage);
+        Assert.Equal(VoiceInputAudioFailureReasons.LowConfidence, result.RecognitionFailedReason);
+        Assert.Equal(0.2d, result.RecognitionConfidence, precision: 3);
+        Assert.Empty(ai.Contexts);
+        Assert.False(result.WasQueuedForSpeech);
     }
 
     /// <summary>
@@ -312,7 +368,39 @@ public sealed class VoiceAiQueryServiceTests
                 WaveBytes = [1, 2, 3, 4],
                 PeakLevel = 0.4d,
                 Duration = TimeSpan.FromSeconds(1)
+            },
+            AudioSettings = new VoiceInputAudioSettings
+            {
+                EnableNoiseReduction = false
+            },
+            BuildStrategyQuestionContext = question => CreateStrategyContext(question, RaceAssistantMode.RaceStintManagement),
+            CaptureCurrentSessionUid = () => 123
+        };
+    }
+
+    private static VoiceRecordingResult CreateWaveRecording(double amplitude, TimeSpan duration)
+    {
+        var sampleCount = Math.Max(1, (int)Math.Round(duration.TotalSeconds * 16_000));
+        using var stream = new MemoryStream();
+        using (var writer = new WaveFileWriter(stream, new WaveFormat(16_000, 16, 1)))
+        {
+            var bytes = new byte[sampleCount * 2];
+            for (var index = 0; index < sampleCount; index++)
+            {
+                var sample = (short)Math.Round(Math.Clamp(amplitude, -1d, 1d) * short.MaxValue);
+                BitConverter.GetBytes(sample).CopyTo(bytes, index * 2);
             }
+
+            writer.Write(bytes, 0, bytes.Length);
+        }
+
+        return new VoiceRecordingResult
+        {
+            HasInput = amplitude > 0d,
+            WaveBytes = stream.ToArray(),
+            PeakLevel = Math.Abs(amplitude),
+            AverageLevel = Math.Abs(amplitude),
+            Duration = duration
         };
     }
 
@@ -338,7 +426,32 @@ public sealed class VoiceAiQueryServiceTests
         string adviceKey,
         RaceAssistantMode mode = RaceAssistantMode.RaceStintManagement)
     {
-        var context = new StrategyQuestionContext
+        var context = CreateStrategyContext(question, mode);
+
+        return new VoiceAiQueryRequest
+        {
+            BaseContext = new AIAnalysisContext(),
+            AiSettings = new AISettings
+            {
+                AiEnabled = true,
+                ApiKey = "test-key"
+            },
+            TtsOptions = new TtsOptions
+            {
+                TtsEnabled = true,
+                CooldownSeconds = 1
+            },
+            AdviceKey = adviceKey,
+            QuestionText = question,
+            StrategyQuestionContext = context,
+            CaptureCurrentSessionUid = () => 123,
+            EnableTtsAnswer = true
+        };
+    }
+
+    private static StrategyQuestionContext CreateStrategyContext(string question, RaceAssistantMode mode)
+    {
+        return new StrategyQuestionContext
         {
             SessionUid = 123,
             Question = question,
@@ -374,40 +487,29 @@ public sealed class VoiceAiQueryServiceTests
                 ]
             }
         };
-
-        return new VoiceAiQueryRequest
-        {
-            BaseContext = new AIAnalysisContext(),
-            AiSettings = new AISettings
-            {
-                AiEnabled = true,
-                ApiKey = "test-key"
-            },
-            TtsOptions = new TtsOptions
-            {
-                TtsEnabled = true,
-                CooldownSeconds = 1
-            },
-            AdviceKey = adviceKey,
-            QuestionText = question,
-            StrategyQuestionContext = context,
-            CaptureCurrentSessionUid = () => 123,
-            EnableTtsAnswer = true
-        };
     }
 
     private sealed class StubSpeechRecognitionService : ISpeechRecognitionService
     {
         private readonly string _recognizedText;
+        private readonly double _confidence;
 
-        public StubSpeechRecognitionService(string recognizedText)
+        public StubSpeechRecognitionService(string recognizedText, double confidence = 0.9d)
         {
             _recognizedText = recognizedText;
+            _confidence = confidence;
         }
 
-        public Task<string> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default)
+        public int CallCount { get; private set; }
+
+        public Task<SpeechRecognitionResult> RecognizeAsync(VoiceRecordingResult recording, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(_recognizedText);
+            CallCount++;
+            return Task.FromResult(new SpeechRecognitionResult
+            {
+                Text = _recognizedText,
+                Confidence = _confidence
+            });
         }
     }
 

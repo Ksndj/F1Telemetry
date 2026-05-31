@@ -5,6 +5,7 @@ using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Strategy;
 using F1Telemetry.App.Logging;
 using F1Telemetry.Core.Interfaces;
+using F1Telemetry.Core.Models;
 using F1Telemetry.TTS.Services;
 
 namespace F1Telemetry.App.Services;
@@ -18,6 +19,7 @@ public sealed class VoiceAiQueryService
     private readonly IAIAnalysisService _aiAnalysisService;
     private readonly TtsMessageFactory _ttsMessageFactory;
     private readonly TtsQueue _ttsQueue;
+    private readonly IVoiceInputAudioProcessor _audioProcessor;
     private readonly RuleBasedFallbackAdviceService _fallbackAdviceService;
     private readonly StrategyRuleConflictResolver _conflictResolver;
     private readonly RaceAssistantAuditLogger? _raceAssistantAuditLogger;
@@ -29,17 +31,21 @@ public sealed class VoiceAiQueryService
     /// <param name="aiAnalysisService">The AI analysis service.</param>
     /// <param name="ttsMessageFactory">The TTS message factory.</param>
     /// <param name="ttsQueue">The TTS queue.</param>
+    /// <param name="raceAssistantAuditLogger">The optional race-assistant audit logger.</param>
+    /// <param name="audioProcessor">The optional microphone preprocessing pipeline.</param>
     public VoiceAiQueryService(
         ISpeechRecognitionService speechRecognitionService,
         IAIAnalysisService aiAnalysisService,
         TtsMessageFactory ttsMessageFactory,
         TtsQueue ttsQueue,
-        RaceAssistantAuditLogger? raceAssistantAuditLogger = null)
+        RaceAssistantAuditLogger? raceAssistantAuditLogger = null,
+        IVoiceInputAudioProcessor? audioProcessor = null)
     {
         _speechRecognitionService = speechRecognitionService ?? throw new ArgumentNullException(nameof(speechRecognitionService));
         _aiAnalysisService = aiAnalysisService ?? throw new ArgumentNullException(nameof(aiAnalysisService));
         _ttsMessageFactory = ttsMessageFactory ?? throw new ArgumentNullException(nameof(ttsMessageFactory));
         _ttsQueue = ttsQueue ?? throw new ArgumentNullException(nameof(ttsQueue));
+        _audioProcessor = audioProcessor ?? new VoiceInputAudioProcessor();
         _raceAssistantAuditLogger = raceAssistantAuditLogger;
         _fallbackAdviceService = new RuleBasedFallbackAdviceService();
         _conflictResolver = new StrategyRuleConflictResolver();
@@ -56,15 +62,75 @@ public sealed class VoiceAiQueryService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        string question;
+        var recognition = await RecognizeRecordingAsync(
+            request.Recording,
+            request.AudioSettings,
+            cancellationToken);
+        if (recognition.FailureResult is not null)
+        {
+            return recognition.FailureResult;
+        }
+
+        return await AskQuestionCoreAsync(
+            recognition.Question,
+            request,
+            cancellationToken,
+            recognition.ProcessingResult,
+            recognition.SpeechResult.Confidence);
+    }
+
+    /// <summary>
+    /// Runs microphone preprocessing and recognition without invoking RaceAssistant or TTS.
+    /// </summary>
+    /// <param name="recording">The microphone recording to test.</param>
+    /// <param name="settings">The audio quality settings.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<VoiceAiQueryResult> RecognizeOnlyAsync(
+        VoiceRecordingResult recording,
+        VoiceInputAudioSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        var recognition = await RecognizeRecordingAsync(recording, settings, cancellationToken);
+        if (recognition.FailureResult is not null)
+        {
+            return recognition.FailureResult;
+        }
+
+        return WithAudioMetrics(
+            new VoiceAiQueryResult
+            {
+                IsSuccess = true,
+                RecognizedQuestion = recognition.Question
+            },
+            recording,
+            recognition.ProcessingResult,
+            recognition.SpeechResult.Confidence);
+    }
+
+    private async Task<VoiceInputRecognitionGateResult> RecognizeRecordingAsync(
+        VoiceRecordingResult recording,
+        VoiceInputAudioSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var normalized = (settings ?? new VoiceInputAudioSettings()).Normalize();
+        VoiceInputAudioProcessingResult processingResult;
+        SpeechRecognitionResult speechResult;
         try
         {
-            if (!request.Recording.HasInput || request.Recording.WaveBytes.Length == 0)
+            processingResult = _audioProcessor.Process(recording, normalized);
+            if (IsNoSpeech(processingResult))
             {
-                return CreateFailure("未检测到语音输入");
+                return VoiceInputRecognitionGateResult.Failure(
+                    CreateFailure(
+                        "未检测到清晰语音",
+                        recording,
+                        processingResult,
+                        failedReason: VoiceInputAudioFailureReasons.NoSpeechDetected));
             }
 
-            question = await _speechRecognitionService.RecognizeAsync(request.Recording, cancellationToken);
+            speechResult = await _speechRecognitionService.RecognizeAsync(
+                processingResult.Recording,
+                cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -72,15 +138,37 @@ public sealed class VoiceAiQueryService
         }
         catch (Exception ex)
         {
-            return CreateFailure($"麦克风识别失败：{ex.Message}");
+            return VoiceInputRecognitionGateResult.Failure(
+                CreateFailure(
+                    $"麦克风识别失败：{ex.Message}",
+                    recording,
+                    null,
+                    failedReason: VoiceInputAudioFailureReasons.RecognitionError));
         }
 
-        if (string.IsNullOrWhiteSpace(question))
+        if (string.IsNullOrWhiteSpace(speechResult.Text))
         {
-            return CreateFailure("未识别到语音问题");
+            return VoiceInputRecognitionGateResult.Failure(
+                CreateFailure(
+                    "识别失败，请靠近麦克风重试",
+                    recording,
+                    processingResult,
+                    speechResult.Confidence,
+                    VoiceInputAudioFailureReasons.EmptyRecognition));
         }
 
-        return await AskQuestionCoreAsync(question, request, cancellationToken);
+        if (speechResult.Confidence < normalized.MinRecognitionConfidence)
+        {
+            return VoiceInputRecognitionGateResult.Failure(
+                CreateFailure(
+                    "识别置信度偏低，请靠近麦克风重试",
+                    recording,
+                    processingResult,
+                    speechResult.Confidence,
+                    VoiceInputAudioFailureReasons.LowConfidence));
+        }
+
+        return VoiceInputRecognitionGateResult.Success(speechResult.Text.Trim(), processingResult, speechResult);
     }
 
     /// <summary>
@@ -105,7 +193,9 @@ public sealed class VoiceAiQueryService
     private async Task<VoiceAiQueryResult> AskQuestionCoreAsync(
         string question,
         VoiceAiQueryRequest request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        VoiceInputAudioProcessingResult? audioProcessingResult = null,
+        double recognitionConfidence = 0d)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -118,7 +208,8 @@ public sealed class VoiceAiQueryService
         var strategyContext = ResolveStrategyContext(question, request);
         if (strategyContext is null)
         {
-            return await AskLegacyAsync(question, questionId, request, cancellationToken);
+            var legacyResult = await AskLegacyAsync(question, questionId, request, cancellationToken);
+            return WithAudioMetrics(legacyResult, request.Recording, audioProcessingResult, recognitionConfidence);
         }
 
         if (!request.AiSettings.AiEnabled)
@@ -147,7 +238,7 @@ public sealed class VoiceAiQueryService
                 aiCalled,
                 aiSucceeded,
                 aiStopwatch.ElapsedMilliseconds);
-            return result;
+            return WithAudioMetrics(result, request.Recording, audioProcessingResult, recognitionConfidence);
         }
 
         StrategyAdviceResult advice;
@@ -185,7 +276,7 @@ public sealed class VoiceAiQueryService
                         aiCalled,
                         aiSucceeded,
                         aiStopwatch.ElapsedMilliseconds);
-                    return failure;
+                    return WithAudioMetrics(failure, request.Recording, audioProcessingResult, recognitionConfidence);
                 }
 
                 usedFallback = !result.IsSuccess;
@@ -241,7 +332,7 @@ public sealed class VoiceAiQueryService
                 aiCalled,
                 aiSucceeded,
                 aiStopwatch.ElapsedMilliseconds);
-            return staleResult;
+            return WithAudioMetrics(staleResult, request.Recording, audioProcessingResult, recognitionConfidence);
         }
 
         var wasQueued = false;
@@ -267,7 +358,7 @@ public sealed class VoiceAiQueryService
             aiCalled,
             aiSucceeded,
             aiStopwatch.ElapsedMilliseconds);
-        return success;
+        return WithAudioMetrics(success, request.Recording, audioProcessingResult, recognitionConfidence);
     }
 
     private async Task<VoiceAiQueryResult> AskLegacyAsync(
@@ -567,6 +658,62 @@ public sealed class VoiceAiQueryService
             : result.Summary.Trim();
     }
 
+    private static bool IsNoSpeech(VoiceInputAudioProcessingResult result)
+    {
+        return !string.IsNullOrWhiteSpace(result.RecognitionFailedReason) ||
+               !result.Recording.HasInput ||
+               result.Recording.WaveBytes.Length == 0;
+    }
+
+    private static VoiceAiQueryResult CreateFailure(
+        string? message,
+        VoiceRecordingResult sourceRecording,
+        VoiceInputAudioProcessingResult? processingResult,
+        double recognitionConfidence = 0d,
+        string failedReason = "")
+    {
+        return WithAudioMetrics(
+            CreateFailure(message),
+            sourceRecording,
+            processingResult,
+            recognitionConfidence,
+            failedReason);
+    }
+
+    private static VoiceAiQueryResult WithAudioMetrics(
+        VoiceAiQueryResult result,
+        VoiceRecordingResult sourceRecording,
+        VoiceInputAudioProcessingResult? processingResult,
+        double recognitionConfidence = 0d,
+        string failedReason = "")
+    {
+        if (processingResult is null)
+        {
+            return result with
+            {
+                RecordingDurationMs = (int)Math.Round(sourceRecording.Duration.TotalMilliseconds),
+                RecognitionConfidence = recognitionConfidence,
+                RecognitionFailedReason = failedReason
+            };
+        }
+
+        return result with
+        {
+            RecordingDurationMs = (int)Math.Round(sourceRecording.Duration.TotalMilliseconds),
+            SpeechDurationMs = processingResult.SpeechDurationMs,
+            VadDetected = processingResult.VadDetected,
+            PreprocessingEnabled = processingResult.PreprocessingEnabled,
+            RecognitionFailedReason = string.IsNullOrWhiteSpace(failedReason)
+                ? processingResult.RecognitionFailedReason
+                : failedReason,
+            RawRmsDb = processingResult.RawRmsDb,
+            ProcessedRmsDb = processingResult.ProcessedRmsDb,
+            PeakDb = processingResult.PeakDb,
+            WasClipped = processingResult.WasClipped,
+            RecognitionConfidence = recognitionConfidence
+        };
+    }
+
     private static VoiceAiQueryResult CreateFailure(string? message)
     {
         return new VoiceAiQueryResult
@@ -574,5 +721,29 @@ public sealed class VoiceAiQueryService
             IsSuccess = false,
             ErrorMessage = string.IsNullOrWhiteSpace(message) ? AIErrorMessageFormatter.NetworkError : message.Trim()
         };
+    }
+
+    private sealed record VoiceInputRecognitionGateResult(
+        string Question,
+        VoiceInputAudioProcessingResult ProcessingResult,
+        SpeechRecognitionResult SpeechResult,
+        VoiceAiQueryResult? FailureResult)
+    {
+        public static VoiceInputRecognitionGateResult Success(
+            string question,
+            VoiceInputAudioProcessingResult processingResult,
+            SpeechRecognitionResult speechResult)
+        {
+            return new VoiceInputRecognitionGateResult(question, processingResult, speechResult, null);
+        }
+
+        public static VoiceInputRecognitionGateResult Failure(VoiceAiQueryResult result)
+        {
+            return new VoiceInputRecognitionGateResult(
+                string.Empty,
+                new VoiceInputAudioProcessingResult(),
+                SpeechRecognitionResult.Empty,
+                result);
+        }
     }
 }
