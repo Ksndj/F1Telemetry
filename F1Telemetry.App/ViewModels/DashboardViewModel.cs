@@ -52,6 +52,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int VoiceAiMaxRecordingSeconds = 20;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
+    private const double CompactSidebarAutoCollapseWidth = 1180d;
+    private const double ExpandedSidebarAutoRestoreWidth = 1280d;
     private static readonly TimeSpan VoiceAiBindingCaptureArmingDelay = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan UdpPortSaveDebounceInterval = TimeSpan.FromMilliseconds(800);
     private readonly IUdpListener _udpListener;
@@ -117,6 +119,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private ShellNavigationItemViewModel? _selectedShellNavigationItem;
     private PostRaceAiCompletionModeOptionViewModel? _selectedPostRaceAiCompletionMode;
     private bool _isSidebarExpanded = true;
+    private bool _sidebarCollapsedByViewport;
     private bool _isBusy;
     private bool _isListening;
     private bool _isConnected;
@@ -568,6 +571,31 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     public GridLength SidebarColumnWidth => new(IsSidebarExpanded ? ExpandedSidebarWidth : CollapsedSidebarWidth);
 
     /// <summary>
+    /// Applies shell-only responsive sizing rules for the sidebar.
+    /// </summary>
+    /// <param name="viewportWidth">The current main window width.</param>
+    public void ApplyShellViewportWidth(double viewportWidth)
+    {
+        if (viewportWidth <= 0d)
+        {
+            return;
+        }
+
+        if (viewportWidth <= CompactSidebarAutoCollapseWidth && IsSidebarExpanded)
+        {
+            _sidebarCollapsedByViewport = true;
+            IsSidebarExpanded = false;
+            return;
+        }
+
+        if (viewportWidth >= ExpandedSidebarAutoRestoreWidth && _sidebarCollapsedByViewport && !IsSidebarExpanded)
+        {
+            _sidebarCollapsedByViewport = false;
+            IsSidebarExpanded = true;
+        }
+    }
+
+    /// <summary>
     /// Gets or sets the currently selected shell navigation item.
     /// </summary>
     public ShellNavigationItemViewModel? SelectedShellNavigationItem
@@ -681,6 +709,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void ToggleSidebar()
     {
+        _sidebarCollapsedByViewport = false;
         IsSidebarExpanded = !IsSidebarExpanded;
     }
 

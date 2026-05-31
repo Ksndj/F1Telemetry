@@ -37,6 +37,8 @@ public sealed class MainWindowTests
                 Assert.Equal(WindowState.Normal, window.WindowState);
                 Assert.Equal(ResizeMode.CanResizeWithGrip, window.ResizeMode);
                 Assert.True(window.ShowInTaskbar);
+                Assert.True(window.MinWidth >= 1000d, "MainWindow should prevent layouts below the supported shell width.");
+                Assert.True(window.MinHeight >= 650d, "MainWindow should prevent layouts below the supported shell height.");
                 Assert.True(double.IsPositiveInfinity(window.MaxWidth), "MainWindow should not cap maximum width.");
                 Assert.True(double.IsPositiveInfinity(window.MaxHeight), "MainWindow should not cap maximum height.");
             }
@@ -89,6 +91,7 @@ public sealed class MainWindowTests
                 Assert.NotNull(window.FindName("Sidebar"));
                 Assert.NotNull(window.FindName("TopStatusBar"));
                 Assert.NotNull(window.FindName("ContentHost"));
+                Assert.NotNull(window.FindName("ContentHostScrollViewer"));
 
                 var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
                 Assert.Equal(ExpectedShellNavigationItemCount, navigationList.Items.Count);
@@ -145,6 +148,7 @@ public sealed class MainWindowTests
                 Assert.Equal("F1 Telemetry", productName.Text);
                 Assert.DoesNotContain(VersionInfo.CurrentVersion, productName.Text, StringComparison.Ordinal);
                 Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(navigationList));
+                Assert.Equal(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(navigationList));
                 AssertNavigationTextVisibility(navigationList, "实时概览", Visibility.Visible);
                 AssertNavigationItemsHaveTooltips(navigationList);
 
@@ -355,7 +359,8 @@ public sealed class MainWindowTests
         Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryValueStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Height\" Value=\"42\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"42\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TopStatusWrapPanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("连接状态", xaml, StringComparison.Ordinal);
         Assert.Contains("赛道", xaml, StringComparison.Ordinal);
         Assert.Contains("赛制", xaml, StringComparison.Ordinal);
@@ -363,8 +368,57 @@ public sealed class MainWindowTests
         Assert.Contains("天气", xaml, StringComparison.Ordinal);
         Assert.Contains("UDP PPS", xaml, StringComparison.Ordinal);
         Assert.Contains("监听端口", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinWidth=\"96\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxWidth=\"118\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Width=\"118\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain(" Width=\"96\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that shell content hosting has a single vertical scroll strategy.
+    /// </summary>
+    [Fact]
+    public void MainWindow_ContentHostUsesVerticalScrollContainer()
+    {
+        RunOnStaThread(() =>
+        {
+            var window = new MainWindow();
+            try
+            {
+                window.UpdateLayout();
+
+                var scrollViewer = Assert.IsType<ScrollViewer>(window.FindName("ContentHostScrollViewer"));
+                Assert.Equal(ScrollBarVisibility.Auto, scrollViewer.VerticalScrollBarVisibility);
+                Assert.Equal(ScrollBarVisibility.Disabled, scrollViewer.HorizontalScrollBarVisibility);
+                Assert.IsType<ContentControl>(window.FindName("ContentHost"));
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies that narrow shell widths trigger the icon-only sidebar path.
+    /// </summary>
+    [Fact]
+    public void MainWindow_DefinesResponsiveSidebarAutoCollapsePath()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var codeBehind = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml.cs"));
+        var viewModel = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "ViewModels", "DashboardViewModel.cs"));
+
+        Assert.Contains("SizeChanged=\"Window_SizeChanged\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ApplyShellViewportWidth(e.NewSize.Width)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("CompactSidebarAutoCollapseWidth = 1180d", viewModel, StringComparison.Ordinal);
+        Assert.Contains("ExpandedSidebarAutoRestoreWidth = 1280d", viewModel, StringComparison.Ordinal);
+        Assert.Contains("_sidebarCollapsedByViewport", viewModel, StringComparison.Ordinal);
+        Assert.Contains("IsSidebarExpanded = false", viewModel, StringComparison.Ordinal);
+        Assert.Contains("IsSidebarExpanded = true", viewModel, StringComparison.Ordinal);
     }
 
     /// <summary>

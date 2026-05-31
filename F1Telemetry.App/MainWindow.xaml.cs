@@ -36,7 +36,13 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         ApplyWindowStateVisuals(WindowState, animate: false);
+        ApplyShellViewportWidth(ActualWidth);
         InitializeVoiceAiInputHook();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        ApplyShellViewportWidth(e.NewSize.Width);
     }
 
     private void Window_StateChanged(object sender, EventArgs e)
@@ -93,6 +99,15 @@ public partial class MainWindow : Window
     {
         _voiceInputDashboard = e.NewValue as DashboardViewModel;
         _voiceInputDashboard?.UpdateVoiceAiRawInputStatus(_voiceInputStatus, _voiceInputReady);
+        ApplyShellViewportWidth(ActualWidth);
+    }
+
+    private void ApplyShellViewportWidth(double viewportWidth)
+    {
+        if (viewportWidth > 0d && DataContext is DashboardViewModel dashboard)
+        {
+            dashboard.ApplyShellViewportWidth(viewportWidth);
+        }
     }
 
     private void InitializeVoiceAiInputHook()
