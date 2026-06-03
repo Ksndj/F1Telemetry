@@ -26,6 +26,13 @@ public interface ILapSampleRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns all samples for a session ordered by lap and capture sequence.
+    /// </summary>
+    Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+        string sessionId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns one complete four-wheel tyre wear point per lap for a session.
     /// </summary>
     Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(

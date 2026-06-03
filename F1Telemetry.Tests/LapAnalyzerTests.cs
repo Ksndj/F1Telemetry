@@ -271,6 +271,32 @@ public sealed class LapAnalyzerTests
                 playerCarIndex: 3,
                 frameIdentifier: 121),
             CreateState(CreatePlayerCar(
+                lapNumber: 2,
+                lapDistance: 1_200f,
+                currentLapTimeInMs: 55_000,
+                lastLapTimeInMs: 94_000,
+                speedKph: 190,
+                throttle: 0.74,
+                brake: 0.02,
+                steering: 0.04f,
+                gear: 6,
+                fuelRemaining: 28.4f,
+                fuelLapsRemaining: 12.7f,
+                ersStoreEnergy: 3.0f,
+                tyreWear: 5.7f,
+                position: 3,
+                deltaFront: 300,
+                deltaLeader: 5_000,
+                pitStatus: 0,
+                isCurrentLapValid: true,
+                visualTyreCompound: 16,
+                actualTyreCompound: 19)));
+        analyzer.Observe(
+            CreateParsedPacket(
+                new LapDataPacket(Array.Empty<LapDataEntry>(), 255, 255),
+                playerCarIndex: 3,
+                frameIdentifier: 122),
+            CreateState(CreatePlayerCar(
                 lapNumber: 3,
                 lapDistance: 35f,
                 currentLapTimeInMs: 250,
@@ -309,7 +335,7 @@ public sealed class LapAnalyzerTests
                     ],
                     TyreStints: Array.Empty<TyreStintHistoryData>()),
                 playerCarIndex: 3,
-                frameIdentifier: 122),
+                frameIdentifier: 123),
             CreateState(CreatePlayerCar(
                 lapNumber: 3,
                 lapDistance: 100f,
@@ -338,6 +364,14 @@ public sealed class LapAnalyzerTests
         Assert.Equal((uint)89_500, summary.LapTimeInMs);
         Assert.Equal((uint)29_400, summary.Sector3TimeInMs);
         Assert.NotNull(summary.AverageSpeedKph);
+        Assert.InRange(summary.FuelUsedLitres!.Value, 0.99f, 1.01f);
+        Assert.InRange(summary.ErsUsed!.Value, 0.69f, 0.71f);
+        Assert.InRange(summary.TyreWearDelta!.Value, 1.19f, 1.21f);
+        Assert.Equal("V16 / A19", summary.StartTyre);
+        Assert.Equal("V16 / A19", summary.EndTyre);
+        Assert.False(summary.StartedInPit);
+        Assert.False(summary.EndedInPit);
+        Assert.Equal(2, analyzer.CaptureCompletedLapSamples(2).Count);
     }
 
     /// <summary>

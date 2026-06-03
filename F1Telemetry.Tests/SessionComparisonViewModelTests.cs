@@ -541,6 +541,13 @@ public sealed class SessionComparisonViewModelTests
             return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
         }
 
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(Array.Empty<StoredLapSample>());
+        }
+
         public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
             string sessionId,
             int count,

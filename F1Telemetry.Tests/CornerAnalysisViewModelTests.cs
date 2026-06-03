@@ -1333,6 +1333,19 @@ public sealed class CornerAnalysisViewModelTests
                     .ToArray());
         }
 
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedSessionId = sessionId;
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(
+                Samples
+                    .Where(sample => sample.SessionId == sessionId)
+                    .OrderBy(sample => sample.LapNumber)
+                    .ThenBy(sample => sample.SampleIndex)
+                    .ToArray());
+        }
+
         public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
             string sessionId,
             int count,
@@ -1488,6 +1501,13 @@ public sealed class CornerAnalysisViewModelTests
         public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(string sessionId, int lapNumber, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("sample read failed");
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
+            CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("sample read failed");
         }

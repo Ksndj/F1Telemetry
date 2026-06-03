@@ -150,6 +150,58 @@ public sealed class DashboardChartStateTests
         });
     }
 
+    /// <summary>
+    /// Verifies same-lap official timing refinements update summary storage without repeating lap side effects.
+    /// </summary>
+    [Fact]
+    public void RefreshCentralState_SameLapRefinement_DoesNotRepeatLapSideEffects()
+    {
+        RunOnStaThread(() =>
+        {
+            var storage = new FakeStoragePersistenceService();
+            var lapAnalyzer = new MutableLapAnalyzer(
+            [
+                new LapSummary { LapNumber = 4, LapTimeInMs = 91_000, AverageSpeedKph = 205, ClosedAt = DateTimeOffset.UtcNow }
+            ],
+            [
+                new LapSample { LapNumber = 4, SampledAt = DateTimeOffset.UtcNow, FrameIdentifier = 1 },
+                new LapSample { LapNumber = 4, SampledAt = DateTimeOffset.UtcNow.AddSeconds(1), FrameIdentifier = 2 }
+            ]);
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: lapAnalyzer,
+                storagePersistenceService: storage);
+
+            try
+            {
+                InvokeRefreshCentralState(viewModel);
+                lapAnalyzer.Laps =
+                [
+                    new LapSummary
+                    {
+                        LapNumber = 4,
+                        LapTimeInMs = 90_500,
+                        Sector1TimeInMs = 30_000,
+                        Sector2TimeInMs = 30_200,
+                        Sector3TimeInMs = 30_300,
+                        AverageSpeedKph = 205,
+                        FuelUsedLitres = 1.4f,
+                        ClosedAt = DateTimeOffset.UtcNow.AddSeconds(1)
+                    }
+                ];
+                InvokeRefreshCentralState(viewModel);
+
+                Assert.Equal(2, storage.EnqueuedLapSummaries.Count);
+                var sampleWrite = Assert.Single(storage.EnqueuedLapSampleWrites);
+                Assert.Equal(4, sampleWrite.LapNumber);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
     private static DashboardViewModel CreateDashboardViewModel(
         FakePacketDispatcher dispatcher,
         SessionStateStore? sessionStateStore = null,
@@ -419,6 +471,8 @@ public sealed class DashboardChartStateTests
 
         public List<LapSummary> EnqueuedLapSummaries { get; } = [];
 
+        public List<LapSampleWrite> EnqueuedLapSampleWrites { get; } = [];
+
         public void ObserveParsedPacket(ParsedPacket parsedPacket)
         {
         }
@@ -426,6 +480,11 @@ public sealed class DashboardChartStateTests
         public void EnqueueLapSummary(LapSummary lapSummary)
         {
             EnqueuedLapSummaries.Add(lapSummary);
+        }
+
+        public void EnqueueLapSamples(int lapNumber, IReadOnlyList<LapSample> lapSamples)
+        {
+            EnqueuedLapSampleWrites.Add(new LapSampleWrite(lapNumber, lapSamples.ToArray()));
         }
 
         public void EnqueueRaceEvent(RaceEvent raceEvent)
@@ -446,6 +505,8 @@ public sealed class DashboardChartStateTests
             return ValueTask.CompletedTask;
         }
     }
+
+    private sealed record LapSampleWrite(int LapNumber, IReadOnlyList<LapSample> Samples);
 
     private sealed class FakeLapAnalyzer(IReadOnlyList<LapSummary> laps) : ILapAnalyzer
     {
@@ -485,6 +546,51 @@ public sealed class DashboardChartStateTests
         public LapSummary? CaptureLastLap()
         {
             return laps.LastOrDefault();
+        }
+    }
+
+    private sealed class MutableLapAnalyzer(
+        IReadOnlyList<LapSummary> laps,
+        IReadOnlyList<LapSample> completedSamples) : ILapAnalyzer
+    {
+        public IReadOnlyList<LapSummary> Laps { get; set; } = laps;
+
+        public void Observe(ParsedPacket parsedPacket, SessionState sessionState)
+        {
+        }
+
+        public void ResetForSession(ulong sessionUid)
+        {
+        }
+
+        public IReadOnlyList<LapSummary> CaptureAllLaps()
+        {
+            return Laps;
+        }
+
+        public IReadOnlyList<LapSample> CaptureCurrentLapSamples()
+        {
+            return Array.Empty<LapSample>();
+        }
+
+        public IReadOnlyList<LapSample> CaptureCompletedLapSamples(int lapNumber)
+        {
+            return lapNumber == 4 ? completedSamples : Array.Empty<LapSample>();
+        }
+
+        public IReadOnlyList<LapSummary> CaptureRecentLaps(int maxCount)
+        {
+            return Laps.Take(maxCount).Reverse().ToArray();
+        }
+
+        public LapSummary? CaptureBestLap()
+        {
+            return Laps.OrderBy(lap => lap.LapTimeInMs).FirstOrDefault();
+        }
+
+        public LapSummary? CaptureLastLap()
+        {
+            return Laps.LastOrDefault();
         }
     }
 

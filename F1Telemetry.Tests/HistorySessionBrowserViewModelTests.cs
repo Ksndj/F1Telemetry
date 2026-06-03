@@ -251,6 +251,100 @@ public sealed class HistorySessionBrowserViewModelTests
     }
 
     /// <summary>
+    /// Verifies sparse stored laps are enriched from one batch of session samples for display only.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithSparseStoredMetrics_EnrichesRowsFromBatchSamples()
+    {
+        const string sessionId = "session-screenshot";
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession(sessionId, DateTimeOffset.Parse("2026-05-17T10:00:00Z"))]
+        };
+        var lapRepository = new FakeLapRepository();
+        lapRepository.LapsBySession[sessionId] = Enumerable.Range(1, 5)
+            .Select(index => CreateSparseLap(sessionId, index, index))
+            .ToArray();
+        lapRepository.LapsBySession[sessionId] = lapRepository.LapsBySession[sessionId]
+            .Select(lap => lap.LapNumber == 4
+                ? lap with
+                {
+                    AverageSpeedKph = 209,
+                    FuelUsedLitres = 1.66f,
+                    ErsUsed = 0f,
+                    StartTyre = "V17 / A20",
+                    EndTyre = "V17 / A20"
+                }
+                : lap)
+            .ToArray();
+        var sampleRepository = new FakeLapSampleRepository();
+        sampleRepository.SamplesBySession[sessionId] = Enumerable.Range(1, 5)
+            .SelectMany(index => CreateLapSamples(sessionId, index))
+            .ToArray();
+        var viewModel = new HistorySessionBrowserViewModel(
+            sessionRepository,
+            lapRepository,
+            lapSampleRepository: sampleRepository);
+
+        await viewModel.RefreshSessionsAsync();
+
+        Assert.Equal(1, sampleRepository.GetForSessionCallCount);
+        Assert.Equal(0, lapRepository.AddCallCount);
+        Assert.Equal(5, viewModel.HistoryLaps.Count);
+        Assert.All(viewModel.HistoryLaps, row =>
+        {
+            Assert.NotEqual("-", row.AverageSpeedText);
+            Assert.NotEqual("-", row.FuelUsedLitresText);
+            Assert.NotEqual("-", row.ErsUsedText);
+            Assert.NotEqual("-", row.TyreWearDeltaText);
+            Assert.NotEqual("-", row.TyreWindowText);
+            Assert.NotEqual("-", row.PitWindowText);
+        });
+        Assert.Equal("0.00 MJ", viewModel.HistoryLaps.Single(row => row.LapNumber == 4).ErsUsedText);
+    }
+
+    /// <summary>
+    /// Verifies insufficient or unstable samples stay hidden instead of manufacturing history values.
+    /// </summary>
+    [Fact]
+    public async Task RefreshSessionsAsync_WithInsufficientSamples_KeepsDerivedFieldsMissing()
+    {
+        const string sessionId = "session-sparse-samples";
+        var sessionRepository = new FakeSessionRepository
+        {
+            Sessions = [CreateSession(sessionId, DateTimeOffset.Parse("2026-05-17T10:00:00Z"))]
+        };
+        var lapRepository = new FakeLapRepository
+        {
+            LapsBySession =
+            {
+                [sessionId] = [CreateSparseLap(sessionId, 1, 1)]
+            }
+        };
+        var sampleRepository = new FakeLapSampleRepository
+        {
+            SamplesBySession =
+            {
+                [sessionId] = [CreateSample(sessionId, lapNumber: 1, sampleIndex: 0, speedKph: 200, fuel: 20f, ers: 1_000_000f, tyreWear: 10f)]
+            }
+        };
+        var viewModel = new HistorySessionBrowserViewModel(
+            sessionRepository,
+            lapRepository,
+            lapSampleRepository: sampleRepository);
+
+        await viewModel.RefreshSessionsAsync();
+
+        var row = Assert.Single(viewModel.HistoryLaps);
+        Assert.Equal("-", row.AverageSpeedText);
+        Assert.Equal("-", row.FuelUsedLitresText);
+        Assert.Equal("-", row.ErsUsedText);
+        Assert.Equal("-", row.TyreWearDeltaText);
+        Assert.Equal("-", row.TyreWindowText);
+        Assert.Equal("-", row.PitWindowText);
+    }
+
+    /// <summary>
     /// Verifies confirmed deletion removes the selected session and loads the next one.
     /// </summary>
     [Fact]
@@ -390,6 +484,60 @@ public sealed class HistorySessionBrowserViewModelTests
         };
     }
 
+    private static StoredLap CreateSparseLap(string sessionId, int lapNumber, long id)
+    {
+        return CreateLap(sessionId, lapNumber, id) with
+        {
+            AverageSpeedKph = null,
+            FuelUsedLitres = null,
+            ErsUsed = null,
+            StartTyre = "-",
+            EndTyre = "-"
+        };
+    }
+
+    private static IReadOnlyList<StoredLapSample> CreateLapSamples(string sessionId, int lapNumber)
+    {
+        var startFuel = 22f - lapNumber;
+        var startErs = lapNumber == 4 ? 1_000_000f : 1_700_000f;
+        return
+        [
+            CreateSample(sessionId, lapNumber, 0, speedKph: 196 + lapNumber, fuel: startFuel, ers: startErs, tyreWear: 8f + lapNumber, visualTyreCompound: 17, actualTyreCompound: 20),
+            CreateSample(sessionId, lapNumber, 1, speedKph: 202 + lapNumber, fuel: startFuel - 0.42f, ers: lapNumber == 4 ? startErs : startErs - 450_000f, tyreWear: 9.2f + lapNumber, visualTyreCompound: 17, actualTyreCompound: 20)
+        ];
+    }
+
+    private static StoredLapSample CreateSample(
+        string sessionId,
+        int lapNumber,
+        int sampleIndex,
+        double speedKph,
+        float fuel,
+        float ers,
+        float tyreWear,
+        int pitStatus = 0,
+        int visualTyreCompound = 17,
+        int actualTyreCompound = 20)
+    {
+        return new StoredLapSample
+        {
+            SessionId = sessionId,
+            LapNumber = lapNumber,
+            SampleIndex = sampleIndex,
+            SampledAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddSeconds((lapNumber * 100) + sampleIndex),
+            FrameIdentifier = (lapNumber * 1000) + sampleIndex,
+            SpeedKph = speedKph,
+            FuelRemainingLitres = fuel,
+            ErsStoreEnergy = ers,
+            TyreWear = tyreWear,
+            PitStatus = pitStatus,
+            IsValid = true,
+            VisualTyreCompound = visualTyreCompound,
+            ActualTyreCompound = actualTyreCompound,
+            CreatedAt = DateTimeOffset.Parse("2026-05-17T10:00:00Z").AddSeconds((lapNumber * 100) + sampleIndex)
+        };
+    }
+
     private sealed class FakeSessionRepository : ISessionRepository
     {
         public List<StoredSession> Sessions { get; init; } = [];
@@ -436,8 +584,11 @@ public sealed class HistorySessionBrowserViewModelTests
 
         public Func<string, int, CancellationToken, Task<IReadOnlyList<StoredLap>>>? GetRecentHandler { get; init; }
 
+        public int AddCallCount { get; private set; }
+
         public Task AddAsync(string sessionId, LapSummary lapSummary, CancellationToken cancellationToken = default)
         {
+            AddCallCount++;
             return Task.CompletedTask;
         }
 
@@ -452,6 +603,53 @@ public sealed class HistorySessionBrowserViewModelTests
                 LapsBySession.TryGetValue(sessionId, out var laps)
                     ? laps.Take(count).ToArray()
                     : (IReadOnlyList<StoredLap>)Array.Empty<StoredLap>());
+        }
+    }
+
+    private sealed class FakeLapSampleRepository : ILapSampleRepository
+    {
+        public Dictionary<string, IReadOnlyList<StoredLapSample>> SamplesBySession { get; init; } = new(StringComparer.Ordinal);
+
+        public int GetForSessionCallCount { get; private set; }
+
+        public Task AddAsync(StoredLapSample sample, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task AddRangeAsync(IEnumerable<StoredLapSample> samples, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForLapAsync(
+            string sessionId,
+            int lapNumber,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(
+                SamplesBySession.TryGetValue(sessionId, out var samples)
+                    ? samples.Where(sample => sample.LapNumber == lapNumber).ToArray()
+                    : Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapSample>> GetForSessionAsync(
+            string sessionId,
+            CancellationToken cancellationToken = default)
+        {
+            GetForSessionCallCount++;
+            return Task.FromResult<IReadOnlyList<StoredLapSample>>(
+                SamplesBySession.TryGetValue(sessionId, out var samples)
+                    ? samples.ToArray()
+                    : Array.Empty<StoredLapSample>());
+        }
+
+        public Task<IReadOnlyList<StoredLapTyreWearTrendPoint>> GetTyreWearTrendAsync(
+            string sessionId,
+            int count,
+            CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<IReadOnlyList<StoredLapTyreWearTrendPoint>>(Array.Empty<StoredLapTyreWearTrendPoint>());
         }
     }
 
