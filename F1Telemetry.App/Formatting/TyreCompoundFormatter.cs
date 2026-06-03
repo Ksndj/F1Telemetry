@@ -37,14 +37,21 @@ public static class TyreCompoundFormatter
     /// <param name="rawCompoundText">The raw tyre summary text produced by older display paths.</param>
     public static string FormatRawCompoundText(string? rawCompoundText)
     {
-        if (string.IsNullOrWhiteSpace(rawCompoundText) || rawCompoundText == "-")
+        if (string.IsNullOrWhiteSpace(rawCompoundText) || rawCompoundText.Trim() == "-")
         {
             return "未知胎";
         }
 
+        var trimmedText = rawCompoundText.Trim();
+        var namedCompound = FormatNamedCompound(trimmedText);
+        if (namedCompound is not null)
+        {
+            return namedCompound;
+        }
+
         byte? visualCompound = null;
         byte? actualCompound = null;
-        foreach (var token in rawCompoundText.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var token in trimmedText.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (token.Length < 2 || !byte.TryParse(token[1..], out var compound))
             {
@@ -68,6 +75,20 @@ public static class TyreCompoundFormatter
         return visualCompound is null && actualCompound is null
             ? "未知胎"
             : Format(visualCompound, actualCompound, hasTelemetryAccess: true);
+    }
+
+    private static string? FormatNamedCompound(string compound)
+    {
+        return compound.ToLowerInvariant() switch
+        {
+            "soft" => "红胎",
+            "medium" => "黄胎",
+            "hard" => "白胎",
+            "intermediate" or "inter" => "半雨胎",
+            "wet" => "全雨胎",
+            "红胎" or "黄胎" or "白胎" or "半雨胎" or "全雨胎" => compound,
+            _ => null
+        };
     }
 
     private static string? FormatVisualCompound(byte compound)

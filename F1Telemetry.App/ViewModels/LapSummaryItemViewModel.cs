@@ -621,7 +621,7 @@ public sealed class LapSummaryItemViewModel
 
     private static bool IsUsableStoredTyre(string? tyre)
     {
-        return !string.IsNullOrWhiteSpace(tyre) && tyre.Trim() != "-" && tyre.Any(char.IsDigit);
+        return !string.IsNullOrWhiteSpace(tyre) && tyre.Trim() != "-";
     }
 
     private static bool IsPositiveFinite(double? value)
@@ -646,11 +646,15 @@ public sealed class LapSummaryItemViewModel
 
     private static string FormatStoredTyre(string? tyre)
     {
-        if (string.IsNullOrWhiteSpace(tyre) || tyre.Trim() == "-" || !tyre.Any(char.IsDigit))
+        if (!IsUsableStoredTyre(tyre))
         {
             return "-";
         }
 
-        return TyreCompoundFormatter.FormatRawCompoundText(tyre);
+        var trimmedTyre = tyre!.Trim();
+        var formatted = TyreCompoundFormatter.FormatRawCompoundText(trimmedTyre);
+        return string.Equals(formatted, "未知胎", StringComparison.Ordinal)
+            ? trimmedTyre
+            : formatted;
     }
 }

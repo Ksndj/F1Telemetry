@@ -167,6 +167,22 @@ public sealed class DisplaySemanticFormatterTests
     }
 
     /// <summary>
+    /// Verifies that legacy textual tyre labels are localized instead of being treated as missing.
+    /// </summary>
+    [Theory]
+    [InlineData("Soft", "红胎")]
+    [InlineData("Medium", "黄胎")]
+    [InlineData("Hard", "白胎")]
+    [InlineData("Intermediate", "半雨胎")]
+    [InlineData("Wet", "全雨胎")]
+    public void TyreCompoundFormatter_FormatRawCompoundText_TextualCompound_ReturnsLocalizedLabel(
+        string rawCompoundText,
+        string expected)
+    {
+        Assert.Equal(expected, TyreCompoundFormatter.FormatRawCompoundText(rawCompoundText));
+    }
+
+    /// <summary>
     /// Verifies that tyre formatter fallbacks remain visible and non-empty.
     /// </summary>
     [Fact]
@@ -464,6 +480,29 @@ public sealed class DisplaySemanticFormatterTests
         Assert.Equal("-", item.AverageSpeedText);
         Assert.Equal("0.00 L", item.FuelUsedLitresText);
         Assert.Equal("0.00 MJ", item.ErsUsedText);
+    }
+
+    /// <summary>
+    /// Verifies stored textual tyre labels are preserved for history projection and localized for display.
+    /// </summary>
+    [Fact]
+    public void LapSummaryItemViewModel_FromStoredLap_PreservesTextualTyreLabels()
+    {
+        var lap = new StoredLap
+        {
+            SessionId = "session-tyre-label",
+            LapNumber = 10,
+            IsValid = true,
+            StartTyre = "Medium",
+            EndTyre = "Medium",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var item = LapSummaryItemViewModel.FromStoredLap(lap);
+
+        Assert.Equal("Medium", item.StartTyre);
+        Assert.Equal("Medium", item.EndTyre);
+        Assert.Equal("黄胎 -> 黄胎", item.TyreWindowText);
     }
 
     /// <summary>
