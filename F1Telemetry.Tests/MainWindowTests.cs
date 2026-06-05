@@ -37,8 +37,8 @@ public sealed class MainWindowTests
                 Assert.Equal(WindowState.Normal, window.WindowState);
                 Assert.Equal(ResizeMode.CanResizeWithGrip, window.ResizeMode);
                 Assert.True(window.ShowInTaskbar);
-                Assert.True(window.MinWidth >= 1000d, "MainWindow should prevent layouts below the supported shell width.");
-                Assert.True(window.MinHeight >= 650d, "MainWindow should prevent layouts below the supported shell height.");
+                Assert.InRange(window.MinWidth, 800d, 900d);
+                Assert.InRange(window.MinHeight, 560d, 600d);
                 Assert.True(double.IsPositiveInfinity(window.MaxWidth), "MainWindow should not cap maximum width.");
                 Assert.True(double.IsPositiveInfinity(window.MaxHeight), "MainWindow should not cap maximum height.");
             }
@@ -148,7 +148,9 @@ public sealed class MainWindowTests
                 Assert.Equal("F1 Telemetry", productName.Text);
                 Assert.DoesNotContain(VersionInfo.CurrentVersion, productName.Text, StringComparison.Ordinal);
                 Assert.Equal(ScrollBarVisibility.Disabled, ScrollViewer.GetHorizontalScrollBarVisibility(navigationList));
-                Assert.Equal(ScrollBarVisibility.Auto, ScrollViewer.GetVerticalScrollBarVisibility(navigationList));
+                Assert.Equal(ScrollBarVisibility.Hidden, ScrollViewer.GetVerticalScrollBarVisibility(navigationList));
+                Assert.Equal("settings", navigationItems[^1].Key);
+                Assert.Equal("设置", navigationItems[^1].Name);
                 AssertNavigationTextVisibility(navigationList, "实时概览", Visibility.Visible);
                 AssertNavigationItemsHaveTooltips(navigationList);
 
@@ -355,19 +357,30 @@ public sealed class MainWindowTests
     {
         var root = FindRepositoryRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var topStatusWrapPanel = FindElementByName(document, "TopStatusWrapPanel");
 
         Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellTelemetryIconStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("StatusChipStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("IconBadgeStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryValueStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"42\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellPortTextBoxStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellPrimaryButtonStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("ShellSecondaryButtonStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"58\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TopStatusWrapPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Equal("WrapPanel", topStatusWrapPanel.Name.LocalName);
+        Assert.Contains("x:Name=\"TopPortControlCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"当前端口\"", xaml, StringComparison.Ordinal);
         Assert.Contains("连接状态", xaml, StringComparison.Ordinal);
         Assert.Contains("赛道", xaml, StringComparison.Ordinal);
         Assert.Contains("赛制", xaml, StringComparison.Ordinal);
         Assert.Contains("比赛进度", xaml, StringComparison.Ordinal);
         Assert.Contains("天气", xaml, StringComparison.Ordinal);
         Assert.Contains("UDP PPS", xaml, StringComparison.Ordinal);
-        Assert.Contains("监听端口", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"监听端口\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"SessionTypeStatusChip\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding SessionTypeTooltipText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"WeatherStatusChip\"", xaml, StringComparison.Ordinal);
@@ -379,15 +392,30 @@ public sealed class MainWindowTests
         Assert.Contains("Width=\"96\"", xaml, StringComparison.Ordinal);
         Assert.Contains("StartListeningCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("StopListeningCommand", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Viewbox", xaml, StringComparison.Ordinal);
 
-        var sessionTypeChip = ExtractNamedBorderBlock(xaml, "SessionTypeStatusChip");
+        var sessionTypeChip = FindElementByName(document, "SessionTypeStatusChip").ToString(SaveOptions.DisableFormatting);
         Assert.Contains("ToolTip=\"{Binding SessionTypeTooltipText}\"", sessionTypeChip, StringComparison.Ordinal);
         Assert.Contains("Text=\"赛制\"", sessionTypeChip, StringComparison.Ordinal);
         Assert.DoesNotContain("Text=\"连接状态\"", sessionTypeChip, StringComparison.Ordinal);
 
-        var udpPortChip = ExtractNamedBorderBlock(xaml, "UdpPortStatusChip");
+        var udpPortChip = FindElementByName(document, "UdpPortStatusChip").ToString(SaveOptions.DisableFormatting);
+        Assert.Contains("TopPortControlCard", udpPortChip, StringComparison.Ordinal);
         Assert.DoesNotContain("<WrapPanel", udpPortChip, StringComparison.Ordinal);
         Assert.DoesNotContain("MaxWidth=", udpPortChip, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the corner-analysis page keeps a vertical scroll surface without changing that page in this milestone.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_DefinesVerticalPageScrollViewer()
+    {
+        var root = FindRepositoryRoot();
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+
+        Assert.Contains("x:Name=\"CornerAnalysisPageScrollViewer\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -440,16 +468,39 @@ public sealed class MainWindowTests
     {
         var root = FindRepositoryRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
         var codeBehind = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml.cs"));
         var viewModel = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "ViewModels", "DashboardViewModel.cs"));
+        var navigationList = FindElementByName(document, "ShellNavigationList").ToString(SaveOptions.DisableFormatting);
+        var navigationItemLayout = FindElementByName(document, "NavigationItemLayout").ToString(SaveOptions.DisableFormatting);
+        var sidebarStatusCard = FindElementByName(document, "SidebarStatusCard").ToString(SaveOptions.DisableFormatting);
 
         Assert.Contains("SizeChanged=\"Window_SizeChanged\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ApplyShellViewportWidth(e.NewSize.Width)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("CompactSidebarAutoCollapseWidth = 1180d", viewModel, StringComparison.Ordinal);
         Assert.Contains("ExpandedSidebarAutoRestoreWidth = 1280d", viewModel, StringComparison.Ordinal);
+        Assert.Contains("CollapsedSidebarWidth = 80d", viewModel, StringComparison.Ordinal);
         Assert.Contains("_sidebarCollapsedByViewport", viewModel, StringComparison.Ordinal);
         Assert.Contains("IsSidebarExpanded = false", viewModel, StringComparison.Ordinal);
         Assert.Contains("IsSidebarExpanded = true", viewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("CollapsedSidebarWidth = 90d", viewModel, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SidebarCompactStatusRow\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CompactSidebarStatusDot\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CompactSidebarUdpLabel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"ShellIconButtonStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"UDP\"", sidebarStatusCard, StringComparison.Ordinal);
+        Assert.DoesNotContain("Padding=\"0,0,6,0\"", navigationList, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Hidden\"", navigationList, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"NavigationItemIcon\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"NavigationItemText\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("Width\" Value=\"44\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("Height\" Value=\"44\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment\" Value=\"Center\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("Grid.ColumnSpan\" Value=\"3\"", navigationItemLayout, StringComparison.Ordinal);
+        Assert.Contains("Visibility\" Value=\"Collapsed\"", navigationItemLayout, StringComparison.Ordinal);
+        var sidebarToggleButton = FindElementByName(document, "SidebarToggleButton").ToString(SaveOptions.DisableFormatting);
+        Assert.Contains("StaticResource ShellIconButtonStyle", sidebarToggleButton, StringComparison.Ordinal);
+        Assert.Contains("HorizontalAlignment\" Value=\"Center\"", sidebarToggleButton, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -782,6 +833,16 @@ public sealed class MainWindowTests
         }
 
         return null;
+    }
+
+    private static XElement FindElementByName(XDocument document, string name)
+    {
+        return document
+            .Descendants()
+            .Single(element => string.Equals(
+                element.Attributes().FirstOrDefault(attribute => attribute.Name.LocalName == "Name")?.Value,
+                name,
+                StringComparison.Ordinal));
     }
 
     private static string FindRepositoryRoot()

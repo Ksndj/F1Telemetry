@@ -261,6 +261,86 @@ public sealed class EventSummaryAndLogCategoryTests
     }
 
     /// <summary>
+    /// Verifies the Overview page exposes responsive scrolling, local table scrollbars, and complete empty-state text.
+    /// </summary>
+    [Fact]
+    public void OverviewView_DefinesResponsiveScrollAndEmptyStates()
+    {
+        var filePath = FindRepositoryFile("F1Telemetry.App", "Views", "OverviewView.xaml");
+        var document = XDocument.Load(filePath);
+        var text = document.ToString(SaveOptions.DisableFormatting);
+        var source = File.ReadAllText(filePath);
+
+        Assert.Contains("x:Name=\"OverviewScrollViewer\"", text, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", text, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", text, StringComparison.Ordinal);
+        Assert.Contains("GlassCardStyle", text, StringComparison.Ordinal);
+        Assert.Contains("MetricTileStyle", text, StringComparison.Ordinal);
+        Assert.Contains("SectionHeaderStyle", text, StringComparison.Ordinal);
+        Assert.Contains("EmptyStateStyle", text, StringComparison.Ordinal);
+        Assert.Contains("IconBadgeStyle", text, StringComparison.Ordinal);
+        Assert.Contains("PillTagStyle", text, StringComparison.Ordinal);
+        Assert.Contains("PrimaryButtonStyle", text, StringComparison.Ordinal);
+        Assert.Contains("SecondaryButtonStyle", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"OverviewTopCardsGrid\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"OverviewMiddleCardsGrid\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"OverviewBottomCardsGrid\"", source, StringComparison.Ordinal);
+        Assert.Equal("Grid", FindElementByName(document, "OverviewTopCardsGrid").Name.LocalName);
+        Assert.Equal("Grid", FindElementByName(document, "OverviewMiddleCardsGrid").Name.LocalName);
+        Assert.Equal("Grid", FindElementByName(document, "OverviewBottomCardsGrid").Name.LocalName);
+        Assert.Equal(new[] { "*", "12", "*", "12", "*" }, GetDirectColumnWidths(FindElementByName(document, "OverviewTopCardsGrid")));
+        Assert.Equal(new[] { "1.1*", "12", "1.4*" }, GetDirectColumnWidths(FindElementByName(document, "OverviewMiddleCardsGrid")));
+        Assert.Equal(new[] { "*", "12", "*", "12", "*" }, GetDirectColumnWidths(FindElementByName(document, "OverviewBottomCardsGrid")));
+        AssertCardGridColumn(document, "OverviewPlayerStatusCard", "0");
+        AssertCardGridColumn(document, "OverviewVehicleInputCard", "2");
+        AssertCardGridColumn(document, "OverviewTyreSummaryCard", "4");
+        AssertCardGridColumn(document, "OverviewOpponentSummaryCard", "0");
+        AssertCardGridColumn(document, "OverviewEventSummaryCard", "2");
+        AssertCardGridColumn(document, "OverviewSessionFocusCard", "0");
+        AssertCardGridColumn(document, "OverviewAiSuggestionCard", "2");
+        AssertCardGridColumn(document, "OverviewTtsCard", "4");
+        Assert.DoesNotContain("x:Name=\"OverviewResponsiveCardsPanel\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"OverviewSecondaryCardsPanel\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("x:Name=\"OverviewSupportCardsPanel\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HorizontalAlignment=\"Left\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MaxWidth=", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"OpponentCarsHorizontalScrollViewer\"", text, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"OverviewEventsHorizontalScrollViewer\"", text, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Auto\"", text, StringComparison.Ordinal);
+        Assert.Equal("WrapPanel", FindElementByName(document, "TyreMetricTilesPanel").Name.LocalName);
+        Assert.Contains("x:Name=\"TyreCurrentCompoundLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreAgeLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreWearLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreSurfaceTemperatureLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreTemperatureLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyrePressureLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreDamageLabel\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"ToolTip\" Value=\"{Binding Text, RelativeSource={RelativeSource Self}}\"", source, StringComparison.Ordinal);
+        Assert.Contains("DamageValueContentStyle", source, StringComparison.Ordinal);
+        Assert.Contains("暂无损伤", source, StringComparison.Ordinal);
+        Assert.Contains("等待数据", text, StringComparison.Ordinal);
+        Assert.Contains("连接后显示", text, StringComparison.Ordinal);
+        Assert.Contains("等待玩家车辆状态", text, StringComparison.Ordinal);
+        Assert.Contains("连接后显示实时数据", text, StringComparison.Ordinal);
+        Assert.Contains("暂无事件数据", text, StringComparison.Ordinal);
+        Assert.Contains("比赛事件将在这里显示", text, StringComparison.Ordinal);
+        Assert.Contains("等待数据以生成建议", text, StringComparison.Ordinal);
+        Assert.Contains("等待播报内容", text, StringComparison.Ordinal);
+        Assert.Contains("等待比赛开始或数据连接", text, StringComparison.Ordinal);
+        Assert.Contains("等待 CarDamage 包", text, StringComparison.Ordinal);
+        Assert.Contains("圈速", text, StringComparison.Ordinal);
+        Assert.Contains("轮胎", text, StringComparison.Ordinal);
+        Assert.Contains("燃油", text, StringComparison.Ordinal);
+        Assert.Contains("策略", text, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", text, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Mode=TwoWay", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1120\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1000\"", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Viewbox", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies the damage formatter supplies the Overview empty-state text when CarDamage has not arrived.
     /// </summary>
     [Fact]
@@ -330,5 +410,29 @@ public sealed class EventSummaryAndLogCategoryTests
         }
 
         throw new FileNotFoundException($"Could not find repository file: {Path.Combine(pathParts)}");
+    }
+
+    private static XElement FindElementByName(XContainer document, string name)
+    {
+        return document.Descendants()
+            .Single(element => (string?)element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml")) == name);
+    }
+
+    private static string[] GetDirectColumnWidths(XElement grid)
+    {
+        var columnDefinitions = grid.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions");
+
+        return columnDefinitions.Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .Select(element => element.Attribute("Width")?.Value ?? "*")
+            .ToArray();
+    }
+
+    private static void AssertCardGridColumn(XContainer document, string name, string expectedColumn)
+    {
+        var card = FindElementByName(document, name);
+        Assert.Equal("Stretch", card.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal(expectedColumn, card.Attribute("Grid.Column")?.Value ?? "0");
     }
 }

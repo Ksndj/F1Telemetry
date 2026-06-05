@@ -38,7 +38,7 @@ public sealed class UdpRawLogSettingsUiTests
         Assert.Equal("Center", layoutGrid.Attribute("VerticalAlignment")?.Value);
         Assert.Equal(7, layoutGrid.Descendants().Count(element => element.Name.LocalName == "ColumnDefinition"));
 
-        Assert.Contains("Text=\"监听端口\"", udpPortChipXaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"当前端口\"", udpPortChipXaml, StringComparison.Ordinal);
         Assert.Equal(3, CountOccurrences(udpPortChipXaml, "Width=\"8\""));
 
         var portTextBox = Assert.Single(layoutGrid.Descendants(), element => element.Name.LocalName == "TextBox");
