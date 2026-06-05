@@ -5,330 +5,960 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DesignHeight="680"
-             d:DesignWidth="1120">
+             d:DesignWidth="980">
     <UserControl.Resources>
-        <Style x:Key="OverviewCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="Padding" Value="18" />
-            <Setter Property="CornerRadius" Value="18" />
-            <Setter Property="Background" Value="#0F1B2E" />
+        <Style x:Key="GlassCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#132844" Offset="0" />
+                        <GradientStop Color="#0E1D31" Offset="0.58" />
+                        <GradientStop Color="#0A1728" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="#244263" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
-        <Style x:Key="MetricCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="Padding" Value="14" />
+
+        <Style x:Key="OverviewCardStyle"
+               BasedOn="{StaticResource GlassCardStyle}"
+               TargetType="{x:Type Border}" />
+
+        <Style x:Key="MetricTileStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="64" />
+            <Setter Property="Padding" Value="12" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="#132844" />
+            <Setter Property="BorderBrush" Value="#223D5D" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="OverviewMetricCardStyle"
+               BasedOn="{StaticResource MetricTileStyle}"
+               TargetType="{x:Type Border}" />
+
+        <Style x:Key="HeroMetricTileStyle"
+               BasedOn="{StaticResource MetricTileStyle}"
+               TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="88" />
+        </Style>
+
+        <Style x:Key="IconBadgeStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
             <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Background" Value="#132743" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#102A4B" />
+            <Setter Property="BorderBrush" Value="#1C6EDC" />
+            <Setter Property="BorderThickness" Value="1" />
         </Style>
-        <Style x:Key="LabelTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="#7FA5D8" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+
+        <Style x:Key="SectionHeaderStyle" TargetType="{x:Type Grid}">
+            <Setter Property="Margin" Value="0,0,0,14" />
         </Style>
-        <Style x:Key="ValueTextStyle" TargetType="{x:Type TextBlock}">
+
+        <Style x:Key="SectionIconTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#36A3FF" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SectionTitleTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="MetricLabelTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#8CB5E5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="MetricUnitTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="Foreground" Value="#8EA6C3" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="MetricValueContentStyle" TargetType="{x:Type ContentControl}">
             <Setter Property="Margin" Value="0,6,0,0" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Tag" Value="等待数据" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContentControl}">
+                        <Grid>
+                            <TextBlock x:Name="ValueText"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="#F8FAFC"
+                                       Text="{TemplateBinding Content}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{TemplateBinding Content}" />
+                            <TextBlock x:Name="EmptyText"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="#B7C9E2"
+                                       Text="{TemplateBinding Tag}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{TemplateBinding Tag}"
+                                       Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Content" Value="-">
+                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="Content" Value="">
+                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
+        <Style x:Key="OverviewValueContentStyle"
+               BasedOn="{StaticResource MetricValueContentStyle}"
+               TargetType="{x:Type ContentControl}" />
+
+        <Style x:Key="DamageValueContentStyle" TargetType="{x:Type ContentControl}">
+            <Setter Property="Margin" Value="0,6,0,0" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Tag" Value="等待 CarDamage 包" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContentControl}">
+                        <Grid>
+                            <TextBlock x:Name="ValueText"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="#F8FAFC"
+                                       Text="{TemplateBinding Content}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{TemplateBinding Content}" />
+                            <TextBlock x:Name="NoDamageText"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="#F8FAFC"
+                                       Text="暂无损伤"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="暂无损伤"
+                                       Visibility="Collapsed" />
+                            <TextBlock x:Name="MissingPacketText"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="#B7C9E2"
+                                       Text="{TemplateBinding Tag}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip="{TemplateBinding Tag}"
+                                       Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Content" Value="-">
+                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="Content" Value="">
+                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="Content" Value="无明显损伤">
+                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="NoDamageText" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="TyreMetricTileStyle"
+               BasedOn="{StaticResource MetricTileStyle}"
+               TargetType="{x:Type Border}">
+            <Setter Property="MinWidth" Value="116" />
+        </Style>
+
+        <Style x:Key="HeroValueContentStyle"
+               BasedOn="{StaticResource MetricValueContentStyle}"
+               TargetType="{x:Type ContentControl}">
+            <Setter Property="FontSize" Value="20" />
+        </Style>
+
+        <Style x:Key="TableCellTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="#D7E4F3" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="OverviewTableCellStyle"
+               BasedOn="{StaticResource TableCellTextStyle}"
+               TargetType="{x:Type TextBlock}" />
+
+        <Style x:Key="NarrativeTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#D7E4F3" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="EmptyStateStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="94" />
+            <Setter Property="Padding" Value="18" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Background" Value="#10233A" />
+            <Setter Property="BorderBrush" Value="#213B5C" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="EmptyIconBadgeStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="46" />
+            <Setter Property="Height" Value="46" />
+            <Setter Property="CornerRadius" Value="23" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#13263E" />
+            <Setter Property="BorderBrush" Value="#375373" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="EmptyIconTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="24" />
+            <Setter Property="Foreground" Value="#6F86A4" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="EmptyStateTitleTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,10,0,0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="17" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="EmptyStateBodyTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,4,0,0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="#93A8C3" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="PillTagStyle" TargetType="{x:Type Border}">
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="CornerRadius" Value="7" />
+            <Setter Property="Background" Value="#172B47" />
+            <Setter Property="BorderBrush" Value="#2A4668" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Padding" Value="13,7" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#1D73F8" />
+            <Setter Property="BorderBrush" Value="#3B8CFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonRoot"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="7">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="#2B84FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="#1557C8" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonRoot" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="SecondaryButtonStyle"
+               BasedOn="{StaticResource PrimaryButtonStyle}"
+               TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#14243A" />
+            <Setter Property="BorderBrush" Value="#294766" />
+        </Style>
+
+        <Style x:Key="OverviewActionButtonStyle"
+               BasedOn="{StaticResource PrimaryButtonStyle}"
+               TargetType="{x:Type Button}" />
+
+        <Style x:Key="OverviewEmptyStateStyle"
+               BasedOn="{StaticResource EmptyStateBodyTextStyle}"
+               TargetType="{x:Type TextBlock}" />
     </UserControl.Resources>
 
     <ScrollViewer x:Name="OverviewScrollViewer"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Disabled">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="16" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="16" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <StackPanel x:Name="OverviewResponsiveLayout"
+                    HorizontalAlignment="Stretch"
+                    Background="#08111F">
+            <Grid x:Name="OverviewTopCardsGrid"
+                  Margin="0,0,0,12"
+                  HorizontalAlignment="Stretch">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="OverviewPlayerStatusCard"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE77B;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="玩家状态" />
+                        </Grid>
 
-            <Grid>
+                        <Border Style="{StaticResource EmptyStateStyle}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Border Style="{StaticResource EmptyIconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource EmptyIconTextStyle}" Text="&#xE804;" />
+                                </Border>
+                                <TextBlock Style="{StaticResource EmptyStateTitleTextStyle}"
+                                           Text="等待玩家车辆状态" />
+                                <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
+                                           Text="连接后显示实时数据" />
+                            </StackPanel>
+                        </Border>
+
+                        <UniformGrid Margin="0,10,0,0" Columns="2">
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="位置" />
+                                    <ContentControl Content="{Binding PlayerPositionText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="当前圈" />
+                                    <ContentControl Content="{Binding PlayerCurrentLapText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="上一圈" />
+                                    <ContentControl Content="{Binding PlayerLastLapText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="最佳圈" />
+                                    <ContentControl Content="{Binding PlayerBestLapText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="OverviewVehicleInputCard"
+                        Grid.Column="2"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE804;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="车辆输入" />
+                        </Grid>
+
+                        <UniformGrid Columns="3">
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="速度" />
+                                    <ContentControl Content="{Binding OverviewSpeedText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="km/h" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="档位" />
+                                    <ContentControl Content="{Binding OverviewGearText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="DRS" />
+                                    <ContentControl Content="{Binding OverviewDrsText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="油门" />
+                                    <ContentControl Content="{Binding OverviewThrottleText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="%" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="刹车" />
+                                    <ContentControl Content="{Binding OverviewBrakeText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="%" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="ERS" />
+                                    <ContentControl Content="{Binding PlayerErsText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="--" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="kg" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+
+                        <Border Style="{StaticResource MetricTileStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="燃油" />
+                                <ContentControl Content="{Binding PlayerFuelText}"
+                                                Style="{StaticResource MetricValueContentStyle}"
+                                                Tag="--" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="OverviewTyreSummaryCard"
+                        Grid.Column="4"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C1;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="胎况摘要" />
+                        </Grid>
+
+                        <Border Style="{StaticResource MetricTileStyle}">
+                            <StackPanel>
+                                <TextBlock x:Name="TyreCurrentCompoundLabel"
+                                           Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="当前胎" />
+                                <ContentControl Content="{Binding PlayerTyreText}"
+                                                Style="{StaticResource MetricValueContentStyle}"
+                                                Tag="等待数据" />
+                            </StackPanel>
+                        </Border>
+
+                        <WrapPanel x:Name="TyreMetricTilesPanel">
+                            <Border Style="{StaticResource TyreMetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TyreAgeLabel"
+                                               Style="{StaticResource MetricLabelTextStyle}"
+                                               Text="胎龄" />
+                                    <ContentControl Content="{Binding PlayerTyreAgeText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource TyreMetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TyreWearLabel"
+                                               Style="{StaticResource MetricLabelTextStyle}"
+                                               Text="四轮磨损" />
+                                    <ContentControl Content="{Binding OverviewTyreWearText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="%" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource TyreMetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TyreSurfaceTemperatureLabel"
+                                               Style="{StaticResource MetricLabelTextStyle}"
+                                               Text="胎面温度" />
+                                    <ContentControl Content="{Binding OverviewTyreTemperatureText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="°C" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource TyreMetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TyreTemperatureLabel"
+                                               Style="{StaticResource MetricLabelTextStyle}"
+                                               Text="温度" />
+                                    <ContentControl Content="{Binding OverviewTyreTemperatureText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="°C" />
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource TyreMetricTileStyle}">
+                                <StackPanel>
+                                    <TextBlock x:Name="TyrePressureLabel"
+                                               Style="{StaticResource MetricLabelTextStyle}"
+                                               Text="压力" />
+                                    <ContentControl Content="{Binding OverviewTyrePressureText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                    <TextBlock Style="{StaticResource MetricUnitTextStyle}" Text="PSI" />
+                                </StackPanel>
+                            </Border>
+                        </WrapPanel>
+
+                        <Border Style="{StaticResource MetricTileStyle}">
+                            <StackPanel>
+                                <TextBlock x:Name="TyreDamageLabel"
+                                           Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="损伤" />
+                                <ContentControl Content="{Binding OverviewDamageText}"
+                                                Style="{StaticResource DamageValueContentStyle}"
+                                                Tag="等待 CarDamage 包" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid x:Name="OverviewMiddleCardsGrid"
+                  Margin="0,0,0,12"
+                  HorizontalAlignment="Stretch">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="1.1*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="1.2*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="1.4*" />
                 </Grid.ColumnDefinitions>
-
-                <Border Style="{StaticResource OverviewCardStyle}">
+                <Border x:Name="OverviewOpponentSummaryCard"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
                     <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="玩家状态" />
-                        <Border Margin="0,16,0,0"
-                                Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="车手" />
-                                <TextBlock FontSize="22"
-                                           FontWeight="SemiBold"
-                                           Style="{StaticResource ValueTextStyle}"
-                                           Text="{Binding PlayerName}" />
-                            </StackPanel>
-                        </Border>
-                        <UniformGrid Margin="0,12,0,0" Columns="2">
-                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="位置" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerPositionText}" />
-                                </StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE716;" />
                             </Border>
-                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="当前圈" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerCurrentLapText}" />
-                                </StackPanel>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="对手摘要" />
+                        </Grid>
+
+                        <StackPanel>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="前后车差距" />
+                                    <ContentControl Grid.Column="1"
+                                                    MinWidth="88"
+                                                    HorizontalAlignment="Right"
+                                                    Content="{Binding PlayerGapText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </Grid>
                             </Border>
-                            <Border Margin="0,6,6,0" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="上一圈" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerLastLapText}" />
-                                </StackPanel>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="关键对手状态" />
+                                    <ContentControl Grid.Column="1"
+                                                    MinWidth="88"
+                                                    HorizontalAlignment="Right"
+                                                    Content="{Binding OverviewKeyOpponentText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </Grid>
                             </Border>
-                            <Border Margin="6,6,0,0" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="最佳圈" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerBestLapText}" />
-                                </StackPanel>
+                            <Border Style="{StaticResource MetricTileStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="上一圈对比" />
+                                    <ContentControl Grid.Column="1"
+                                                    MinWidth="88"
+                                                    HorizontalAlignment="Right"
+                                                    Content="{Binding OverviewLapComparisonText}"
+                                                    Style="{StaticResource MetricValueContentStyle}"
+                                                    Tag="等待数据" />
+                                </Grid>
                             </Border>
-                        </UniformGrid>
+                        </StackPanel>
+
+                        <Grid Margin="0,6,0,0">
+                            <TextBlock x:Name="OpponentCarsEmptyStateText"
+                                       Text="等待数据">
+                                <TextBlock.Style>
+                                    <Style BasedOn="{StaticResource OverviewEmptyStateStyle}"
+                                           TargetType="{x:Type TextBlock}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=OpponentCarsItems, Path=HasItems}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <ScrollViewer x:Name="OpponentCarsHorizontalScrollViewer"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="{x:Type ScrollViewer}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=OpponentCarsItems, Path=HasItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ScrollViewer.Style>
+                                <ItemsControl x:Name="OpponentCarsItems"
+                                              ItemsSource="{Binding OpponentCars}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border MinWidth="540"
+                                                    Style="{StaticResource MetricTileStyle}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="70" />
+                                                        <ColumnDefinition Width="120" />
+                                                        <ColumnDefinition Width="100" />
+                                                        <ColumnDefinition Width="100" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                                               Foreground="#F8FAFC"
+                                                               Text="{Binding DisplayName}"
+                                                               ToolTip="{Binding DisplayName}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Text="{Binding PositionText}"
+                                                               ToolTip="{Binding PositionText}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Text="{Binding PitStatusText}"
+                                                               ToolTip="{Binding PitStatusText}" />
+                                                    <TextBlock Grid.Column="3"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Foreground="#8CB5E5"
+                                                               Text="{Binding GapToPlayerText}"
+                                                               ToolTip="{Binding GapToPlayerText}" />
+                                                    <TextBlock Grid.Column="4"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Foreground="#8CB5E5"
+                                                               Text="{Binding LapComparisonText}"
+                                                               ToolTip="{Binding LapComparisonText}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Style="{StaticResource OverviewCardStyle}">
+                <Border x:Name="OverviewEventSummaryCard"
+                        Grid.Column="2"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
                     <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="车辆输入" />
-                        <UniformGrid Margin="0,16,0,0" Columns="3">
-                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="速度" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewSpeedText}" />
-                                </StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C5;" />
                             </Border>
-                            <Border Margin="6,0,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="档位" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewGearText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="DRS" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewDrsText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,6,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="油门" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewThrottleText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="6,6,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="刹车" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewBrakeText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="6,6,0,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="ERS" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerErsText}" />
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-                        <Border Margin="0,6,0,0" Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="燃油" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerFuelText}" />
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-                </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="事件摘要" />
+                        </Grid>
 
-                <Border Grid.Column="4" Style="{StaticResource OverviewCardStyle}">
-                    <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="胎况摘要" />
-                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="当前胎" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerTyreText}" />
-                            </StackPanel>
-                        </Border>
-                        <UniformGrid Margin="0,12,0,0" Columns="2">
-                            <Border Margin="0,0,6,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="胎龄" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerTyreAgeText}" />
+                        <Grid>
+                            <Border x:Name="OverviewEventsEmptyState">
+                                <Border.Style>
+                                    <Style BasedOn="{StaticResource EmptyStateStyle}"
+                                           TargetType="{x:Type Border}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=OverviewEventItems, Path=HasItems}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <Border Style="{StaticResource EmptyIconBadgeStyle}">
+                                        <TextBlock Style="{StaticResource EmptyIconTextStyle}" Text="&#xE787;" />
+                                    </Border>
+                                    <TextBlock Style="{StaticResource EmptyStateTitleTextStyle}"
+                                               Text="暂无事件数据" />
+                                    <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
+                                               Text="比赛事件将在这里显示" />
                                 </StackPanel>
                             </Border>
-                            <Border Margin="6,0,0,6" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="四轮磨损" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyreWearText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="0,6,6,0" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="温度" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyreTemperatureText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="6,6,0,0" Style="{StaticResource MetricCardStyle}">
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource LabelTextStyle}" Text="压力" />
-                                    <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewTyrePressureText}" />
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="损伤" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewDamageText}" />
-                            </StackPanel>
-                        </Border>
+                            <ScrollViewer x:Name="OverviewEventsHorizontalScrollViewer"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <ScrollViewer.Style>
+                                    <Style TargetType="{x:Type ScrollViewer}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=OverviewEventItems, Path=HasItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ScrollViewer.Style>
+                                <ItemsControl x:Name="OverviewEventItems"
+                                              ItemsSource="{Binding OverviewEventSummaries}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border MinWidth="540"
+                                                    Style="{StaticResource MetricTileStyle}">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="82" />
+                                                        <ColumnDefinition Width="80" />
+                                                        <ColumnDefinition Width="*" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                                               Foreground="#8CB5E5"
+                                                               Text="{Binding Timestamp}"
+                                                               ToolTip="{Binding Timestamp}" />
+                                                    <TextBlock Grid.Column="1"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Text="{Binding Category}"
+                                                               ToolTip="{Binding Category}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               Foreground="#F8FAFC"
+                                                               Text="{Binding Message}"
+                                                               ToolTip="{Binding Message}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </Grid>
 
-            <Grid Grid.Row="2">
+            <Grid x:Name="OverviewBottomCardsGrid"
+                  HorizontalAlignment="Stretch">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1*" />
-                    <ColumnDefinition Width="16" />
-                    <ColumnDefinition Width="1*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-
-                <Border Style="{StaticResource OverviewCardStyle}">
+                <Border x:Name="OverviewSessionFocusCard"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
                     <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="对手摘要" />
-                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C1;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="当前赛制重点" />
+                        </Grid>
+
+                        <Border Style="{StaticResource EmptyStateStyle}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="前后车差距" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding PlayerGapText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="关键对手状态" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewKeyOpponentText}" />
-                            </StackPanel>
-                        </Border>
-                        <Border Margin="0,12,0,0" Style="{StaticResource MetricCardStyle}">
-                            <StackPanel>
-                                <TextBlock Style="{StaticResource LabelTextStyle}" Text="上一圈对比" />
-                                <TextBlock Style="{StaticResource ValueTextStyle}" Text="{Binding OverviewLapComparisonText}" />
-                            </StackPanel>
-                        </Border>
-                        <ItemsControl Margin="0,12,0,0"
-                                      ItemsSource="{Binding OpponentCars}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,8" Style="{StaticResource MetricCardStyle}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="72" />
-                                                <ColumnDefinition Width="110" />
-                                                <ColumnDefinition Width="96" />
-                                                <ColumnDefinition Width="90" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Foreground="White" Text="{Binding DisplayName}" />
-                                            <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding PositionText}" />
-                                            <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
-                                            <TextBlock Grid.Column="3" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
-                                            <TextBlock Grid.Column="4" Foreground="#7FA5D8" Text="{Binding LapComparisonText}" />
-                                        </Grid>
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="关注重点状态" />
+                                <WrapPanel Margin="0,12,0,2">
+                                    <Border Style="{StaticResource PillTagStyle}">
+                                        <TextBlock Foreground="#F8FAFC" Text="圈速" />
                                     </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                                    <Border Style="{StaticResource PillTagStyle}">
+                                        <TextBlock Foreground="#F8FAFC" Text="轮胎" />
+                                    </Border>
+                                    <Border Style="{StaticResource PillTagStyle}">
+                                        <TextBlock Foreground="#F8FAFC" Text="燃油" />
+                                    </Border>
+                                    <Border Style="{StaticResource PillTagStyle}">
+                                        <TextBlock Foreground="#F8FAFC" Text="策略" />
+                                    </Border>
+                                </WrapPanel>
+                                <TextBlock Style="{StaticResource NarrativeTextStyle}"
+                                           Text="等待比赛开始或数据连接" />
+                                <TextBlock Margin="0,8,0,0"
+                                           Style="{StaticResource NarrativeTextStyle}"
+                                           Text="{Binding OverviewSessionFocusText}"
+                                           ToolTip="{Binding OverviewSessionFocusText}" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
 
-                <Border Grid.Column="2" Style="{StaticResource OverviewCardStyle}">
+                <Border x:Name="OverviewAiSuggestionCard"
+                        Grid.Column="2"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
                     <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="事件摘要" />
-                        <ItemsControl Margin="0,16,0,0"
-                                      ItemsSource="{Binding OverviewEventSummaries}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,0,8" Style="{StaticResource MetricCardStyle}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="76" />
-                                                <ColumnDefinition Width="60" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
-                                            <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding Category}" />
-                                            <TextBlock Grid.Column="2" Foreground="White" Text="{Binding Message}" TextWrapping="Wrap" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE950;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="AI 建议" />
+                        </Grid>
+
+                        <Border Style="{StaticResource EmptyStateStyle}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Border Style="{StaticResource EmptyIconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource EmptyIconTextStyle}" Text="&#xE950;" />
+                                </Border>
+                                <ContentControl Content="{Binding OverviewRecentAiSuggestionText}"
+                                                Style="{StaticResource HeroValueContentStyle}"
+                                                Tag="等待数据以生成建议" />
+                                <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
+                                           Text="连接后将提供实时策略建议" />
+                            </StackPanel>
+                        </Border>
+
+                        <Button Margin="0,8,0,0"
+                                HorizontalAlignment="Stretch"
+                                Command="{Binding OpenRaceAssistantCommand}"
+                                Content="问工程师"
+                                Style="{StaticResource PrimaryButtonStyle}" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="OverviewTtsCard"
+                        Grid.Column="4"
+                        HorizontalAlignment="Stretch"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE767;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="TTS 播报" />
+                        </Grid>
+
+                        <Border Style="{StaticResource EmptyStateStyle}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Border Style="{StaticResource EmptyIconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource EmptyIconTextStyle}" Text="&#xE9D9;" />
+                                </Border>
+                                <ContentControl Content="{Binding OverviewRecentTtsStatusText}"
+                                                Style="{StaticResource HeroValueContentStyle}"
+                                                Tag="等待播报内容" />
+                                <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
+                                           Text="开启比赛后将自动播报关键事件" />
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </Border>
             </Grid>
-
-            <Border Grid.Row="4" Style="{StaticResource OverviewCardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1*" />
-                        <ColumnDefinition Width="16" />
-                        <ColumnDefinition Width="1*" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="当前赛制重点" />
-                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
-                            <TextBlock Foreground="White"
-                                       Text="{Binding OverviewSessionFocusText}"
-                                       TextWrapping="Wrap" />
-                        </Border>
-                        <TextBlock FontSize="20"
-                                   Margin="0,16,0,0"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="AI 建议" />
-                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
-                            <TextBlock Foreground="White"
-                                       Text="{Binding OverviewRecentAiSuggestionText}"
-                                       TextWrapping="Wrap" />
-                        </Border>
-                        <Button Margin="0,12,0,0"
-                                Padding="12,7"
-                                HorizontalAlignment="Left"
-                                Command="{Binding OpenRaceAssistantCommand}"
-                                Content="问工程师" />
-                    </StackPanel>
-
-                    <StackPanel Grid.Column="2">
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="White"
-                                   Text="TTS 播报" />
-                        <Border Margin="0,16,0,0" Style="{StaticResource MetricCardStyle}">
-                            <TextBlock Foreground="White"
-                                       Text="{Binding OverviewRecentTtsStatusText}"
-                                       TextWrapping="Wrap" />
-                        </Border>
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

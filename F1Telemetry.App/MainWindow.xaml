@@ -10,8 +10,8 @@
         Title="{Binding AppTitleText}"
         Width="1380"
         Height="860"
-        MinWidth="1000"
-        MinHeight="650"
+        MinWidth="860"
+        MinHeight="580"
         WindowState="Normal"
         ResizeMode="CanResizeWithGrip"
         ShowInTaskbar="True"
@@ -111,23 +111,62 @@
                                 <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#1D3558" />
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="ItemBorder" Property="Background" Value="#1557A9" />
-                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#2387F8" />
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1D73F8" />
+                                <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#60A5FA" />
                             </Trigger>
+                            <DataTrigger Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                                <Setter TargetName="ItemBorder" Property="Width" Value="44" />
+                                <Setter TargetName="ItemBorder" Property="Height" Value="44" />
+                                <Setter TargetName="ItemBorder" Property="Padding" Value="0" />
+                                <Setter TargetName="ItemBorder" Property="HorizontalAlignment" Value="Center" />
+                            </DataTrigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
 
-        <Style x:Key="ShellTelemetryCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="MinHeight" Value="42" />
-            <Setter Property="Padding" Value="12,8" />
-            <Setter Property="Margin" Value="0,0,8,6" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Background" Value="#0D1B2E" />
-            <Setter Property="BorderBrush" Value="#1B3354" />
+        <Style x:Key="StatusChipStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="58" />
+            <Setter Property="Padding" Value="13,10" />
+            <Setter Property="Margin" Value="0,0,8,8" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#152A45" Offset="0" />
+                        <GradientStop Color="#0F1E33" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="#203E61" />
             <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="ShellTelemetryCardStyle"
+               BasedOn="{StaticResource StatusChipStyle}"
+               TargetType="{x:Type Border}" />
+
+        <Style x:Key="IconBadgeStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="#102A4B" />
+            <Setter Property="BorderBrush" Value="#1C6EDC" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="ShellTelemetryIconStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Foreground" Value="#36A3FF" />
+            <Setter Property="TextAlignment" Value="Center" />
         </Style>
 
         <Style x:Key="ShellTelemetryLabelStyle" TargetType="{x:Type TextBlock}">
@@ -139,10 +178,79 @@
 
         <Style x:Key="ShellTelemetryValueStyle" TargetType="{x:Type TextBlock}">
             <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontSize" Value="15" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="VerticalAlignment" Value="Center" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="ShellPortTextBoxStyle" TargetType="{x:Type TextBox}">
+            <Setter Property="Background" Value="#0B1728" />
+            <Setter Property="BorderBrush" Value="#1D3A5C" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="CaretBrush" Value="#60A5FA" />
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="ShellPrimaryButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#1D73F8" />
+            <Setter Property="BorderBrush" Value="#3B8CFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonRoot"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="#2B84FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonRoot" Property="Background" Value="#1557C8" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonRoot" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ShellSecondaryButtonStyle"
+               BasedOn="{StaticResource ShellPrimaryButtonStyle}"
+               TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#14243A" />
+            <Setter Property="BorderBrush" Value="#294766" />
+        </Style>
+
+        <Style x:Key="PrimaryButtonStyle"
+               BasedOn="{StaticResource ShellPrimaryButtonStyle}"
+               TargetType="{x:Type Button}" />
+
+        <Style x:Key="SecondaryButtonStyle"
+               BasedOn="{StaticResource ShellSecondaryButtonStyle}"
+               TargetType="{x:Type Button}" />
+
+        <Style x:Key="ShellIconButtonStyle"
+               BasedOn="{StaticResource ShellSecondaryButtonStyle}"
+               TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="42" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Foreground" Value="#D7E4F3" />
+            <Setter Property="Background" Value="#10243C" />
+            <Setter Property="BorderBrush" Value="#203E61" />
         </Style>
     </Window.Resources>
     <Grid x:Name="WindowRoot"
@@ -188,11 +296,19 @@
 
                 <StackPanel>
                     <Button x:Name="SidebarToggleButton"
-                            Width="34"
-                            Height="34"
-                            HorizontalAlignment="Right"
                             Command="{Binding ToggleSidebarCommand}"
                             ToolTip="展开 / 收起侧边栏">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ShellIconButtonStyle}"
+                                   TargetType="{x:Type Button}">
+                                <Setter Property="HorizontalAlignment" Value="Right" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                        <Setter Property="HorizontalAlignment" Value="Center" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
                         <TextBlock FontFamily="Segoe MDL2 Assets"
                                    FontSize="15"
                                    Text="&#xE700;" />
@@ -246,26 +362,51 @@
                          Background="Transparent"
                          BorderThickness="0"
                          ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.VerticalScrollBarVisibility="Hidden"
                          ItemContainerStyle="{StaticResource ShellNavigationItemStyle}"
                          ItemsSource="{Binding ShellNavigationItems}"
                          SelectedItem="{Binding SelectedShellNavigationItem, Mode=TwoWay}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <Grid ToolTip="{Binding Name}">
+                            <Grid x:Name="NavigationItemLayout"
+                                  ToolTip="{Binding Name}">
+                                <Grid.Style>
+                                    <Style TargetType="{x:Type Grid}">
+                                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                                                <Setter Property="Width" Value="44" />
+                                                <Setter Property="Height" Value="44" />
+                                                <Setter Property="HorizontalAlignment" Value="Center" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="24" />
                                     <ColumnDefinition Width="10" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock HorizontalAlignment="Center"
+                                <TextBlock x:Name="NavigationItemIcon"
+                                           HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
                                            FontFamily="Segoe MDL2 Assets"
                                            FontSize="17"
                                            Foreground="{Binding RelativeSource={RelativeSource AncestorType={x:Type ListBoxItem}}, Path=Foreground}"
-                                           Text="{Binding IconGlyph}" />
-                                <TextBlock Grid.Column="2"
+                                           Text="{Binding IconGlyph}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="{x:Type TextBlock}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                                                    <Setter Property="Grid.ColumnSpan" Value="3" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                                <TextBlock x:Name="NavigationItemText"
+                                           Grid.Column="2"
                                            VerticalAlignment="Center"
                                            FontSize="16"
                                            FontWeight="SemiBold"
@@ -287,11 +428,21 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <Border Grid.Row="2"
-                        Padding="12,14"
+                <Border x:Name="SidebarStatusCard"
+                        Grid.Row="2"
                         CornerRadius="14"
                         Background="#0B1728"
                         ToolTip="{Binding SidebarUdpStatusTooltip}">
+                    <Border.Style>
+                        <Style TargetType="{x:Type Border}">
+                            <Setter Property="Padding" Value="12,14" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
+                                    <Setter Property="Padding" Value="8" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel>
                         <TextBlock Foreground="#2DE274"
                                    Text="{Binding ConnectionStateText}">
@@ -320,13 +471,11 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                        <TextBlock HorizontalAlignment="Center"
-                                   FontSize="12"
-                                   FontWeight="SemiBold"
-                                   Foreground="#9AB0C9"
-                                   Text="UDP">
-                            <TextBlock.Style>
-                                <Style TargetType="{x:Type TextBlock}">
+                        <StackPanel x:Name="SidebarCompactStatusRow"
+                                    HorizontalAlignment="Center"
+                                    Orientation="Vertical">
+                            <StackPanel.Style>
+                                <Style TargetType="{x:Type StackPanel}">
                                     <Setter Property="Visibility" Value="Collapsed" />
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsSidebarExpanded}" Value="False">
@@ -334,8 +483,20 @@
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                            </StackPanel.Style>
+                            <Ellipse x:Name="CompactSidebarStatusDot"
+                                     Width="8"
+                                     Height="8"
+                                     HorizontalAlignment="Center"
+                                     Fill="#2DE274" />
+                            <TextBlock x:Name="CompactSidebarUdpLabel"
+                                       Margin="0,6,0,0"
+                                       HorizontalAlignment="Center"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="#9AB0C9"
+                                       Text="UDP" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -358,101 +519,136 @@
 
                 <WrapPanel x:Name="TopStatusWrapPanel">
                     <Border x:Name="ConnectionStatusChip"
-                            MinWidth="150"
-                            MaxWidth="210"
+                            MinWidth="168"
+                            MaxWidth="220"
                             Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="连接状态" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       Text="{Binding ConnectionStateText}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE71B;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="连接状态" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           Text="{Binding ConnectionStateText}"
+                                           ToolTip="{Binding ConnectionStateText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border x:Name="TrackStatusChip"
-                            MinWidth="150"
-                            MaxWidth="210"
+                            MinWidth="168"
+                            MaxWidth="220"
                             Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛道" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       Text="{Binding TrackText}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE707;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛道" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           Text="{Binding TrackText}"
+                                           ToolTip="{Binding TrackText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border x:Name="SessionTypeStatusChip"
-                            MinWidth="150"
-                            MaxWidth="210"
+                            MinWidth="168"
+                            MaxWidth="220"
                             Style="{StaticResource ShellTelemetryCardStyle}"
                             ToolTip="{Binding SessionTypeTooltipText}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛制" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       Text="{Binding SessionTypeText}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xECA7;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛制" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           Text="{Binding SessionTypeText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
-                    <Border MinWidth="150" MaxWidth="210" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border x:Name="LapStatusChip"
+                            MinWidth="168"
+                            MaxWidth="220"
+                            Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="比赛进度" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       Text="{Binding LapText}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE7C1;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="比赛进度" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           Text="{Binding LapText}"
+                                           ToolTip="{Binding LapText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border x:Name="WeatherStatusChip"
-                            MinWidth="170"
+                            MinWidth="150"
                             MaxWidth="230"
                             Style="{StaticResource ShellTelemetryCardStyle}"
                             ToolTip="{Binding WeatherTooltipText}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="天气" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       TextTrimming="CharacterEllipsis"
-                                       Text="{Binding WeatherText}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE753;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="天气" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Text="{Binding WeatherText}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
-                    <Border MinWidth="108" MaxWidth="150" Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Border x:Name="UdpPpsStatusChip"
+                            MinWidth="128"
+                            MaxWidth="170"
+                            Style="{StaticResource ShellTelemetryCardStyle}">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="8" />
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="10" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="UDP PPS" />
-                            <TextBlock Grid.Column="2"
-                                       Style="{StaticResource ShellTelemetryValueStyle}"
-                                       Text="{Binding PacketsPerSecond}" />
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE9D9;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="UDP PPS" />
+                                <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                           Text="{Binding PacketsPerSecond}" />
+                            </StackPanel>
                         </Grid>
                     </Border>
                     <Border x:Name="UdpPortStatusChip"
-                            Style="{StaticResource ShellTelemetryCardStyle}">
-                        <Grid VerticalAlignment="Center">
+                            MinWidth="356"
+                            Style="{StaticResource StatusChipStyle}">
+                        <Grid x:Name="TopPortControlCard"
+                              VerticalAlignment="Center">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="8" />
@@ -464,24 +660,26 @@
                             </Grid.ColumnDefinitions>
                             <TextBlock VerticalAlignment="Center"
                                        Style="{StaticResource ShellTelemetryLabelStyle}"
-                                       Text="监听端口" />
+                                       Text="当前端口" />
                             <TextBox Grid.Column="2"
                                      Width="104"
                                      Height="30"
                                      VerticalAlignment="Center"
-                                     Padding="10,4"
+                                     Style="{StaticResource ShellPortTextBoxStyle}"
                                      Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <Button Grid.Column="4"
                                     Width="96"
                                     Height="30"
                                     VerticalAlignment="Center"
                                     Command="{Binding StartListeningCommand}"
+                                    Style="{StaticResource PrimaryButtonStyle}"
                                     Content="开始监听" />
                             <Button Grid.Column="6"
                                     Width="96"
                                     Height="30"
                                     VerticalAlignment="Center"
                                     Command="{Binding StopListeningCommand}"
+                                    Style="{StaticResource SecondaryButtonStyle}"
                                     Content="停止监听" />
                         </Grid>
                     </Border>
@@ -491,6 +689,8 @@
                            Margin="8,0,0,0"
                            Foreground="#B5C7DC"
                            Text="{Binding StatusMessage}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding StatusMessage}"
                            TextWrapping="Wrap" />
 
                 <TextBlock x:Name="ShellTitleText"

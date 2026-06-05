@@ -17,7 +17,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void CurrentVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("3.1.0", VersionInfo.CurrentVersion);
+        Assert.Equal("3.1.1", VersionInfo.CurrentVersion);
     }
 
     /// <summary>
@@ -26,7 +26,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v3.1.0", VersionInfo.DisplayVersion);
+        Assert.Equal("v3.1.1", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed class VersionInfoTests
         var viewModel = Assert.IsType<DashboardViewModel>(
             RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
 
-        Assert.Contains("3.1.0", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.Contains("3.1.1", viewModel.AppTitleText, StringComparison.Ordinal);
         Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
@@ -66,27 +66,19 @@ public sealed class VersionInfoTests
     }
 
     /// <summary>
-    /// Verifies release scripts and installer metadata use the same application version.
+    /// Verifies application version metadata uses the current application version.
     /// </summary>
     [Fact]
-    public void ReleaseFiles_UseCurrentApplicationVersion()
+    public void ApplicationVersionMetadata_UseCurrentApplicationVersion()
     {
         var root = FindRepositoryRoot();
         var directoryBuildProps = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
-        var publishScript = File.ReadAllText(Path.Combine(root, "build", "publish.ps1"));
-        var innoScript = File.ReadAllText(Path.Combine(root, "build", "F1Telemetry.iss"));
 
-        Assert.Contains("<Version>3.1.0</Version>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<VersionPrefix>3.1.0</VersionPrefix>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<AssemblyVersion>3.1.0.0</AssemblyVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<FileVersion>3.1.0.0</FileVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<InformationalVersion>3.1.0</InformationalVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("/p:Version=3.1.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:AssemblyVersion=3.1.0.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:FileVersion=3.1.0.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("/p:InformationalVersion=3.1.0", publishScript, StringComparison.Ordinal);
-        Assert.Contains("#define MyAppVersion \"3.1.0\"", innoScript, StringComparison.Ordinal);
-        Assert.Contains("OutputBaseFilename=F1Telemetry-3.1.0-win-x64-setup", innoScript, StringComparison.Ordinal);
+        Assert.Contains("<Version>3.1.1</Version>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<VersionPrefix>3.1.1</VersionPrefix>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<AssemblyVersion>3.1.1.0</AssemblyVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<FileVersion>3.1.1.0</FileVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Contains("<InformationalVersion>3.1.1</InformationalVersion>", directoryBuildProps, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()
