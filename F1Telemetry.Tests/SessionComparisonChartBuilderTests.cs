@@ -38,12 +38,18 @@ public sealed class SessionComparisonChartBuilderTests
         var ersPanel = builder.BuildErsPanel(inputs);
 
         Assert.True(lapPanel.HasData);
+        Assert.True(lapPanel.UsesLapNumberXAxis);
+        Assert.True(lapPanel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { "Race A", "Race B" }, lapPanel.Series.Select(series => series.Name));
         Assert.Equal(new[] { 1d, 2d }, lapPanel.Series[0].Points.Select(point => point.X));
         Assert.Equal(new[] { 90d, 89.5d }, lapPanel.Series[0].Points.Select(point => point.Y));
         Assert.True(fuelPanel.HasData);
+        Assert.True(fuelPanel.UsesLapNumberXAxis);
+        Assert.True(fuelPanel.UsesNonNegativeYAxis);
         Assert.Equal(2, fuelPanel.Series.Count);
         Assert.True(ersPanel.HasData);
+        Assert.True(ersPanel.UsesLapNumberXAxis);
+        Assert.True(ersPanel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { 1.2d, 1.1d }, ersPanel.Series[0].Points.Select(point => point.Y));
     }
 
@@ -69,6 +75,74 @@ public sealed class SessionComparisonChartBuilderTests
         Assert.True(fuelPanel.HasData);
         var series = Assert.Single(fuelPanel.Series);
         Assert.Equal("Race B", series.Name);
+        Assert.All(series.Points, point => Assert.NotEqual(0d, point.Y));
+    }
+
+    /// <summary>
+    /// Verifies different session lap counts align on legal lap-number X values.
+    /// </summary>
+    [Fact]
+    public void BuildFuelPanel_WithDifferentSessionLapCounts_KeepsPositiveLapAxis()
+    {
+        var builder = new StoredLapSessionComparisonChartBuilder();
+        var inputs = new[]
+        {
+            new SessionComparisonChartInput(
+                "Race A",
+                Enumerable.Range(1, 29)
+                    .Select(lap => CreateLap("session-a", lap, fuelUsedLitres: lap / 10f))
+                    .ToArray()),
+            new SessionComparisonChartInput(
+                "Race B",
+                Enumerable.Range(1, 5)
+                    .Select(lap => CreateLap("session-b", lap, fuelUsedLitres: lap / 20f))
+                    .ToArray())
+        };
+
+        var panel = builder.BuildFuelPanel(inputs);
+        var xRange = ChartAxisRangeHelper.GetLapAxisRange(panel.Series.SelectMany(series => series.Points).Select(point => point.X));
+
+        Assert.True(panel.UsesLapNumberXAxis);
+        Assert.True(panel.UsesNonNegativeYAxis);
+        Assert.Equal(29, panel.Series[0].Points.Count);
+        Assert.Equal(5, panel.Series[1].Points.Count);
+        Assert.True(xRange.Minimum >= 1d);
+        Assert.All(panel.Series.SelectMany(series => series.Points), point => Assert.True(point.X >= 1d));
+    }
+
+    /// <summary>
+    /// Verifies missing metric values are skipped instead of converted into fake zero points.
+    /// </summary>
+    [Fact]
+    public void BuildFuelAndErsPanels_WithMissingMetricValues_DoNotCreateZeroPoints()
+    {
+        var builder = new StoredLapSessionComparisonChartBuilder();
+        var inputs = new[]
+        {
+            new SessionComparisonChartInput(
+                "Race A",
+                [
+                    CreateLap("session-a", 1, fuelUsedLitres: 1.1f),
+                    CreateLap("session-a", 2),
+                    CreateLap("session-a", 3, ersUsed: 900_000f)
+                ]),
+            new SessionComparisonChartInput(
+                "Race B",
+                [
+                    CreateLap("session-b", 1),
+                    CreateLap("session-b", 2, fuelUsedLitres: 1.4f, ersUsed: 1_100_000f)
+                ])
+        };
+
+        var fuelPanel = builder.BuildFuelPanel(inputs);
+        var ersPanel = builder.BuildErsPanel(inputs);
+
+        Assert.Equal(new[] { 1d }, fuelPanel.Series[0].Points.Select(point => point.X));
+        Assert.Equal(new[] { 2d }, fuelPanel.Series[1].Points.Select(point => point.X));
+        Assert.Equal(new[] { 3d }, ersPanel.Series[0].Points.Select(point => point.X));
+        Assert.Equal(new[] { 2d }, ersPanel.Series[1].Points.Select(point => point.X));
+        Assert.All(fuelPanel.Series.SelectMany(series => series.Points), point => Assert.True(point.Y > 0d));
+        Assert.All(ersPanel.Series.SelectMany(series => series.Points), point => Assert.True(point.Y > 0d));
     }
 
     /// <summary>
@@ -89,10 +163,16 @@ public sealed class SessionComparisonChartBuilderTests
         var ersPanel = builder.BuildErsPanel(inputs);
 
         Assert.False(lapPanel.HasData);
+        Assert.True(lapPanel.UsesLapNumberXAxis);
+        Assert.True(lapPanel.UsesNonNegativeYAxis);
         Assert.Empty(lapPanel.Series);
         Assert.False(fuelPanel.HasData);
+        Assert.True(fuelPanel.UsesLapNumberXAxis);
+        Assert.True(fuelPanel.UsesNonNegativeYAxis);
         Assert.Empty(fuelPanel.Series);
         Assert.False(ersPanel.HasData);
+        Assert.True(ersPanel.UsesLapNumberXAxis);
+        Assert.True(ersPanel.UsesNonNegativeYAxis);
         Assert.Empty(ersPanel.Series);
     }
 
@@ -122,6 +202,8 @@ public sealed class SessionComparisonChartBuilderTests
 
         Assert.True(panel.HasData);
         Assert.Equal("四轮平均胎磨对比", panel.Title);
+        Assert.True(panel.UsesLapNumberXAxis);
+        Assert.True(panel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { "Race A · 红胎", "Race A · 黄胎", "Race B · 全雨胎" }, panel.Series.Select(series => series.Name));
         Assert.Equal(13d, panel.Series[0].Points[0].Y);
         Assert.Equal(23d, panel.Series[1].Points[0].Y);

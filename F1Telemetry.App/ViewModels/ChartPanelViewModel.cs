@@ -13,6 +13,8 @@ public sealed class ChartPanelViewModel : ViewModelBase
     private string _yAxisLabel = string.Empty;
     private string _emptyStateText = string.Empty;
     private IReadOnlyList<ChartSeriesModel> _series = Array.Empty<ChartSeriesModel>();
+    private bool _usesLapNumberXAxis;
+    private bool _usesNonNegativeYAxis;
 
     /// <summary>
     /// Initializes an empty chart panel view model.
@@ -30,13 +32,17 @@ public sealed class ChartPanelViewModel : ViewModelBase
     /// <param name="emptyMessage">The empty-state message.</param>
     /// <param name="isEmpty">Whether the chart is currently empty.</param>
     /// <param name="series">The plotted series.</param>
+    /// <param name="usesLapNumberXAxis">Whether the X axis represents positive integer lap numbers.</param>
+    /// <param name="usesNonNegativeYAxis">Whether the Y axis represents a metric that cannot be negative.</param>
     public ChartPanelViewModel(
         string title,
         string xAxisLabel,
         string yAxisLabel,
         string emptyMessage,
         bool isEmpty,
-        IReadOnlyList<ChartSeriesModel> series)
+        IReadOnlyList<ChartSeriesModel> series,
+        bool usesLapNumberXAxis = false,
+        bool usesNonNegativeYAxis = false)
     {
         _title = title;
         _xAxisLabel = xAxisLabel;
@@ -45,6 +51,8 @@ public sealed class ChartPanelViewModel : ViewModelBase
             ? "等待图表数据"
             : emptyMessage;
         _series = series ?? Array.Empty<ChartSeriesModel>();
+        _usesLapNumberXAxis = usesLapNumberXAxis;
+        _usesNonNegativeYAxis = usesNonNegativeYAxis;
     }
 
     /// <summary>
@@ -111,6 +119,24 @@ public sealed class ChartPanelViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// Gets a value indicating whether the X axis should be rendered as positive integer lap numbers.
+    /// </summary>
+    public bool UsesLapNumberXAxis
+    {
+        get => _usesLapNumberXAxis;
+        private set => SetProperty(ref _usesLapNumberXAxis, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the Y axis should be clamped to non-negative values.
+    /// </summary>
+    public bool UsesNonNegativeYAxis
+    {
+        get => _usesNonNegativeYAxis;
+        private set => SetProperty(ref _usesNonNegativeYAxis, value);
+    }
+
+    /// <summary>
     /// Updates the current panel from another chart panel snapshot.
     /// </summary>
     /// <param name="source">The source panel state.</param>
@@ -123,6 +149,8 @@ public sealed class ChartPanelViewModel : ViewModelBase
         YAxisLabel = source.YAxisLabel;
         EmptyStateText = source.EmptyStateText;
         Series = source.Series;
+        UsesLapNumberXAxis = source.UsesLapNumberXAxis;
+        UsesNonNegativeYAxis = source.UsesNonNegativeYAxis;
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(XAxisLabel));
         OnPropertyChanged(nameof(YAxisLabel));
@@ -131,6 +159,8 @@ public sealed class ChartPanelViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasData));
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(Series));
+        OnPropertyChanged(nameof(UsesLapNumberXAxis));
+        OnPropertyChanged(nameof(UsesNonNegativeYAxis));
     }
 
     private static bool HasPlottablePoints(IReadOnlyList<ChartSeriesModel> series)

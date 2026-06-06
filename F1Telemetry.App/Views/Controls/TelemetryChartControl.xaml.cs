@@ -33,6 +33,10 @@ public partial class TelemetryChartControl : UserControl
         InitializeComponent();
         _plotHost = new WpfPlot();
         PlotBorder.Child = _plotHost;
+        ChartInteractionHelper.DisableFixedChartInteractions(_plotHost);
+        ChartInteractionHelper.AttachNoWheelZoomBehavior(this);
+        ChartInteractionHelper.AttachNoWheelZoomBehavior(PlotBorder);
+        ChartInteractionHelper.AttachNoWheelZoomBehavior(_plotHost);
         DataContextChanged += OnDataContextChanged;
         Loaded += OnLoaded;
     }
@@ -88,7 +92,9 @@ public partial class TelemetryChartControl : UserControl
             or nameof(ChartPanelViewModel.Title)
             or nameof(ChartPanelViewModel.XAxisLabel)
             or nameof(ChartPanelViewModel.YAxisLabel)
-            or nameof(ChartPanelViewModel.EmptyStateText))
+            or nameof(ChartPanelViewModel.EmptyStateText)
+            or nameof(ChartPanelViewModel.UsesLapNumberXAxis)
+            or nameof(ChartPanelViewModel.UsesNonNegativeYAxis))
         {
             RefreshChart();
         }
@@ -142,6 +148,7 @@ public partial class TelemetryChartControl : UserControl
 
         plot.ShowLegend();
         plot.Axes.AutoScale();
+        ApplyAxisRules(plot, panel, plottableSeries.SelectMany(series => series.Points).ToArray());
         _plotHost.Refresh();
     }
 
@@ -156,6 +163,8 @@ public partial class TelemetryChartControl : UserControl
         plot.Axes.Left.Label.FontName = ChartFontName;
         plot.Axes.Bottom.TickLabelStyle.FontName = ChartFontName;
         plot.Axes.Left.TickLabelStyle.FontName = ChartFontName;
+        plot.Axes.Bottom.TickGenerator = new ScottPlot.TickGenerators.NumericAutomatic();
+        plot.Axes.Left.TickGenerator = new ScottPlot.TickGenerators.NumericAutomatic();
 
         plot.Grid.MajorLineColor = GridColor;
         plot.Grid.MinorLineColor = GridColor.WithAlpha(40);
@@ -167,6 +176,65 @@ public partial class TelemetryChartControl : UserControl
         plot.Legend.BackgroundColor = LegendBackgroundColor;
         plot.Legend.OutlineColor = GridColor;
         plot.Legend.OutlineWidth = 1;
+    }
+
+    private void ApplyAxisRules(Plot plot, ChartPanelViewModel panel, IReadOnlyList<Coordinates> points)
+    {
+        if (points.Count == 0)
+        {
+            return;
+        }
+
+        var limits = plot.Axes.GetLimits();
+        var xMinimum = limits.Left;
+        var xMaximum = limits.Right;
+        var yMinimum = limits.Bottom;
+        var yMaximum = limits.Top;
+
+        if (panel.UsesLapNumberXAxis)
+        {
+            var xRange = ChartAxisRangeHelper.GetLapAxisRange(points.Select(point => point.X));
+            xMinimum = xRange.Minimum;
+            xMaximum = xRange.Maximum;
+
+            var xTicks = ChartAxisRangeHelper.BuildSparseAxisLabels(points.Select(point => point.X), GetChartWidth());
+            if (xTicks.Values.Count > 0)
+            {
+                plot.Axes.Bottom.SetTicks(xTicks.Values.ToArray(), xTicks.Labels.ToArray());
+            }
+        }
+
+        if (panel.UsesNonNegativeYAxis)
+        {
+            var yRange = ChartAxisRangeHelper.GetNonNegativeRange(points.Select(point => point.Y));
+            yMinimum = yRange.Minimum;
+            yMaximum = yRange.Maximum;
+
+            var yTicks = ChartAxisRangeHelper.BuildSparseNumericAxisLabels(yRange, points.Count, GetChartWidth());
+            if (yTicks.Values.Count > 0)
+            {
+                plot.Axes.Left.SetTicks(yTicks.Values.ToArray(), yTicks.Labels.ToArray());
+            }
+        }
+
+        if (points.Count <= 3)
+        {
+            plot.Grid.MinorLineWidth = 0;
+        }
+
+        plot.Axes.SetLimits(xMinimum, xMaximum, yMinimum, yMaximum);
+    }
+
+    private double GetChartWidth()
+    {
+        if (double.IsFinite(_plotHost.ActualWidth) && _plotHost.ActualWidth > 0d)
+        {
+            return _plotHost.ActualWidth;
+        }
+
+        return double.IsFinite(ActualWidth) && ActualWidth > 0d
+            ? ActualWidth
+            : 420d;
     }
 
     private Scatter CreateScatter(ChartSeriesModel series, List<Coordinates> points)
