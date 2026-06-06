@@ -27,9 +27,15 @@
         <Style x:Key="StatusCardStyle"
                BasedOn="{StaticResource GlassCardStyle}"
                TargetType="{x:Type Border}">
-            <Setter Property="Width" Value="252" />
             <Setter Property="MinHeight" Value="132" />
             <Setter Property="Margin" Value="0,0,10,10" />
+        </Style>
+
+        <Style x:Key="ResponsiveStatusCardsPanelStyle" TargetType="{x:Type UniformGrid}">
+            <Setter Property="Columns" Value="4" />
+            <Setter Property="Rows" Value="1" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,-10,2" />
         </Style>
 
         <Style x:Key="ReportSectionCardStyle"
@@ -95,11 +101,62 @@
             <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
         </Style>
 
-        <Style x:Key="CompactButtonStyle" TargetType="{x:Type Button}">
+        <Style x:Key="ActionButtonBaseStyle" TargetType="{x:Type Button}">
             <Setter Property="MinWidth" Value="132" />
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Margin" Value="0,0,10,10" />
             <Setter Property="Padding" Value="14,6" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#1C6EDC" />
+            <Setter Property="BorderBrush" Value="#4AA3FF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonChrome"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#2B83F6" />
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#6BB6FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#175BB7" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#9BD3FF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7F95AE" />
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#21405F" />
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#2B4B6B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryActionButtonStyle"
+               BasedOn="{StaticResource ActionButtonBaseStyle}"
+               TargetType="{x:Type Button}" />
+
+        <Style x:Key="SecondaryActionButtonStyle"
+               BasedOn="{StaticResource ActionButtonBaseStyle}"
+               TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#10233A" />
+            <Setter Property="BorderBrush" Value="#315C86" />
         </Style>
     </UserControl.Resources>
 
@@ -137,13 +194,14 @@
                                    Text="{Binding PostRaceAiLastAnalysisText}" />
                         <TextBlock Margin="0,6,0,0"
                                    Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding PostRaceAiStatusText}" />
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiStatusText}" />
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <WrapPanel x:Name="AiAnalysisStatusCardsPanel"
-                       Margin="0,0,0,2">
+            <UniformGrid x:Name="AiAnalysisStatusCardsPanel"
+                         Style="{StaticResource ResponsiveStatusCardsPanelStyle}">
                 <Border Style="{StaticResource StatusCardStyle}">
                     <StackPanel>
                         <Grid>
@@ -171,9 +229,11 @@
                             </TextBlock.Style>
                         </TextBlock>
                         <TextBlock Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding AiApiKeyStatusText, StringFormat=API Key：{0}}" />
+                                   Text="{Binding AiApiKeyStatusText, StringFormat=API Key：{0}}"
+                                   ToolTip="{Binding AiApiKeyStatusText}" />
                         <TextBlock Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding AiModel, StringFormat=Model：{0}}" />
+                                   Text="{Binding AiModel, StringFormat=Model：{0}}"
+                                   ToolTip="{Binding AiModel}" />
                     </StackPanel>
                 </Border>
 
@@ -193,7 +253,8 @@
                         </Grid>
                         <TextBlock Margin="0,12,0,0"
                                    Style="{StaticResource CardValueTextStyle}"
-                                   Text="{Binding PostRaceAiStatusText}" />
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiStatusText}" />
                         <TextBlock Style="{StaticResource BodyTextStyle}"
                                    Text="{Binding PostRaceAiDataStatusText}"
                                    ToolTip="{Binding PostRaceAiCompletionText}" />
@@ -227,9 +288,11 @@
                             </TextBlock.Style>
                         </TextBlock>
                         <TextBlock Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding TtsVoiceName, StringFormat=当前语音：{0}}" />
+                                   Text="{Binding TtsVoiceName, StringFormat=当前语音：{0}}"
+                                   ToolTip="{Binding TtsVoiceName}" />
                         <TextBlock Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding TtsVoiceStatusText}" />
+                                   Text="{Binding TtsVoiceStatusText}"
+                                   ToolTip="{Binding TtsVoiceStatusText}" />
                     </StackPanel>
                 </Border>
 
@@ -255,7 +318,7 @@
                                    ToolTip="{Binding PostRaceAiCompletionText}" />
                     </StackPanel>
                 </Border>
-            </WrapPanel>
+            </UniformGrid>
 
             <Border x:Name="AiAnalysisOperationCard"
                     Margin="0,0,0,12"
@@ -291,10 +354,10 @@
                                       ItemsSource="{Binding PostRaceAiCompletionModes}"
                                       SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
                         </StackPanel>
-                        <Button Style="{StaticResource CompactButtonStyle}"
+                        <Button Style="{StaticResource PrimaryActionButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="生成赛后总结" />
-                        <Button Style="{StaticResource CompactButtonStyle}"
+                        <Button Style="{StaticResource SecondaryActionButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="重新生成" />
                         <TextBlock MinWidth="240"
@@ -342,16 +405,17 @@
                         </Border.Style>
                         <StackPanel HorizontalAlignment="Center"
                                     VerticalAlignment="Center">
-                            <Border Width="38"
-                                    Height="38"
-                                    CornerRadius="19"
+                            <Border x:Name="AiAnalysisReportEmptyIcon"
+                                    Width="48"
+                                    Height="48"
+                                    CornerRadius="24"
                                     Background="#132844"
                                     BorderBrush="#2A4F77"
                                     BorderThickness="1">
                                 <TextBlock HorizontalAlignment="Center"
                                            VerticalAlignment="Center"
                                            FontFamily="Segoe MDL2 Assets"
-                                           FontSize="16"
+                                           FontSize="20"
                                            Foreground="#36A3FF"
                                            Text="&#xE946;" />
                             </Border>
