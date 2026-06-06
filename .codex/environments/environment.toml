@@ -12,3 +12,8 @@ command = '''
 cd "C:\Users\10670\OneDrive\文档\F1遥测"
 dotnet run --project .\F1Telemetry.App\F1Telemetry.App.csproj
 '''
+
+[[actions]]
+name = "测试"
+icon = "run"
+command = "dotnet .\\.artifacts\\bin\\F1Telemetry.App\\Debug\\net10.0-windows\\F1Telemetry.App.dll"
