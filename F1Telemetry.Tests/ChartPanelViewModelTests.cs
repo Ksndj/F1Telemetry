@@ -289,6 +289,63 @@ public sealed class ChartPanelViewModelTests
     }
 
     /// <summary>
+    /// Verifies chart wheel handling runs before a parent scroll viewer can move the page.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WhenHostedInScrollViewer_HandlesWheelBeforeParentScroll()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                Height = 260d,
+                DataContext = CreateHistoricalPanel()
+            };
+            var scrollViewer = new ScrollViewer
+            {
+                Height = 320d,
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        control,
+                        new Border { Height = 900d }
+                    }
+                }
+            };
+            var window = new Window
+            {
+                Width = 800d,
+                Height = 500d,
+                Content = scrollViewer,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.ToolWindow
+            };
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                var plotHost = GetPlotHost(control);
+                var wheelArgs = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, -120)
+                {
+                    RoutedEvent = UIElement.PreviewMouseWheelEvent,
+                    Source = plotHost
+                };
+
+                plotHost.RaiseEvent(wheelArgs);
+
+                Assert.True(wheelArgs.Handled);
+                Assert.Equal(0d, scrollViewer.VerticalOffset);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
     /// Returns series shapes that contain no finite plottable points.
     /// </summary>
     public static TheoryData<IReadOnlyList<ChartSeriesModel>> NonPlottableSeries()

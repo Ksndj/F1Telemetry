@@ -31,6 +31,35 @@ public static class ChartInteractionHelper
 
         element.PreviewMouseWheel -= OnPreviewMouseWheel;
         element.PreviewMouseWheel += OnPreviewMouseWheel;
+        element.MouseWheel -= OnPreviewMouseWheel;
+        element.MouseWheel += OnPreviewMouseWheel;
+    }
+
+    /// <summary>
+    /// Handles wheel input at the host window before parent scroll viewers can scroll.
+    /// </summary>
+    /// <param name="window">The window that hosts the chart control.</param>
+    /// <param name="handler">The chart-specific wheel handler.</param>
+    public static void AttachNoWheelZoomBehavior(Window window, MouseWheelEventHandler handler)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        window.RemoveHandler(UIElement.PreviewMouseWheelEvent, handler);
+        window.AddHandler(UIElement.PreviewMouseWheelEvent, handler, true);
+    }
+
+    /// <summary>
+    /// Removes a previously attached host-window wheel handler.
+    /// </summary>
+    /// <param name="window">The window that hosts the chart control.</param>
+    /// <param name="handler">The chart-specific wheel handler.</param>
+    public static void DetachNoWheelZoomBehavior(Window window, MouseWheelEventHandler handler)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        window.RemoveHandler(UIElement.PreviewMouseWheelEvent, handler);
     }
 
     private static void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
