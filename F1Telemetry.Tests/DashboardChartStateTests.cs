@@ -81,6 +81,691 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies a new UDP session clears stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void SessionUidChange_ClearsPostRaceAiReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var dispatcher = new FakePacketDispatcher();
+            var viewModel = CreateDashboardViewModel(dispatcher);
+
+            try
+            {
+                InvokeUpdatePostRaceAiReportDetails(
+                    viewModel,
+                    new AIAnalysisResult
+                    {
+                        IsSuccess = true,
+                        Summary = "上一场比赛结论",
+                        KeyProblems = ["上一场主要问题"],
+                        StrategyReview = "上一场策略回顾",
+                        TyreReview = "上一场轮胎表现",
+                        ErsFuelReview = "上一场 ERS / 燃油",
+                        OpponentReview = "上一场对手攻防",
+                        Improvements = ["上一场改进建议"]
+                    },
+                    new LapSummary { LapNumber = 58 });
+
+                Assert.True(viewModel.PostRaceAiHasReport);
+                Assert.Equal("上一场比赛结论", viewModel.PostRaceAiReportSummaryText);
+
+                dispatcher.RaiseSession(456UL);
+
+                Assert.False(viewModel.PostRaceAiHasReport);
+                Assert.Equal("最近分析：暂无", viewModel.PostRaceAiLastAnalysisText);
+                Assert.Equal("暂无 AI 分析报告", viewModel.PostRaceAiReportSummaryText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiKeyProblemsText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiStrategyReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiTyreReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiErsFuelReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiOpponentReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiImprovementsText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies failed post-race AI attempts clear stale report details.
+    /// </summary>
+    [Fact]
+    public void UpdatePostRaceAiReportDetails_WithFailure_ClearsReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(new FakePacketDispatcher());
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+
+                InvokeUpdatePostRaceAiReportDetails(
+                    viewModel,
+                    new AIAnalysisResult
+                    {
+                        IsSuccess = false,
+                        ErrorMessage = "网络或 API 返回异常"
+                    },
+                    new LapSummary { LapNumber = 12 });
+
+                AssertPostRaceAiReportCleared(viewModel, "网络或 API 返回异常");
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies status refreshes do not hide the latest generated or failed AI report state.
+    /// </summary>
+    [Fact]
+    public void RefreshPostRaceAiStatus_PreservesGeneratedAndFailedReportState()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = "稳定完赛",
+                KeyProblems = ["进站偏晚"]
+            });
+            aiService.Results.Enqueue(new AIAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "网络错误"
+            });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionState);
+
+                Assert.Contains("已生成", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("稳定完赛", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionState);
+
+                Assert.False(viewModel.PostRaceAiHasReport);
+                Assert.Contains("生成失败", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("网络错误", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("网络错误", viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies automatic generation is disabled when the current session is not ready for post-race summary.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithAutoDataNotReady_IsDisabled()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                InvokeRefreshPostRaceAiStatus(viewModel, new SessionState());
+
+                Assert.False(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.False(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies manual post-race summary remains available when auto completion is still waiting for final classification.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithStagedRaceLap_AllowsManualGeneration()
+    {
+        RunOnStaThread(() =>
+        {
+            var sessionStateStore = new SessionStateStore(new CarStateStore());
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                sessionStateStore,
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            viewModel.AiBaseUrl = "https://api.example.com";
+            viewModel.AiModel = "test-model";
+
+            try
+            {
+                ApplyStagedRaceState(sessionStateStore);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionStateStore.CaptureState());
+
+                Assert.Contains("等待 FinalClassification", viewModel.PostRaceAiCompletionText, StringComparison.Ordinal);
+                Assert.True(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.True(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.True(viewModel.RegeneratePostRaceAiSummaryCommand.CanExecute(null));
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies disabled AI prevents post-race summary commands from appearing actionable.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithAiDisabled_IsDisabledAndShowsReason()
+    {
+        RunOnStaThread(() =>
+        {
+            var sessionStateStore = new SessionStateStore(new CarStateStore());
+            var aiService = new FakeAiAnalysisService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                sessionStateStore,
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = false;
+            viewModel.AiApiKey = "test-key";
+            viewModel.AiBaseUrl = "https://api.example.com";
+            viewModel.AiModel = "test-model";
+
+            try
+            {
+                ApplyStagedRaceState(sessionStateStore);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionStateStore.CaptureState());
+
+                Assert.False(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.False(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.False(viewModel.RegeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.Contains("AI 未启用", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("AI 未启用", viewModel.PostRaceAiDataStatusText, StringComparison.Ordinal);
+                Assert.Equal("请先在 AI/TTS 设置中启用 AI", viewModel.PostRaceAiSummaryCommandTooltipText);
+
+                if (viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null))
+                {
+                    viewModel.GeneratePostRaceAiSummaryCommand.Execute(null);
+                }
+
+                Assert.Equal(0, aiService.AnalyzeCallCount);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies missing AI configuration disables post-race summary commands before execution.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithMissingAiConfiguration_IsDisabled()
+    {
+        RunOnStaThread(() =>
+        {
+            AssertDisabledForConfiguration(
+                configure: viewModel => viewModel.AiApiKey = string.Empty,
+                expectedReason: "API Key 未配置");
+            AssertDisabledForConfiguration(
+                configure: viewModel => viewModel.AiBaseUrl = string.Empty,
+                expectedReason: "Base URL 未配置");
+            AssertDisabledForConfiguration(
+                configure: viewModel => viewModel.AiModel = string.Empty,
+                expectedReason: "模型未配置");
+        });
+    }
+
+    /// <summary>
+    /// Verifies post-race summary commands re-enable when AI configuration becomes valid.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_ReenablesWhenAiConfigurationBecomesValid()
+    {
+        RunOnStaThread(() =>
+        {
+            var sessionStateStore = new SessionStateStore(new CarStateStore());
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                sessionStateStore,
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            viewModel.AiBaseUrl = string.Empty;
+            viewModel.AiModel = "test-model";
+            ApplyStagedRaceState(sessionStateStore);
+            InvokeRefreshPostRaceAiStatus(viewModel, sessionStateStore.CaptureState());
+            var canExecuteChangedCount = 0;
+            viewModel.GeneratePostRaceAiSummaryCommand.CanExecuteChanged += (_, _) => canExecuteChangedCount++;
+
+            try
+            {
+                Assert.False(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+
+                viewModel.AiBaseUrl = "https://api.example.com";
+
+                Assert.True(canExecuteChangedCount > 0);
+                Assert.True(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.True(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.True(viewModel.RegeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.Equal("数据可用于生成", viewModel.PostRaceAiDataStatusText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies the backend AI-disabled guard still prevents analysis when invoked directly.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithAiDisabledGuard_DoesNotCallAiService()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = false;
+            viewModel.AiApiKey = "test-key";
+            viewModel.AiBaseUrl = "https://api.example.com";
+            viewModel.AiModel = "test-model";
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    CreateCompletedRaceState(),
+                    force: true,
+                    bypassDuplicateKey: true);
+
+                Assert.Equal(0, aiService.AnalyzeCallCount);
+                Assert.Contains("AI 未启用", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies missing API key preflight clears stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithMissingApiKey_ClearsOldReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                var logCount = viewModel.AiAnalysisLogs.Count;
+                viewModel.AiAnalysisLogs.Add(new LogEntryViewModel
+                {
+                    Timestamp = "12:00",
+                    Category = "AI",
+                    Message = "保留的日志"
+                });
+                viewModel.AiApiKey = string.Empty;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
+
+                Assert.Equal(0, aiService.AnalyzeCallCount);
+                AssertPostRaceAiReportCleared(viewModel, "API Key");
+                Assert.Contains(viewModel.AiAnalysisLogs, log => log.Message == "保留的日志");
+                Assert.True(viewModel.AiAnalysisLogs.Count >= logCount + 1);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies repeated automatic preflight failures do not refill the AI analysis log.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithRepeatedPreflightFailure_SuppressesDuplicateAutoLog()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                viewModel.AiApiKey = string.Empty;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+                var logCountAfterFirstFailure = viewModel.AiAnalysisLogs.Count;
+                var apiKeyFailureLogsAfterFirstFailure = viewModel.AiAnalysisLogs.Count(
+                    log => log.Message.Contains("API Key", StringComparison.Ordinal));
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                Assert.Equal(logCountAfterFirstFailure, viewModel.AiAnalysisLogs.Count);
+                Assert.Equal(
+                    apiKeyFailureLogsAfterFirstFailure,
+                    viewModel.AiAnalysisLogs.Count(log => log.Message.Contains("API Key", StringComparison.Ordinal)));
+                Assert.Equal(0, aiService.AnalyzeCallCount);
+                AssertPostRaceAiReportCleared(viewModel, "API Key");
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                Assert.Equal(logCountAfterFirstFailure + 1, viewModel.AiAnalysisLogs.Count);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies disabled AI stops generation without clearing stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithAiDisabled_PreservesOldReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                var existingLogCount = viewModel.AiAnalysisLogs.Count;
+                viewModel.AiEnabled = false;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    CreateCompletedRaceState(),
+                    force: false,
+                    bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                AssertPostRaceAiReportPreserved(viewModel);
+                Assert.Equal(existingLogCount, viewModel.AiAnalysisLogs.Count);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    CreateCompletedRaceState(),
+                    force: true,
+                    bypassDuplicateKey: true);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                AssertPostRaceAiReportPreserved(viewModel);
+                Assert.Contains("AI 未启用", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.DoesNotContain("AI 未启用", viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies invalid base URL preflight clears stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithMissingBaseUrl_ClearsOldReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                viewModel.AiBaseUrl = string.Empty;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
+
+                AssertPostRaceAiReportCleared(viewModel, "Base URL");
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies missing model preflight clears stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithMissingModel_ClearsOldReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                viewModel.AiModel = string.Empty;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
+
+                AssertPostRaceAiReportCleared(viewModel, "模型未配置");
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies asynchronous AI failures clear stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithAiFailure_ClearsOldReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "AI 请求失败：网络错误"
+            });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
+
+                Assert.Equal(1, aiService.AnalyzeCallCount);
+                AssertPostRaceAiReportCleared(viewModel, "网络错误");
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies explicit regeneration can rerun AI analysis for the same session lap.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithBypassDuplicateKey_RegeneratesSameLap()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "第一次报告" });
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "第二次报告" });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: new FakeLapAnalyzer([new LapSummary { LapNumber = 22, LapTimeInMs = 88_000 }]),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = new SessionState
+            {
+                SeasonLinkIdentifier = 1,
+                WeekendLinkIdentifier = 2,
+                SessionLinkIdentifier = 3,
+                SessionType = 15,
+                HasFinalClassification = true,
+                PlayerFinalClassificationLaps = 22,
+                PlayerFinalClassificationPosition = 1
+            };
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+
+                Assert.Equal(1, aiService.AnalyzeCallCount);
+                Assert.Equal("第一次报告", viewModel.PostRaceAiReportSummaryText);
+                Assert.True(viewModel.PostRaceAiHasReport);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("第二次报告", viewModel.PostRaceAiReportSummaryText);
+                Assert.True(viewModel.PostRaceAiHasReport);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies regeneration after an automatic report keeps the automatic duplicate key suppressed.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_RegenerationAfterAutomaticReport_SuppressesNextAutomaticTick()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "自动报告" });
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "重新生成报告" });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: false,
+                    bypassDuplicateKey: false);
+
+                Assert.Equal(1, aiService.AnalyzeCallCount);
+                Assert.Equal("自动报告", viewModel.PostRaceAiReportSummaryText);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: true,
+                    bypassDuplicateKey: true);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("重新生成报告", viewModel.PostRaceAiReportSummaryText);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: false,
+                    bypassDuplicateKey: false);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("重新生成报告", viewModel.PostRaceAiReportSummaryText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies tyre condition summaries switch from waiting text to live telemetry values.
     /// </summary>
     [Fact]
@@ -206,7 +891,8 @@ public sealed class DashboardChartStateTests
         FakePacketDispatcher dispatcher,
         SessionStateStore? sessionStateStore = null,
         ILapAnalyzer? lapAnalyzer = null,
-        FakeStoragePersistenceService? storagePersistenceService = null)
+        FakeStoragePersistenceService? storagePersistenceService = null,
+        FakeAiAnalysisService? aiAnalysisService = null)
     {
         var ttsQueue = new TtsQueue(new FakeTtsService(), new TtsOptions());
         return new DashboardViewModel(
@@ -215,7 +901,7 @@ public sealed class DashboardChartStateTests
             sessionStateStore ?? new SessionStateStore(new CarStateStore()),
             lapAnalyzer ?? new LapAnalyzer(),
             new EventDetectionService(),
-            new FakeAiAnalysisService(),
+            aiAnalysisService ?? new FakeAiAnalysisService(),
             new FakeAppSettingsStore(),
             new FakeUdpRawLogWriter(),
             new TtsMessageFactory(),
@@ -235,6 +921,256 @@ public sealed class DashboardChartStateTests
         method!.Invoke(viewModel, null);
     }
 
+    private static void InvokeUpdatePostRaceAiReportDetails(
+        DashboardViewModel viewModel,
+        AIAnalysisResult result,
+        LapSummary lastLap)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "UpdatePostRaceAiReportDetails",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object[] { result, lastLap, DateTimeOffset.UtcNow });
+    }
+
+    private static void InvokeRefreshPostRaceAiStatus(
+        DashboardViewModel viewModel,
+        SessionState sessionState)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "RefreshPostRaceAiStatus",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object[] { sessionState });
+    }
+
+    private static void InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+        DashboardViewModel viewModel,
+        SessionState sessionState,
+        bool bypassDuplicateKey)
+    {
+        InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, force: true, bypassDuplicateKey);
+    }
+
+    private static void InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+        DashboardViewModel viewModel,
+        SessionState sessionState,
+        bool force,
+        bool bypassDuplicateKey)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "TriggerPostRaceAiAnalysisIfReadyAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var task = Assert.IsAssignableFrom<Task>(method!.Invoke(
+            viewModel,
+            new object?[] { sessionState, sessionState.PlayerCar, force, bypassDuplicateKey }));
+        task.GetAwaiter().GetResult();
+    }
+
+    private static void InvokeDrainPendingAiAnalysisLogs(DashboardViewModel viewModel)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "DrainPendingAiAnalysisLogs",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, null);
+    }
+
+    private static void PrimeSuccessfulPostRaceAiReport(DashboardViewModel viewModel)
+    {
+        InvokeUpdatePostRaceAiReportDetails(
+            viewModel,
+            new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = "旧比赛结论",
+                KeyProblems = ["旧主要问题"],
+                StrategyReview = "旧策略回顾",
+                TyreReview = "旧轮胎表现",
+                ErsFuelReview = "旧 ERS / 燃油",
+                OpponentReview = "旧对手攻防",
+                Improvements = ["旧改进建议"]
+            },
+            new LapSummary { LapNumber = 21 });
+
+        Assert.True(viewModel.PostRaceAiHasReport);
+        Assert.Equal("旧比赛结论", viewModel.PostRaceAiReportSummaryText);
+    }
+
+    private static void AssertDisabledForConfiguration(Action<DashboardViewModel> configure, string expectedReason)
+    {
+        var sessionStateStore = new SessionStateStore(new CarStateStore());
+        var viewModel = CreateDashboardViewModel(
+            new FakePacketDispatcher(),
+            sessionStateStore,
+            lapAnalyzer: CreateSingleLapAnalyzer());
+        viewModel.AiEnabled = true;
+        viewModel.AiApiKey = "test-key";
+        viewModel.AiBaseUrl = "https://api.example.com";
+        viewModel.AiModel = "test-model";
+
+        try
+        {
+            ApplyStagedRaceState(sessionStateStore);
+            configure(viewModel);
+
+            InvokeRefreshPostRaceAiStatus(viewModel, sessionStateStore.CaptureState());
+
+            Assert.False(viewModel.CanGeneratePostRaceAiSummary);
+            Assert.False(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+            Assert.False(viewModel.RegeneratePostRaceAiSummaryCommand.CanExecute(null));
+            Assert.Contains(expectedReason, viewModel.PostRaceAiDataStatusText, StringComparison.Ordinal);
+            Assert.Contains(expectedReason, viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+            Assert.Contains(expectedReason, viewModel.PostRaceAiSummaryCommandTooltipText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            viewModel.Dispose();
+        }
+    }
+
+    private static void ApplyStagedRaceState(SessionStateStore sessionStateStore)
+    {
+        var aggregator = new StateAggregator(sessionStateStore);
+        aggregator.ApplyPacket(CreateParsedPacket(CreateRaceSessionPacket(), playerCarIndex: 0));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new EventPacket("CHQF", EventCode.ChequeredFlag, new EmptyEventDetail()),
+            playerCarIndex: 0));
+    }
+
+    private static void AssertPostRaceAiReportCleared(DashboardViewModel viewModel, string expectedReason)
+    {
+        Assert.False(viewModel.PostRaceAiHasReport);
+        Assert.Equal("最近分析：暂无", viewModel.PostRaceAiLastAnalysisText);
+        Assert.Equal("暂无 AI 分析报告", viewModel.PostRaceAiReportSummaryText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiKeyProblemsText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiStrategyReviewText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiTyreReviewText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiErsFuelReviewText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiOpponentReviewText);
+        Assert.Equal("等待完赛数据", viewModel.PostRaceAiImprovementsText);
+        Assert.Contains(expectedReason, viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+        Assert.Contains(expectedReason, viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
+    }
+
+    private static void AssertPostRaceAiReportPreserved(DashboardViewModel viewModel)
+    {
+        Assert.True(viewModel.PostRaceAiHasReport);
+        Assert.Equal("旧比赛结论", viewModel.PostRaceAiReportSummaryText);
+        Assert.Equal("旧主要问题", viewModel.PostRaceAiKeyProblemsText);
+        Assert.Equal("旧策略回顾", viewModel.PostRaceAiStrategyReviewText);
+        Assert.Equal("旧轮胎表现", viewModel.PostRaceAiTyreReviewText);
+        Assert.Equal("旧 ERS / 燃油", viewModel.PostRaceAiErsFuelReviewText);
+        Assert.Equal("旧对手攻防", viewModel.PostRaceAiOpponentReviewText);
+        Assert.Equal("旧改进建议", viewModel.PostRaceAiImprovementsText);
+    }
+
+    private static SessionState CreateCompletedRaceState()
+    {
+        return new SessionState
+        {
+            SeasonLinkIdentifier = 1,
+            WeekendLinkIdentifier = 2,
+            SessionLinkIdentifier = 3,
+            SessionType = 15,
+            HasFinalClassification = true,
+            PlayerFinalClassificationLaps = 22,
+            PlayerFinalClassificationPosition = 1
+        };
+    }
+
+    private static SessionPacket CreateRaceSessionPacket()
+    {
+        return new SessionPacket(
+            Weather: 2,
+            TrackTemperature: 31,
+            AirTemperature: 24,
+            TotalLaps: 29,
+            TrackLength: 5400,
+            SessionType: 15,
+            TrackId: 10,
+            Formula: 0,
+            SessionTimeLeft: 1800,
+            SessionDuration: 3600,
+            PitSpeedLimit: 80,
+            GamePaused: false,
+            IsSpectating: false,
+            SpectatorCarIndex: 0,
+            SliProNativeSupport: false,
+            NumMarshalZones: 0,
+            MarshalZones: Array.Empty<MarshalZoneData>(),
+            SafetyCarStatus: 0,
+            NetworkGame: false,
+            NumWeatherForecastSamples: 0,
+            WeatherForecastSamples: Array.Empty<WeatherForecastSampleData>(),
+            ForecastAccuracy: 0,
+            AiDifficulty: 80,
+            SeasonLinkIdentifier: 1,
+            WeekendLinkIdentifier: 2,
+            SessionLinkIdentifier: 3,
+            PitStopWindowIdealLap: 0,
+            PitStopWindowLatestLap: 0,
+            PitStopRejoinPosition: 0,
+            SteeringAssist: false,
+            BrakingAssist: 0,
+            GearboxAssist: 0,
+            PitAssist: false,
+            PitReleaseAssist: false,
+            ErsAssist: false,
+            DrsAssist: false,
+            DynamicRacingLine: 0,
+            DynamicRacingLineType: 0,
+            GameMode: 0,
+            RuleSet: 0,
+            TimeOfDay: 0,
+            SessionLength: 0,
+            SpeedUnitsLeadPlayer: 0,
+            TemperatureUnitsLeadPlayer: 0,
+            SpeedUnitsSecondaryPlayer: 0,
+            TemperatureUnitsSecondaryPlayer: 0,
+            NumSafetyCarPeriods: 0,
+            NumVirtualSafetyCarPeriods: 0,
+            NumRedFlagPeriods: 0,
+            EqualCarPerformance: true,
+            RecoveryMode: 0,
+            FlashbackLimit: 0,
+            SurfaceType: 0,
+            LowFuelMode: false,
+            RaceStarts: true,
+            TyreTemperature: true,
+            PitLaneTyreSim: false,
+            CarDamage: 0,
+            CarDamageRate: 0,
+            Collisions: 0,
+            CollisionsOffForFirstLapOnly: false,
+            MpUnsafePitRelease: false,
+            MpOffForGriefing: false,
+            CornerCuttingStringency: 0,
+            ParcFermeRules: true,
+            PitStopExperience: 0,
+            SafetyCar: 0,
+            SafetyCarExperience: 0,
+            FormationLap: false,
+            FormationLapExperience: false,
+            RedFlags: 0,
+            AffectsLicenceLevelSolo: false,
+            AffectsLicenceLevelMp: false,
+            NumSessionsInWeekend: 0,
+            WeekendStructure: Array.Empty<byte>(),
+            Sector2LapDistanceStart: 0f,
+            Sector3LapDistanceStart: 0f);
+    }
+
+    private static FakeLapAnalyzer CreateSingleLapAnalyzer()
+    {
+        return new FakeLapAnalyzer([new LapSummary { LapNumber = 22, LapTimeInMs = 88_000 }]);
+    }
+
     private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
     {
         var header = new PacketHeader(
@@ -243,7 +1179,7 @@ public sealed class DashboardChartStateTests
             GameMajorVersion: 1,
             GameMinorVersion: 0,
             PacketVersion: 1,
-            RawPacketId: (byte)PacketId.CarTelemetry,
+            RawPacketId: GetPacketId(packet),
             SessionUid: 123UL,
             SessionTime: 0,
             FrameIdentifier: 1,
@@ -251,7 +1187,18 @@ public sealed class DashboardChartStateTests
             PlayerCarIndex: playerCarIndex,
             SecondaryPlayerCarIndex: 255);
         var datagram = new UdpDatagram(Array.Empty<byte>(), new IPEndPoint(IPAddress.Loopback, 20777), DateTimeOffset.UtcNow);
-        return new ParsedPacket(PacketId.CarTelemetry, header, packet, datagram);
+        return new ParsedPacket((PacketId)header.RawPacketId, header, packet, datagram);
+    }
+
+    private static byte GetPacketId(IUdpPacket packet)
+    {
+        return packet switch
+        {
+            SessionPacket => (byte)PacketId.Session,
+            EventPacket => (byte)PacketId.Event,
+            CarTelemetryPacket => (byte)PacketId.CarTelemetry,
+            _ => throw new ArgumentOutOfRangeException(nameof(packet))
+        };
     }
 
     private static CarTelemetryData[] BuildTelemetryCars()
@@ -395,12 +1342,17 @@ public sealed class DashboardChartStateTests
 
     private sealed class FakeAiAnalysisService : IAIAnalysisService
     {
+        public Queue<AIAnalysisResult> Results { get; } = new();
+
+        public int AnalyzeCallCount { get; private set; }
+
         public Task<AIAnalysisResult> AnalyzeAsync(
             AIAnalysisContext context,
             AISettings settings,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AIAnalysisResult());
+            AnalyzeCallCount++;
+            return Task.FromResult(Results.TryDequeue(out var result) ? result : new AIAnalysisResult());
         }
     }
 

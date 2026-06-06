@@ -69,10 +69,114 @@ public sealed class AiBroadcastConversionTests
 
         Assert.Contains("AI 分析播报", xaml, StringComparison.Ordinal);
         Assert.Contains("AiAnalysisLogs", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiTtsLogs", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiCompletionModes", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("AiTtsLogs", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("TelemetryChartControl", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("实时图表", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the AI broadcast page is structured as a post-race analysis workspace.
+    /// </summary>
+    [Fact]
+    public void ChartsView_DefinesAiPostRaceAnalysisWorkspace()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "ChartsView.xaml"));
+
+        Assert.Contains("x:Name=\"ChartsScrollViewer\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisTitleCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisStatusCardsPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource ResponsiveStatusCardsPanelStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TargetType=\"{x:Type controls:ResponsiveStatusCardsPanel}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("WideColumns=\"4\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MediumColumns=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("NarrowColumns=\"1\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("TargetType=\"{x:Type UniformGrid}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Setter Property=\"Columns\" Value=\"4\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisOperationCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisReportDetailCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisLogsCard\"", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("AI 状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛后总结状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("TTS 状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("数据状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("比赛结论", xaml, StringComparison.Ordinal);
+        Assert.Contains("主要问题", xaml, StringComparison.Ordinal);
+        Assert.Contains("策略回顾", xaml, StringComparison.Ordinal);
+        Assert.Contains("轮胎表现", xaml, StringComparison.Ordinal);
+        Assert.Contains("ERS / 燃油", xaml, StringComparison.Ordinal);
+        Assert.Contains("对手 / 攻防", xaml, StringComparison.Ordinal);
+        Assert.Contains("下次改进建议", xaml, StringComparison.Ordinal);
+        Assert.Contains("暂无 AI 分析报告", xaml, StringComparison.Ordinal);
+        Assert.Contains("完赛后或手动点击生成赛后总结", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("AiEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiApiKeyStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiModel", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiCompletionText", xaml, StringComparison.Ordinal);
+        Assert.Contains("TtsEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("TtsVoiceName", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiDataStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiSummaryCommandTooltipText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiLastAnalysisText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiReportSummaryText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiKeyProblemsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiStrategyReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiTyreReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiErsFuelReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiOpponentReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiImprovementsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiFailureReason", xaml, StringComparison.Ordinal);
+        Assert.Contains("生成失败：{0}", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding GeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding RegeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding PostRaceAiStatusText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource DarkComboBoxStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"DarkComboBoxStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"DarkComboBoxItemStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"TextSearch.TextPath\" Value=\"DisplayName\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding SelectedPostRaceAiCompletionMode.Description}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Background\" Value=\"#0B1728\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Foreground\" Value=\"#F8FAFC\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"PART_Popup\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("DropDownBorder", xaml, StringComparison.Ordinal);
+        Assert.Contains("Fill=\"#8CB5E5\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsMouseOver", xaml, StringComparison.Ordinal);
+        Assert.Contains("IsKeyboardFocusWithin", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Background=\"White\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SystemColors.WindowBrushKey", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource AnalysisPrimaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource AnalysisSecondaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding PostRaceAiSummaryCommandTooltipText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"AnalysisActionButtonBaseStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Width\" Value=\"128\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("Trigger Property=\"IsEnabled\" Value=\"False\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Foreground\" Value=\"#B7C9E2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Background\" Value=\"#21405F\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource CompactButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{x:Null}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisOperationPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Orientation=\"Horizontal\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("StackPanel Width=\"280\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding AiAnalysisLogs}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding AiTtsLogs}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextWrapping=\"Wrap\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"None\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisReportEmptyIcon\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Width=\"48\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Height=\"48\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1120\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1000\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Viewbox", xaml, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryFile(params string[] pathParts)

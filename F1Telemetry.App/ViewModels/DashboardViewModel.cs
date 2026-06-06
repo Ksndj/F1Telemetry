@@ -48,6 +48,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private const int MaxOverviewEventSummaries = 4;
     private const int MaxOverviewEventSummaryChars = 40;
     private const int MaxPostRaceAiLaps = 15;
+    private const string OverviewDamageMissingText = "等待数据";
+    private const string OverviewDamageMissingTooltipText = "损伤：等待数据（未收到 CarDamage 包）";
+    private const string PostRaceAiNoReportText = "暂无 AI 分析报告";
+    private const string PostRaceAiWaitingDataText = "等待完赛数据";
     private const int VoiceAiBindingCaptureSeconds = 15;
     private const double ExpandedSidebarWidth = 220d;
     private const double CollapsedSidebarWidth = 80d;
@@ -104,6 +108,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _openAppLogDirectoryCommand;
     private readonly RelayCommand _openRaceAssistantLogDirectoryCommand;
     private readonly RelayCommand _generatePostRaceAiSummaryCommand;
+    private readonly RelayCommand _regeneratePostRaceAiSummaryCommand;
     private readonly RelayCommand _readTyreSetsInventoryCommand;
     private readonly RelayCommand _clearTyreInventoryCommand;
     private readonly RelayCommand _saveTyreInventoryCommand;
@@ -167,7 +172,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _overviewTyreWearText = "-";
     private string _overviewTyreTemperatureText = "等待数据";
     private string _overviewTyrePressureText = "等待数据";
-    private string _overviewDamageText = "等待 CarDamage 包";
+    private string _overviewDamageText = OverviewDamageMissingText;
+    private string _overviewDamageTooltipText = OverviewDamageMissingTooltipText;
     private string _overviewKeyOpponentText = "-";
     private string _overviewLapComparisonText = "-";
     private string _overviewSessionFocusText = SessionModeFormatter.FormatFocus(SessionMode.Unknown);
@@ -282,6 +288,18 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int? _lastTrendRefreshLapNumber;
     private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
     private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
+    private string _postRaceAiDataStatusText = PostRaceAiWaitingDataText;
+    private string _postRaceAiSummaryCommandTooltipText = "等待可用于生成赛后总结的数据。";
+    private string _postRaceAiFailureReason = string.Empty;
+    private string _postRaceAiLastAnalysisText = "最近分析：暂无";
+    private bool _postRaceAiHasReport;
+    private string _postRaceAiReportSummaryText = PostRaceAiNoReportText;
+    private string _postRaceAiKeyProblemsText = PostRaceAiWaitingDataText;
+    private string _postRaceAiStrategyReviewText = PostRaceAiWaitingDataText;
+    private string _postRaceAiTyreReviewText = PostRaceAiWaitingDataText;
+    private string _postRaceAiErsFuelReviewText = PostRaceAiWaitingDataText;
+    private string _postRaceAiOpponentReviewText = PostRaceAiWaitingDataText;
+    private string _postRaceAiImprovementsText = PostRaceAiWaitingDataText;
     private readonly object _shutdownGate = new();
     private Task? _shutdownTask;
     private bool _disposed;
@@ -497,6 +515,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 var sessionState = _sessionStateStore.CaptureState();
                 _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, sessionState.PlayerCar, force: true);
+            },
+            () => CanGeneratePostRaceAiSummary);
+        _regeneratePostRaceAiSummaryCommand = new RelayCommand(
+            () =>
+            {
+                var sessionState = _sessionStateStore.CaptureState();
+                _ = TriggerPostRaceAiAnalysisIfReadyAsync(
+                    sessionState,
+                    sessionState.PlayerCar,
+                    force: true,
+                    bypassDuplicateKey: true);
             },
             () => CanGeneratePostRaceAiSummary);
 
@@ -829,8 +858,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -846,6 +874,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             if (SetProperty(ref _aiBaseUrl, value))
             {
+                _lastPostRaceAiSummaryKey = null;
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -861,6 +891,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             if (SetProperty(ref _aiModel, value))
             {
+                _lastPostRaceAiSummaryKey = null;
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -878,8 +910,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -2046,10 +2077,118 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     }
 
     /// <summary>
+    /// Gets the compact post-race AI data readiness state.
+    /// </summary>
+    public string PostRaceAiDataStatusText
+    {
+        get => _postRaceAiDataStatusText;
+        private set => SetProperty(ref _postRaceAiDataStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the tooltip explaining the current post-race summary button state.
+    /// </summary>
+    public string PostRaceAiSummaryCommandTooltipText
+    {
+        get => _postRaceAiSummaryCommandTooltipText;
+        private set => SetProperty(ref _postRaceAiSummaryCommandTooltipText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI generation failure reason.
+    /// </summary>
+    public string PostRaceAiFailureReason
+    {
+        get => _postRaceAiFailureReason;
+        private set => SetProperty(ref _postRaceAiFailureReason, value);
+    }
+
+    /// <summary>
+    /// Gets the last post-race AI analysis timestamp text.
+    /// </summary>
+    public string PostRaceAiLastAnalysisText
+    {
+        get => _postRaceAiLastAnalysisText;
+        private set => SetProperty(ref _postRaceAiLastAnalysisText, value);
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether a post-race AI report is available for display.
+    /// </summary>
+    public bool PostRaceAiHasReport
+    {
+        get => _postRaceAiHasReport;
+        private set => SetProperty(ref _postRaceAiHasReport, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI report conclusion.
+    /// </summary>
+    public string PostRaceAiReportSummaryText
+    {
+        get => _postRaceAiReportSummaryText;
+        private set => SetProperty(ref _postRaceAiReportSummaryText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI report key problems.
+    /// </summary>
+    public string PostRaceAiKeyProblemsText
+    {
+        get => _postRaceAiKeyProblemsText;
+        private set => SetProperty(ref _postRaceAiKeyProblemsText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI strategy review.
+    /// </summary>
+    public string PostRaceAiStrategyReviewText
+    {
+        get => _postRaceAiStrategyReviewText;
+        private set => SetProperty(ref _postRaceAiStrategyReviewText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI tyre review.
+    /// </summary>
+    public string PostRaceAiTyreReviewText
+    {
+        get => _postRaceAiTyreReviewText;
+        private set => SetProperty(ref _postRaceAiTyreReviewText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI ERS and fuel review.
+    /// </summary>
+    public string PostRaceAiErsFuelReviewText
+    {
+        get => _postRaceAiErsFuelReviewText;
+        private set => SetProperty(ref _postRaceAiErsFuelReviewText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI opponent review.
+    /// </summary>
+    public string PostRaceAiOpponentReviewText
+    {
+        get => _postRaceAiOpponentReviewText;
+        private set => SetProperty(ref _postRaceAiOpponentReviewText, value);
+    }
+
+    /// <summary>
+    /// Gets the latest post-race AI improvement suggestions.
+    /// </summary>
+    public string PostRaceAiImprovementsText
+    {
+        get => _postRaceAiImprovementsText;
+        private set => SetProperty(ref _postRaceAiImprovementsText, value);
+    }
+
+    /// <summary>
     /// Gets a value indicating whether the manual post-race AI summary command can run.
     /// </summary>
     public bool CanGeneratePostRaceAiSummary =>
-        AiEnabled && !_isAiAnalysisRunning && CaptureAiSummaryLap(_sessionStateStore.CaptureState()) is not null;
+        CanGeneratePostRaceAiSummaryForState(_sessionStateStore.CaptureState());
 
     /// <summary>
     /// Gets the current-lap speed chart panel state.
@@ -2115,6 +2254,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the command that manually generates a post-race AI summary from staged race data.
     /// </summary>
     public ICommand GeneratePostRaceAiSummaryCommand => _generatePostRaceAiSummaryCommand;
+
+    /// <summary>
+    /// Gets the command that regenerates the current post-race AI summary even for the same lap.
+    /// </summary>
+    public ICommand RegeneratePostRaceAiSummaryCommand => _regeneratePostRaceAiSummaryCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
@@ -2438,6 +2582,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _overviewDamageText;
         private set => SetProperty(ref _overviewDamageText, value);
+    }
+
+    /// <summary>
+    /// Gets the technical tooltip for the overview player-car damage summary.
+    /// </summary>
+    public string OverviewDamageTooltipText
+    {
+        get => _overviewDamageTooltipText;
+        private set => SetProperty(ref _overviewDamageTooltipText, value);
     }
 
     /// <summary>
@@ -3136,6 +3289,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
+                ResetPostRaceAiReportDetails();
                 _realtimeCornerAdviceService.Reset();
                 _persistedLapQualityByKey.Clear();
                 _completedLapSideEffectKeys.Clear();
@@ -3183,6 +3337,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
+            ResetPostRaceAiReportDetails();
             _realtimeCornerAdviceService.Reset();
             _persistedLapQualityByKey.Clear();
             _completedLapSideEffectKeys.Clear();
@@ -3245,6 +3400,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
         _lastStagedPostRaceAiKey = null;
+        ResetPostRaceAiReportDetails();
         _realtimeCornerAdviceService.Reset();
         _persistedLapQualityByKey.Clear();
         _completedLapSideEffectKeys.Clear();
@@ -3450,7 +3606,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             OverviewTyreWearText = "-";
             OverviewTyreTemperatureText = "等待数据";
             OverviewTyrePressureText = "等待数据";
-            OverviewDamageText = "等待 CarDamage 包";
+            OverviewDamageText = OverviewDamageMissingText;
+            OverviewDamageTooltipText = OverviewDamageMissingTooltipText;
             return;
         }
 
@@ -3474,7 +3631,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OverviewTyreWearText = playerCar.TyreWear is null ? "-" : $"平均 {playerCar.TyreWear.Value:0.0}%";
         OverviewTyreTemperatureText = BuildTyreTemperatureText(playerCar.TyreCondition);
         OverviewTyrePressureText = BuildTyrePressureText(playerCar.TyreCondition);
-        OverviewDamageText = DamageSummaryFormatter.Format(playerCar.Damage, "等待 CarDamage 包");
+        OverviewDamageText = DamageSummaryFormatter.Format(playerCar.Damage, OverviewDamageMissingText);
+        OverviewDamageTooltipText = BuildOverviewDamageTooltipText(playerCar.Damage, OverviewDamageText);
     }
 
     private void RebuildOpponentCars(IReadOnlyList<CarSnapshot> opponents, CarSnapshot? playerCar)
@@ -5282,9 +5440,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private async Task TriggerPostRaceAiAnalysisIfReadyAsync(
         SessionState sessionState,
         CarSnapshot? playerCar,
-        bool force = false)
+        bool force = false,
+        bool bypassDuplicateKey = false)
     {
-        if (_isAiAnalysisRunning || !AiEnabled)
+        if (_isAiAnalysisRunning)
         {
             return;
         }
@@ -5301,24 +5460,37 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
-        if (string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
+        var summaryKey = BuildPostRaceAiSummaryKey(
+            sessionState,
+            lastLap.LapNumber,
+            ResolvePostRaceAiSummaryKeyIsManual(sessionState, completion, force));
+        if (!AiEnabled)
+        {
+            if (completion.IsManual || bypassDuplicateKey)
+            {
+                PostRaceAiStatusText = "AI 未启用，已停止生成赛后 AI 总结。";
+            }
+
+            return;
+        }
+
+        if (!bypassDuplicateKey &&
+            string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(AiApiKey))
+        if (!TryValidatePostRaceAiConfiguration(out var configurationFailureReason))
         {
             _lastPostRaceAiSummaryKey = summaryKey;
-            PostRaceAiStatusText = "赛后 AI 总结未上传：AI API Key 未配置。";
-            EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, AIErrorMessageFormatter.MissingApiKey));
+            SetPostRaceAiReportFailed(configurationFailureReason);
+            EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, configurationFailureReason));
             return;
         }
 
         _lastPostRaceAiSummaryKey = summaryKey;
         _isAiAnalysisRunning = true;
-        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+        RaisePostRaceAiSummaryCommandStateChanged();
         var analysisSessionUid = _activeSessionUid;
         PostRaceAiStatusText = completion.IsManual
             ? "用户已标记完赛，正在生成赛后 AI 总结..."
@@ -5347,6 +5519,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
             if (result.IsSuccess)
             {
+                UpdatePostRaceAiReportDetails(result, lastLap, DateTimeOffset.UtcNow);
                 PostRaceAiStatusText = $"赛后 AI 总结已生成：{result.Summary}";
                 EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
                 EnqueueAiAnalysisLog("AI", BuildPostRaceAiDetailLogText(result));
@@ -5355,8 +5528,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             }
             else
             {
-                PostRaceAiStatusText = $"赛后 AI 总结失败：{result.ErrorMessage}";
-                EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, result.ErrorMessage));
+                var failureReason = NormalizePostRaceAiText(result.ErrorMessage, "网络或 API 返回异常");
+                SetPostRaceAiReportFailed(failureReason);
+                EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, failureReason));
             }
         }
         catch (OperationCanceledException)
@@ -5365,18 +5539,41 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         finally
         {
             _isAiAnalysisRunning = false;
-            OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-            _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+            RaisePostRaceAiSummaryCommandStateChanged();
         }
     }
 
     private void RefreshPostRaceAiStatus(SessionState sessionState)
     {
         var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        var commandState = BuildPostRaceAiSummaryCommandState(sessionState, completion);
         PostRaceAiCompletionText = completion.Evidence;
+        PostRaceAiDataStatusText = commandState.StatusText;
+        PostRaceAiSummaryCommandTooltipText = commandState.TooltipText;
 
         if (_isAiAnalysisRunning)
         {
+            return;
+        }
+
+        if (!commandState.CanGenerate)
+        {
+            PostRaceAiStatusText = commandState.StatusText;
+            RaisePostRaceAiSummaryCommandStateChanged();
+            return;
+        }
+
+        if (PostRaceAiHasReport)
+        {
+            PostRaceAiStatusText = $"赛后 AI 总结已生成：{PostRaceAiReportSummaryText}";
+            RaisePostRaceAiSummaryCommandStateChanged();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(PostRaceAiFailureReason))
+        {
+            PostRaceAiStatusText = $"生成失败：{PostRaceAiFailureReason}";
+            RaisePostRaceAiSummaryCommandStateChanged();
             return;
         }
 
@@ -5386,8 +5583,139 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 ? "正赛尚未完成；如中途退出，本次运行会暂存并等待完赛后总结。"
                 : completion.StatusText;
 
+        RaisePostRaceAiSummaryCommandStateChanged();
+    }
+
+    private bool CanGeneratePostRaceAiSummaryForState(SessionState sessionState)
+    {
+        var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        return BuildPostRaceAiSummaryCommandState(sessionState, completion).CanGenerate;
+    }
+
+    private void RaisePostRaceAiSummaryCommandStateChanged()
+    {
         OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+        _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+        _regeneratePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private PostRaceAiSummaryCommandState BuildPostRaceAiSummaryCommandState(
+        SessionState sessionState,
+        PostRaceAiCompletionEvaluation completion)
+    {
+        if (_isAiAnalysisRunning)
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "正在生成赛后总结",
+                TooltipText: "当前赛后总结正在生成，请等待本次请求完成。");
+        }
+
+        if (!AiEnabled)
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "AI 未启用，无法生成赛后总结",
+                TooltipText: "请先在 AI/TTS 设置中启用 AI");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiApiKey))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "API Key 未配置",
+                TooltipText: "API Key 未配置。请先在 AI/TTS 设置中配置 API Key。");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiBaseUrl))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "Base URL 未配置",
+                TooltipText: "Base URL 未配置。请先在 AI/TTS 设置中配置 Base URL。");
+        }
+
+        if (!Uri.TryCreate(AiBaseUrl, UriKind.Absolute, out var baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "Base URL 无效",
+                TooltipText: "Base URL 无效。请先在 AI/TTS 设置中填写有效的 HTTP/HTTPS Base URL。");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiModel))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "模型未配置",
+                TooltipText: "模型未配置。请先在 AI/TTS 设置中配置模型名称。");
+        }
+
+        if (CaptureAiSummaryLap(sessionState) is null ||
+            (!completion.ShouldGenerate && !completion.ShouldStage))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "数据不足，暂无法生成",
+                TooltipText: completion.Evidence);
+        }
+
+        return new PostRaceAiSummaryCommandState(
+            CanGenerate: true,
+            StatusText: "数据可用于生成",
+            TooltipText: completion.Evidence);
+    }
+
+    private bool ResolvePostRaceAiSummaryKeyIsManual(
+        SessionState sessionState,
+        PostRaceAiCompletionEvaluation completion,
+        bool force)
+    {
+        if (!force || !completion.IsManual)
+        {
+            return completion.IsManual;
+        }
+
+        var automaticCompletion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        return !automaticCompletion.ShouldGenerate || automaticCompletion.IsManual;
+    }
+
+    private bool TryValidatePostRaceAiConfiguration(out string failureReason)
+    {
+        if (!AiEnabled)
+        {
+            failureReason = "AI 未启用";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(AiApiKey))
+        {
+            failureReason = "API Key 未配置";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(AiBaseUrl))
+        {
+            failureReason = "Base URL 未配置";
+            return false;
+        }
+
+        if (!Uri.TryCreate(AiBaseUrl, UriKind.Absolute, out var baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+        {
+            failureReason = "Base URL 无效";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(AiModel))
+        {
+            failureReason = "模型未配置";
+            return false;
+        }
+
+        failureReason = string.Empty;
+        return true;
     }
 
     private PostRaceAiCompletionEvaluation EvaluatePostRaceAiCompletion(SessionState sessionState, bool force)
@@ -5513,6 +5841,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         string Evidence,
         string StatusText);
 
+    private sealed record PostRaceAiSummaryCommandState(
+        bool CanGenerate,
+        string StatusText,
+        string TooltipText);
+
     private void TryEnqueueAiSpeech(LapSummary lastLap, AIAnalysisResult result)
     {
         var ttsMessage = _ttsMessageFactory.CreateForAiResult(lastLap, result, BuildTtsOptions());
@@ -5550,6 +5883,49 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         };
     }
 
+    private void UpdatePostRaceAiReportDetails(AIAnalysisResult result, LapSummary lastLap, DateTimeOffset generatedAt)
+    {
+        if (!result.IsSuccess)
+        {
+            var errorText = NormalizePostRaceAiText(result.ErrorMessage, "网络或 API 返回异常");
+            SetPostRaceAiReportFailed(errorText);
+            return;
+        }
+
+        PostRaceAiFailureReason = string.Empty;
+        PostRaceAiLastAnalysisText = $"最近分析：Lap {lastLap.LapNumber} · {generatedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
+        PostRaceAiHasReport = true;
+        PostRaceAiReportSummaryText = NormalizePostRaceAiText(result.Summary, "暂无比赛结论");
+        PostRaceAiKeyProblemsText = JoinPostRaceAiItems(result.KeyProblems, "暂无主要问题");
+        PostRaceAiStrategyReviewText = NormalizePostRaceAiText(result.StrategyReview, "暂无策略回顾");
+        PostRaceAiTyreReviewText = NormalizePostRaceAiText(result.TyreReview, "暂无轮胎表现");
+        PostRaceAiErsFuelReviewText = NormalizePostRaceAiText(result.ErsFuelReview, "暂无 ERS / 燃油结论");
+        PostRaceAiOpponentReviewText = NormalizePostRaceAiText(result.OpponentReview, "暂无对手 / 攻防结论");
+        PostRaceAiImprovementsText = JoinPostRaceAiItems(result.Improvements, "暂无下次改进建议");
+    }
+
+    private void SetPostRaceAiReportFailed(string reason)
+    {
+        var failureReason = NormalizePostRaceAiText(reason, "网络或 API 返回异常");
+        ResetPostRaceAiReportDetails();
+        PostRaceAiFailureReason = failureReason;
+        PostRaceAiStatusText = $"生成失败：{failureReason}";
+    }
+
+    private void ResetPostRaceAiReportDetails()
+    {
+        PostRaceAiFailureReason = string.Empty;
+        PostRaceAiHasReport = false;
+        PostRaceAiLastAnalysisText = "最近分析：暂无";
+        PostRaceAiReportSummaryText = PostRaceAiNoReportText;
+        PostRaceAiKeyProblemsText = PostRaceAiWaitingDataText;
+        PostRaceAiStrategyReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiTyreReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiErsFuelReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiOpponentReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiImprovementsText = PostRaceAiWaitingDataText;
+    }
+
     private static string BuildPostRaceAiDetailLogText(AIAnalysisResult result)
     {
         var problems = result.KeyProblems.Count == 0
@@ -5568,6 +5944,23 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             $"ERS/燃油：{result.ErsFuelReview}",
             $"攻防判断：{result.OpponentReview}",
             improvements);
+    }
+
+    private static string NormalizePostRaceAiText(string? value, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(value) || string.Equals(value.Trim(), "-", StringComparison.Ordinal)
+            ? fallback
+            : value.Trim();
+    }
+
+    private static string JoinPostRaceAiItems(IReadOnlyList<string> values, string fallback)
+    {
+        var normalized = values
+            .Select(value => NormalizePostRaceAiText(value, string.Empty))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .ToArray();
+
+        return normalized.Length == 0 ? fallback : string.Join("；", normalized);
     }
 
     private LapSummary? CaptureAiSummaryLap(SessionState sessionState)
@@ -6386,6 +6779,18 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             playerCar.VisualTyreCompound,
             playerCar.ActualTyreCompound,
             playerCar.HasTelemetryAccess);
+    }
+
+    private static string BuildOverviewDamageTooltipText(DamageSnapshot? damage, string displayText)
+    {
+        if (damage is null)
+        {
+            return OverviewDamageMissingTooltipText;
+        }
+
+        return string.IsNullOrWhiteSpace(displayText)
+            ? "损伤：数据不足（CarDamage 数据不足）"
+            : $"损伤：{displayText}";
     }
 
     private static string BuildTyreTemperatureText(TyreConditionSnapshot? tyreCondition)

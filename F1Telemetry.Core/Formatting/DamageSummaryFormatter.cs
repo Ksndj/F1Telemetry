@@ -58,7 +58,7 @@ public static class DamageSummaryFormatter
             parts.Add($"{FormatComponent(item.Component)} {item.DamagePercent}%（{FormatSeverity(item.Severity)}）");
         }
 
-        return parts.Count == 0 ? "无明显损伤" : string.Join("；", parts);
+        return parts.Count == 0 ? "暂无损伤" : string.Join("；", parts);
     }
 
     private static string FormatComponent(DamageComponent component)

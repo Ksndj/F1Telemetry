@@ -1,139 +1,736 @@
 <UserControl x:Class="F1Telemetry.App.Views.ChartsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:F1Telemetry.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DesignHeight="680"
-             d:DesignWidth="1120">
+             d:DesignWidth="980">
+    <UserControl.Resources>
+        <Style x:Key="GlassCardStyle" TargetType="{x:Type Border}">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#132844" Offset="0" />
+                        <GradientStop Color="#0E1D31" Offset="0.58" />
+                        <GradientStop Color="#0A1728" Offset="1" />
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="BorderBrush" Value="#244263" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="StatusCardStyle"
+               BasedOn="{StaticResource GlassCardStyle}"
+               TargetType="{x:Type Border}">
+            <Setter Property="MinHeight" Value="132" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+        </Style>
+
+        <Style x:Key="ResponsiveStatusCardsPanelStyle"
+               TargetType="{x:Type controls:ResponsiveStatusCardsPanel}">
+            <Setter Property="WideColumns" Value="4" />
+            <Setter Property="MediumColumns" Value="2" />
+            <Setter Property="NarrowColumns" Value="1" />
+            <Setter Property="WideMinWidth" Value="1120" />
+            <Setter Property="MediumMinWidth" Value="720" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="Margin" Value="0,0,-10,2" />
+        </Style>
+
+        <Style x:Key="ReportSectionCardStyle"
+               BasedOn="{StaticResource GlassCardStyle}"
+               TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="310" />
+            <Setter Property="MinHeight" Value="118" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+
+        <Style x:Key="IconBadgeStyle" TargetType="{x:Type Border}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="#102A4B" />
+            <Setter Property="BorderBrush" Value="#1C6EDC" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="IconTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Foreground" Value="#36A3FF" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SectionTitleTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="18" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="CardLabelTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#8CB5E5" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="CardValueTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Margin" Value="0,5,0,0" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="BodyTextStyle" TargetType="{x:Type TextBlock}">
+            <Setter Property="Foreground" Value="#C9D8EA" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+        </Style>
+
+        <Style x:Key="DarkComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#0B1728" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ItemChrome"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#17365C" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#1C4D82" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7F95AE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkComboBoxStyle" TargetType="{x:Type ComboBox}">
+            <Setter Property="Width" Value="224" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#0B1728" />
+            <Setter Property="BorderBrush" Value="#244263" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MaxDropDownHeight" Value="240" />
+            <Setter Property="TextSearch.TextPath" Value="DisplayName" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid x:Name="ComboRoot"
+                              SnapsToDevicePixels="True"
+                              TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ToggleButton x:Name="ComboToggle"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border x:Name="ComboChrome"
+                                                CornerRadius="8"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="30" />
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="ComboArrow"
+                                                      Grid.Column="1"
+                                                      Width="8"
+                                                      Height="5"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Data="M 0 0 L 4 5 L 8 0 Z"
+                                                      Fill="#8CB5E5" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#10233A" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#3A79B8" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#60A5FA" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#102A4B" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#4AA3FF" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#9BD3FF" />
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#14243A" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#243B56" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#6F86A3" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <TextBlock x:Name="ContentSite"
+                                       Margin="10,0,34,0"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       IsHitTestVisible="False"
+                                       Text="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}"
+                                       TextTrimming="CharacterEllipsis" />
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Fade">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border x:Name="DropDownBorder"
+                                            Padding="3"
+                                            CornerRadius="8"
+                                            Background="#0B1728"
+                                            BorderBrush="#244263"
+                                            BorderThickness="1">
+                                        <ScrollViewer CanContentScroll="True"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="ComboToggle" Property="BorderBrush" Value="#6BB6FF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7F95AE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AnalysisActionButtonBaseStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="128" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Padding" Value="12,5" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#1C6EDC" />
+            <Setter Property="BorderBrush" Value="#4AA3FF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonChrome"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="8"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#2B83F6" />
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#6BB6FF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#175BB7" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#9BD3FF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#B7C9E2" />
+                                <Setter TargetName="ButtonChrome" Property="Background" Value="#21405F" />
+                                <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#2B4B6B" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AnalysisPrimaryButtonStyle"
+               BasedOn="{StaticResource AnalysisActionButtonBaseStyle}"
+               TargetType="{x:Type Button}" />
+
+        <Style x:Key="AnalysisSecondaryButtonStyle"
+               BasedOn="{StaticResource AnalysisActionButtonBaseStyle}"
+               TargetType="{x:Type Button}">
+            <Setter Property="Background" Value="#10233A" />
+            <Setter Property="BorderBrush" Value="#315C86" />
+        </Style>
+
+        <DataTemplate x:Key="AnalysisLogEntryTemplate">
+            <Border Margin="0,0,0,8"
+                    Padding="12"
+                    CornerRadius="8"
+                    Background="#132844"
+                    BorderBrush="#223D5D"
+                    BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="86" />
+                        <ColumnDefinition Width="78" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource CardLabelTextStyle}"
+                               Text="{Binding Timestamp}"
+                               ToolTip="{Binding Timestamp}" />
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource BodyTextStyle}"
+                               Text="{Binding Category}"
+                               ToolTip="{Binding Category}" />
+                    <TextBlock Grid.Column="2"
+                               Foreground="#F8FAFC"
+                               Text="{Binding Message}"
+                               TextWrapping="Wrap"
+                               TextTrimming="None"
+                               ToolTip="{Binding Message}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <ScrollViewer x:Name="ChartsScrollViewer"
                   HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-        <Border Padding="20"
-                CornerRadius="20"
-                Background="#0F1B2E">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="16" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,8">
+            <Border x:Name="AiAnalysisTitleCard"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="18" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                <StackPanel>
-                    <TextBlock FontSize="20"
-                               FontWeight="SemiBold"
-                               Foreground="White"
-                               Text="AI 分析播报" />
-                    <TextBlock Margin="0,6,0,0"
-                               Foreground="#9AB0C9"
-                               Text="完整正赛结束后生成赛后 AI 总结；中途存档或退出时先暂存，不与事件日志重复显示。"
-                               TextWrapping="Wrap" />
-                </StackPanel>
+                    <StackPanel>
+                        <TextBlock FontSize="24"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F8FAFC"
+                                   Text="AI 分析播报"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="AI 分析播报" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Text="生成赛后总结、查看 AI 报告和播报状态" />
+                    </StackPanel>
 
-                <Grid Grid.Row="2">
+                    <StackPanel Grid.Column="2"
+                                MinWidth="220"
+                                VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="最近分析" />
+                        <TextBlock Style="{StaticResource CardValueTextStyle}"
+                                   Text="{Binding PostRaceAiLastAnalysisText}" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiStatusText}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <controls:ResponsiveStatusCardsPanel x:Name="AiAnalysisStatusCardsPanel"
+                                                 WideColumns="4"
+                                                 MediumColumns="2"
+                                                 NarrowColumns="1"
+                                                 Style="{StaticResource ResponsiveStatusCardsPanelStyle}">
+                <Border Style="{StaticResource StatusCardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE8D4;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="AI 状态" />
+                        </Grid>
+                        <TextBlock Margin="0,12,0,0">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource CardValueTextStyle}" TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Text" Value="AI 未启用" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding AiEnabled}" Value="True">
+                                            <Setter Property="Text" Value="已启用" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding AiApiKeyStatusText, StringFormat=API Key：{0}}"
+                                   ToolTip="{Binding AiApiKeyStatusText}" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding AiModel, StringFormat=Model：{0}}"
+                                   ToolTip="{Binding AiModel}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StatusCardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE9D2;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="赛后总结状态" />
+                        </Grid>
+                        <TextBlock Margin="0,12,0,0"
+                                   Style="{StaticResource CardValueTextStyle}"
+                                   Text="{Binding PostRaceAiStatusText}"
+                                   ToolTip="{Binding PostRaceAiStatusText}" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiCompletionText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StatusCardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE720;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="TTS 状态" />
+                        </Grid>
+                        <TextBlock Margin="0,12,0,0">
+                            <TextBlock.Style>
+                                <Style BasedOn="{StaticResource CardValueTextStyle}" TargetType="{x:Type TextBlock}">
+                                    <Setter Property="Text" Value="TTS 未启用" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding TtsEnabled}" Value="True">
+                                            <Setter Property="Text" Value="已启用" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding TtsVoiceName, StringFormat=当前语音：{0}}"
+                                   ToolTip="{Binding TtsVoiceName}" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding TtsVoiceStatusText}"
+                                   ToolTip="{Binding TtsVoiceStatusText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource StatusCardStyle}">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE9F9;" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="数据状态" />
+                        </Grid>
+                        <TextBlock Margin="0,12,0,0"
+                                   Style="{StaticResource CardValueTextStyle}"
+                                   Text="{Binding PostRaceAiDataStatusText}" />
+                        <TextBlock Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding PostRaceAiLastAnalysisText}"
+                                   ToolTip="{Binding PostRaceAiCompletionText}" />
+                    </StackPanel>
+                </Border>
+            </controls:ResponsiveStatusCardsPanel>
+
+            <Border x:Name="AiAnalysisOperationCard"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
+                <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="12" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="12" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <Border Padding="14"
-                            CornerRadius="12"
-                            Background="#132743">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="170" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock VerticalAlignment="Center"
-                                       Foreground="#7FA5D8"
-                                       Text="赛后总结模式" />
-                            <ComboBox Grid.Column="1"
-                                      Margin="0,0,12,0"
-                                      Padding="8,5"
-                                      DisplayMemberPath="DisplayName"
-                                      ItemsSource="{Binding PostRaceAiCompletionModes}"
-                                      SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
-                            <Button Grid.Column="2"
-                                    Padding="12,6"
-                                    Command="{Binding GeneratePostRaceAiSummaryCommand}"
-                                    Content="生成赛后总结" />
-                        </Grid>
-                    </Border>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeStyle}">
+                            <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE713;" />
+                        </Border>
+                        <TextBlock Grid.Column="1"
+                                   Style="{StaticResource SectionTitleTextStyle}"
+                                   Text="操作区" />
+                    </Grid>
 
-                    <Border Grid.Row="2"
-                            Padding="14"
-                            CornerRadius="12"
-                            Background="#132743">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="8" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="8" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="150" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Foreground="#7FA5D8"
-                                       Text="AI 总结状态" />
-                            <TextBlock Grid.Column="1"
-                                       Foreground="White"
-                                       Text="{Binding PostRaceAiStatusText}"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="2"
-                                       Foreground="#7FA5D8"
-                                       Text="完赛判断" />
-                            <TextBlock Grid.Row="2"
-                                       Grid.Column="1"
-                                       Foreground="White"
-                                       Text="{Binding PostRaceAiCompletionText}"
-                                       TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="4"
-                                       Foreground="#7FA5D8"
-                                       Text="播报状态" />
-                            <TextBlock Grid.Row="4"
-                                       Grid.Column="1"
-                                       Foreground="White"
-                                       Text="{Binding TtsVoiceStatusText}"
-                                       TextWrapping="Wrap" />
-                        </Grid>
-                    </Border>
-
-                    <ItemsControl Grid.Row="4"
-                                  ItemsSource="{Binding AiAnalysisLogs}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="0,0,0,8"
-                                        Padding="12"
-                                        CornerRadius="12"
-                                        Background="#132743">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
-                                        <TextBlock Grid.Column="1"
-                                                   Foreground="#D7E4F3"
-                                                   Text="{Binding Category}" />
-                                        <TextBlock Grid.Column="2"
-                                                   Foreground="White"
-                                                   Text="{Binding Message}"
-                                                   TextWrapping="Wrap" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+                    <WrapPanel x:Name="AiAnalysisOperationPanel"
+                               Grid.Row="2"
+                               Orientation="Horizontal">
+                        <TextBlock Margin="0,0,8,10"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource CardLabelTextStyle}"
+                                   Text="赛后总结模式" />
+                        <ComboBox Style="{StaticResource DarkComboBoxStyle}"
+                                  DisplayMemberPath="DisplayName"
+                                  ItemsSource="{Binding PostRaceAiCompletionModes}"
+                                  SelectedItem="{Binding SelectedPostRaceAiCompletionMode}"
+                                  ToolTip="{Binding SelectedPostRaceAiCompletionMode.Description}" />
+                        <Button Style="{StaticResource AnalysisPrimaryButtonStyle}"
+                                Command="{Binding GeneratePostRaceAiSummaryCommand}"
+                                Content="生成赛后总结"
+                                ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}"
+                                ToolTipService.ShowOnDisabled="True" />
+                        <Button Style="{StaticResource AnalysisSecondaryButtonStyle}"
+                                Command="{Binding RegeneratePostRaceAiSummaryCommand}"
+                                Content="重新生成"
+                                ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}"
+                                ToolTipService.ShowOnDisabled="True" />
+                        <TextBlock MinWidth="180"
+                                   MaxWidth="360"
+                                   Margin="0,0,0,10"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}" />
+                    </WrapPanel>
                 </Grid>
-            </Grid>
-        </Border>
+            </Border>
+
+            <Border x:Name="AiAnalysisReportDetailCard"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeStyle}">
+                            <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE8A5;" />
+                        </Border>
+                        <TextBlock Grid.Column="1"
+                                   Style="{StaticResource SectionTitleTextStyle}"
+                                   Text="报告详情" />
+                    </Grid>
+
+                    <Border x:Name="AiAnalysisReportEmptyState"
+                            MinHeight="132"
+                            Padding="20"
+                            CornerRadius="8"
+                            Background="#10233A"
+                            BorderBrush="#213B5C"
+                            BorderThickness="1">
+                        <Border.Style>
+                            <Style TargetType="{x:Type Border}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PostRaceAiHasReport}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                            <Border x:Name="AiAnalysisReportEmptyIcon"
+                                    Width="48"
+                                    Height="48"
+                                    CornerRadius="24"
+                                    Background="#132844"
+                                    BorderBrush="#2A4F77"
+                                    BorderThickness="1">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="20"
+                                           Foreground="#36A3FF"
+                                           Text="&#xE946;" />
+                            </Border>
+                            <TextBlock Margin="0,12,0,0"
+                                       HorizontalAlignment="Center"
+                                       FontSize="17"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F8FAFC"
+                                       Text="暂无 AI 分析报告" />
+                            <TextBlock Margin="0,6,0,0"
+                                       HorizontalAlignment="Center"
+                                       Style="{StaticResource BodyTextStyle}"
+                                       Text="完赛后或手动点击生成赛后总结" />
+                            <TextBlock x:Name="AiAnalysisReportFailureReason"
+                                       Margin="0,10,0,0"
+                                       HorizontalAlignment="Center"
+                                       Text="{Binding PostRaceAiFailureReason, StringFormat=生成失败：{0}}"
+                                       ToolTip="{Binding PostRaceAiFailureReason}">
+                                <TextBlock.Style>
+                                    <Style BasedOn="{StaticResource BodyTextStyle}" TargetType="{x:Type TextBlock}">
+                                        <Setter Property="Foreground" Value="#FCA5A5" />
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PostRaceAiFailureReason}" Value="">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+
+                    <WrapPanel x:Name="AiAnalysisReportSectionsPanel">
+                        <WrapPanel.Style>
+                            <Style TargetType="{x:Type WrapPanel}">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PostRaceAiHasReport}" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </WrapPanel.Style>
+
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="比赛结论" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiReportSummaryText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="主要问题" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiKeyProblemsText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="策略回顾" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiStrategyReviewText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="轮胎表现" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiTyreReviewText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="ERS / 燃油" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiErsFuelReviewText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="对手 / 攻防" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiOpponentReviewText}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource ReportSectionCardStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="下次改进建议" />
+                                <TextBlock Style="{StaticResource BodyTextStyle}"
+                                           Text="{Binding PostRaceAiImprovementsText}" />
+                            </StackPanel>
+                        </Border>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="AiAnalysisLogsCard"
+                    Style="{StaticResource GlassCardStyle}">
+                <StackPanel>
+                    <Grid Margin="0,0,0,14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeStyle}">
+                            <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE7C3;" />
+                        </Border>
+                        <TextBlock Grid.Column="1"
+                                   Style="{StaticResource SectionTitleTextStyle}"
+                                   Text="AI / TTS 日志" />
+                    </Grid>
+
+                    <TextBlock Margin="0,0,0,8"
+                               Style="{StaticResource CardLabelTextStyle}"
+                               Text="AI 分析" />
+                    <ItemsControl ItemTemplate="{StaticResource AnalysisLogEntryTemplate}"
+                                  ItemsSource="{Binding AiAnalysisLogs}" />
+
+                    <TextBlock Margin="0,8,0,8"
+                               Style="{StaticResource CardLabelTextStyle}"
+                               Text="TTS / 语音" />
+                    <ItemsControl ItemTemplate="{StaticResource AnalysisLogEntryTemplate}"
+                                  ItemsSource="{Binding AiTtsLogs}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>
