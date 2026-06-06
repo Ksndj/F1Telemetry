@@ -5448,7 +5448,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
+        var summaryKey = BuildPostRaceAiSummaryKey(
+            sessionState,
+            lastLap.LapNumber,
+            ResolvePostRaceAiSummaryKeyIsManual(sessionState, completion, force));
         if (!AiEnabled)
         {
             if (completion.IsManual || bypassDuplicateKey)
@@ -5586,6 +5589,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
         _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
         _regeneratePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private bool ResolvePostRaceAiSummaryKeyIsManual(
+        SessionState sessionState,
+        PostRaceAiCompletionEvaluation completion,
+        bool force)
+    {
+        if (!force || !completion.IsManual)
+        {
+            return completion.IsManual;
+        }
+
+        var automaticCompletion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        return !automaticCompletion.ShouldGenerate || automaticCompletion.IsManual;
     }
 
     private bool TryValidatePostRaceAiConfiguration(out string failureReason)

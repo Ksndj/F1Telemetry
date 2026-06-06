@@ -531,6 +531,61 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies regeneration after an automatic report keeps the automatic duplicate key suppressed.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_RegenerationAfterAutomaticReport_SuppressesNextAutomaticTick()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "自动报告" });
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "重新生成报告" });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: false,
+                    bypassDuplicateKey: false);
+
+                Assert.Equal(1, aiService.AnalyzeCallCount);
+                Assert.Equal("自动报告", viewModel.PostRaceAiReportSummaryText);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: true,
+                    bypassDuplicateKey: true);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("重新生成报告", viewModel.PostRaceAiReportSummaryText);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    sessionState,
+                    force: false,
+                    bypassDuplicateKey: false);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("重新生成报告", viewModel.PostRaceAiReportSummaryText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies tyre condition summaries switch from waiting text to live telemetry values.
     /// </summary>
     [Fact]
