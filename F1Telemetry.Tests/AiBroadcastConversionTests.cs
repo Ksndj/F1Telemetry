@@ -121,6 +121,7 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("TtsEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("TtsVoiceName", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiDataStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiSummaryCommandTooltipText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiLastAnalysisText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiReportSummaryText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiKeyProblemsText", xaml, StringComparison.Ordinal);
@@ -152,6 +153,7 @@ public sealed class AiBroadcastConversionTests
         Assert.DoesNotContain("SystemColors.WindowBrushKey", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource AnalysisPrimaryButtonStyle}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource AnalysisSecondaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding PostRaceAiSummaryCommandTooltipText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"AnalysisActionButtonBaseStyle\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Width\" Value=\"128\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);

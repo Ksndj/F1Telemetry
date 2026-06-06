@@ -538,17 +538,21 @@
                                   ToolTip="{Binding SelectedPostRaceAiCompletionMode.Description}" />
                         <Button Style="{StaticResource AnalysisPrimaryButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
-                                Content="生成赛后总结" />
+                                Content="生成赛后总结"
+                                ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}"
+                                ToolTipService.ShowOnDisabled="True" />
                         <Button Style="{StaticResource AnalysisSecondaryButtonStyle}"
                                 Command="{Binding RegeneratePostRaceAiSummaryCommand}"
-                                Content="重新生成" />
+                                Content="重新生成"
+                                ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}"
+                                ToolTipService.ShowOnDisabled="True" />
                         <TextBlock MinWidth="180"
                                    MaxWidth="360"
                                    Margin="0,0,0,10"
                                    VerticalAlignment="Center"
                                    Style="{StaticResource BodyTextStyle}"
                                    Text="{Binding PostRaceAiDataStatusText}"
-                                   ToolTip="{Binding PostRaceAiStatusText}" />
+                                   ToolTip="{Binding PostRaceAiSummaryCommandTooltipText}" />
                     </WrapPanel>
                 </Grid>
             </Border>

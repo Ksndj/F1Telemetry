@@ -289,6 +289,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string _postRaceAiStatusText = "等待完整正赛结束后生成 AI 总结。";
     private string _postRaceAiCompletionText = "自动判断：等待 UDP 最终分类。";
     private string _postRaceAiDataStatusText = PostRaceAiWaitingDataText;
+    private string _postRaceAiSummaryCommandTooltipText = "等待可用于生成赛后总结的数据。";
     private string _postRaceAiFailureReason = string.Empty;
     private string _postRaceAiLastAnalysisText = "最近分析：暂无";
     private bool _postRaceAiHasReport;
@@ -857,7 +858,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                RaisePostRaceAiSummaryCommandStateChanged();
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -874,6 +875,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             if (SetProperty(ref _aiBaseUrl, value))
             {
                 _lastPostRaceAiSummaryKey = null;
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -890,6 +892,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             if (SetProperty(ref _aiModel, value))
             {
                 _lastPostRaceAiSummaryKey = null;
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -907,7 +910,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                RaisePostRaceAiSummaryCommandStateChanged();
+                RefreshPostRaceAiStatus(_sessionStateStore.CaptureState());
                 QueuePersistAiSettings();
             }
         }
@@ -2080,6 +2083,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         get => _postRaceAiDataStatusText;
         private set => SetProperty(ref _postRaceAiDataStatusText, value);
+    }
+
+    /// <summary>
+    /// Gets the tooltip explaining the current post-race summary button state.
+    /// </summary>
+    public string PostRaceAiSummaryCommandTooltipText
+    {
+        get => _postRaceAiSummaryCommandTooltipText;
+        private set => SetProperty(ref _postRaceAiSummaryCommandTooltipText, value);
     }
 
     /// <summary>
@@ -5534,11 +5546,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void RefreshPostRaceAiStatus(SessionState sessionState)
     {
         var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
+        var commandState = BuildPostRaceAiSummaryCommandState(sessionState, completion);
         PostRaceAiCompletionText = completion.Evidence;
-        PostRaceAiDataStatusText = BuildPostRaceAiDataStatusText(sessionState, completion);
+        PostRaceAiDataStatusText = commandState.StatusText;
+        PostRaceAiSummaryCommandTooltipText = commandState.TooltipText;
 
         if (_isAiAnalysisRunning)
         {
+            return;
+        }
+
+        if (!commandState.CanGenerate)
+        {
+            PostRaceAiStatusText = commandState.StatusText;
+            RaisePostRaceAiSummaryCommandStateChanged();
             return;
         }
 
@@ -5565,24 +5586,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         RaisePostRaceAiSummaryCommandStateChanged();
     }
 
-    private string BuildPostRaceAiDataStatusText(SessionState sessionState, PostRaceAiCompletionEvaluation completion)
-    {
-        if (CaptureAiSummaryLap(sessionState) is null)
-        {
-            return PostRaceAiWaitingDataText;
-        }
-
-        return completion.ShouldGenerate
-            ? "数据可用于生成"
-            : "数据不足，暂无法生成";
-    }
-
     private bool CanGeneratePostRaceAiSummaryForState(SessionState sessionState)
     {
         var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
-        return !_isAiAnalysisRunning &&
-            CaptureAiSummaryLap(sessionState) is not null &&
-            (completion.ShouldGenerate || completion.ShouldStage);
+        return BuildPostRaceAiSummaryCommandState(sessionState, completion).CanGenerate;
     }
 
     private void RaisePostRaceAiSummaryCommandStateChanged()
@@ -5590,6 +5597,74 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
         _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
         _regeneratePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+    }
+
+    private PostRaceAiSummaryCommandState BuildPostRaceAiSummaryCommandState(
+        SessionState sessionState,
+        PostRaceAiCompletionEvaluation completion)
+    {
+        if (_isAiAnalysisRunning)
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "正在生成赛后总结",
+                TooltipText: "当前赛后总结正在生成，请等待本次请求完成。");
+        }
+
+        if (!AiEnabled)
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "AI 未启用，无法生成赛后总结",
+                TooltipText: "请先在 AI/TTS 设置中启用 AI");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiApiKey))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "API Key 未配置",
+                TooltipText: "API Key 未配置。请先在 AI/TTS 设置中配置 API Key。");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiBaseUrl))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "Base URL 未配置",
+                TooltipText: "Base URL 未配置。请先在 AI/TTS 设置中配置 Base URL。");
+        }
+
+        if (!Uri.TryCreate(AiBaseUrl, UriKind.Absolute, out var baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttp && baseUri.Scheme != Uri.UriSchemeHttps))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "Base URL 无效",
+                TooltipText: "Base URL 无效。请先在 AI/TTS 设置中填写有效的 HTTP/HTTPS Base URL。");
+        }
+
+        if (string.IsNullOrWhiteSpace(AiModel))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "模型未配置",
+                TooltipText: "模型未配置。请先在 AI/TTS 设置中配置模型名称。");
+        }
+
+        if (CaptureAiSummaryLap(sessionState) is null ||
+            (!completion.ShouldGenerate && !completion.ShouldStage))
+        {
+            return new PostRaceAiSummaryCommandState(
+                CanGenerate: false,
+                StatusText: "数据不足，暂无法生成",
+                TooltipText: completion.Evidence);
+        }
+
+        return new PostRaceAiSummaryCommandState(
+            CanGenerate: true,
+            StatusText: "数据可用于生成",
+            TooltipText: completion.Evidence);
     }
 
     private bool ResolvePostRaceAiSummaryKeyIsManual(
@@ -5635,7 +5710,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         if (string.IsNullOrWhiteSpace(AiModel))
         {
-            failureReason = "Model 未配置";
+            failureReason = "模型未配置";
             return false;
         }
 
@@ -5765,6 +5840,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         bool IsManual,
         string Evidence,
         string StatusText);
+
+    private sealed record PostRaceAiSummaryCommandState(
+        bool CanGenerate,
+        string StatusText,
+        string TooltipText);
 
     private void TryEnqueueAiSpeech(LapSummary lastLap, AIAnalysisResult result)
     {
