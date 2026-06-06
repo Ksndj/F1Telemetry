@@ -3250,6 +3250,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _activeSessionUid = null;
                 _lastPostRaceAiSummaryKey = null;
                 _lastStagedPostRaceAiKey = null;
+                ResetPostRaceAiReportDetails();
                 _realtimeCornerAdviceService.Reset();
                 _persistedLapQualityByKey.Clear();
                 _completedLapSideEffectKeys.Clear();
@@ -3297,6 +3298,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             _activeSessionUid = null;
             _lastPostRaceAiSummaryKey = null;
             _lastStagedPostRaceAiKey = null;
+            ResetPostRaceAiReportDetails();
             _realtimeCornerAdviceService.Reset();
             _persistedLapQualityByKey.Clear();
             _completedLapSideEffectKeys.Clear();
@@ -3359,6 +3361,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
         _lastStagedPostRaceAiKey = null;
+        ResetPostRaceAiReportDetails();
         _realtimeCornerAdviceService.Reset();
         _persistedLapQualityByKey.Clear();
         _completedLapSideEffectKeys.Clear();
@@ -5706,6 +5709,19 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         PostRaceAiErsFuelReviewText = NormalizePostRaceAiText(result.ErsFuelReview, "暂无 ERS / 燃油结论");
         PostRaceAiOpponentReviewText = NormalizePostRaceAiText(result.OpponentReview, "暂无对手 / 攻防结论");
         PostRaceAiImprovementsText = JoinPostRaceAiItems(result.Improvements, "暂无下次改进建议");
+    }
+
+    private void ResetPostRaceAiReportDetails()
+    {
+        PostRaceAiHasReport = false;
+        PostRaceAiLastAnalysisText = "最近分析：暂无";
+        PostRaceAiReportSummaryText = PostRaceAiNoReportText;
+        PostRaceAiKeyProblemsText = PostRaceAiWaitingDataText;
+        PostRaceAiStrategyReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiTyreReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiErsFuelReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiOpponentReviewText = PostRaceAiWaitingDataText;
+        PostRaceAiImprovementsText = PostRaceAiWaitingDataText;
     }
 
     private static string BuildPostRaceAiDetailLogText(AIAnalysisResult result)

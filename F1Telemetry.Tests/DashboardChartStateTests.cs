@@ -81,6 +81,56 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies a new UDP session clears stale post-race AI report details.
+    /// </summary>
+    [Fact]
+    public void SessionUidChange_ClearsPostRaceAiReportDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var dispatcher = new FakePacketDispatcher();
+            var viewModel = CreateDashboardViewModel(dispatcher);
+
+            try
+            {
+                InvokeUpdatePostRaceAiReportDetails(
+                    viewModel,
+                    new AIAnalysisResult
+                    {
+                        IsSuccess = true,
+                        Summary = "上一场比赛结论",
+                        KeyProblems = ["上一场主要问题"],
+                        StrategyReview = "上一场策略回顾",
+                        TyreReview = "上一场轮胎表现",
+                        ErsFuelReview = "上一场 ERS / 燃油",
+                        OpponentReview = "上一场对手攻防",
+                        Improvements = ["上一场改进建议"]
+                    },
+                    new LapSummary { LapNumber = 58 });
+
+                Assert.True(viewModel.PostRaceAiHasReport);
+                Assert.Equal("上一场比赛结论", viewModel.PostRaceAiReportSummaryText);
+
+                dispatcher.RaiseSession(456UL);
+
+                Assert.False(viewModel.PostRaceAiHasReport);
+                Assert.Equal("最近分析：暂无", viewModel.PostRaceAiLastAnalysisText);
+                Assert.Equal("暂无 AI 分析报告", viewModel.PostRaceAiReportSummaryText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiKeyProblemsText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiStrategyReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiTyreReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiErsFuelReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiOpponentReviewText);
+                Assert.Equal("等待完赛数据", viewModel.PostRaceAiImprovementsText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies tyre condition summaries switch from waiting text to live telemetry values.
     /// </summary>
     [Fact]
@@ -233,6 +283,19 @@ public sealed class DashboardChartStateTests
 
         Assert.NotNull(method);
         method!.Invoke(viewModel, null);
+    }
+
+    private static void InvokeUpdatePostRaceAiReportDetails(
+        DashboardViewModel viewModel,
+        AIAnalysisResult result,
+        LapSummary lastLap)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "UpdatePostRaceAiReportDetails",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object[] { result, lastLap, DateTimeOffset.UtcNow });
     }
 
     private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
