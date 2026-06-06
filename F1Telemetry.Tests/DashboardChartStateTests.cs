@@ -336,10 +336,10 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
-    /// Verifies disabled AI preflight clears stale post-race AI report details.
+    /// Verifies disabled AI stops generation without clearing stale post-race AI report details.
     /// </summary>
     [Fact]
-    public void PostRaceAiAnalysis_WithAiDisabled_ClearsOldReportDetails()
+    public void PostRaceAiAnalysis_WithAiDisabled_PreservesOldReportDetails()
     {
         RunOnStaThread(() =>
         {
@@ -352,11 +352,29 @@ public sealed class DashboardChartStateTests
             try
             {
                 PrimeSuccessfulPostRaceAiReport(viewModel);
+                var existingLogCount = viewModel.AiAnalysisLogs.Count;
                 viewModel.AiEnabled = false;
 
-                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    CreateCompletedRaceState(),
+                    force: false,
+                    bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
 
-                AssertPostRaceAiReportCleared(viewModel, "AI 未启用");
+                AssertPostRaceAiReportPreserved(viewModel);
+                Assert.Equal(existingLogCount, viewModel.AiAnalysisLogs.Count);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+                    viewModel,
+                    CreateCompletedRaceState(),
+                    force: true,
+                    bypassDuplicateKey: true);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                AssertPostRaceAiReportPreserved(viewModel);
+                Assert.Contains("AI 未启用", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.DoesNotContain("AI 未启用", viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
             }
             finally
             {
@@ -698,6 +716,15 @@ public sealed class DashboardChartStateTests
         SessionState sessionState,
         bool bypassDuplicateKey)
     {
+        InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, force: true, bypassDuplicateKey);
+    }
+
+    private static void InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+        DashboardViewModel viewModel,
+        SessionState sessionState,
+        bool force,
+        bool bypassDuplicateKey)
+    {
         var method = typeof(DashboardViewModel).GetMethod(
             "TriggerPostRaceAiAnalysisIfReadyAsync",
             BindingFlags.Instance | BindingFlags.NonPublic);
@@ -705,7 +732,7 @@ public sealed class DashboardChartStateTests
         Assert.NotNull(method);
         var task = Assert.IsAssignableFrom<Task>(method!.Invoke(
             viewModel,
-            new object?[] { sessionState, sessionState.PlayerCar, true, bypassDuplicateKey }));
+            new object?[] { sessionState, sessionState.PlayerCar, force, bypassDuplicateKey }));
         task.GetAwaiter().GetResult();
     }
 
@@ -753,6 +780,18 @@ public sealed class DashboardChartStateTests
         Assert.Equal("等待完赛数据", viewModel.PostRaceAiImprovementsText);
         Assert.Contains(expectedReason, viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
         Assert.Contains(expectedReason, viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
+    }
+
+    private static void AssertPostRaceAiReportPreserved(DashboardViewModel viewModel)
+    {
+        Assert.True(viewModel.PostRaceAiHasReport);
+        Assert.Equal("旧比赛结论", viewModel.PostRaceAiReportSummaryText);
+        Assert.Equal("旧主要问题", viewModel.PostRaceAiKeyProblemsText);
+        Assert.Equal("旧策略回顾", viewModel.PostRaceAiStrategyReviewText);
+        Assert.Equal("旧轮胎表现", viewModel.PostRaceAiTyreReviewText);
+        Assert.Equal("旧 ERS / 燃油", viewModel.PostRaceAiErsFuelReviewText);
+        Assert.Equal("旧对手攻防", viewModel.PostRaceAiOpponentReviewText);
+        Assert.Equal("旧改进建议", viewModel.PostRaceAiImprovementsText);
     }
 
     private static SessionState CreateCompletedRaceState()

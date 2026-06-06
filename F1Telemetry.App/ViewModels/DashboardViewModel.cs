@@ -5449,6 +5449,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
+        if (!AiEnabled)
+        {
+            if (completion.IsManual || bypassDuplicateKey)
+            {
+                PostRaceAiStatusText = "AI 未启用，已停止生成赛后 AI 总结。";
+            }
+
+            return;
+        }
+
         if (!bypassDuplicateKey &&
             string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
         {
