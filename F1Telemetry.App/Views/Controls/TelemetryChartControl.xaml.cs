@@ -50,6 +50,7 @@ public partial class TelemetryChartControl : UserControl
         ChartInteractionHelper.AttachNoWheelZoomBehavior(PlotBorder);
         ChartInteractionHelper.AttachNoWheelZoomBehavior(_plotHost);
         DataContextChanged += OnDataContextChanged;
+        SizeChanged += OnSizeChanged;
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -60,6 +61,14 @@ public partial class TelemetryChartControl : UserControl
         AttachToHostWindow();
         AttachToDataContext(DataContext as ChartPanelViewModel);
         RefreshChart();
+    }
+
+    private void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged)
+        {
+            UpdateChartSurfaceWidthFromCurrentPanel();
+        }
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -223,6 +232,7 @@ public partial class TelemetryChartControl : UserControl
             EmptyStateTextBlock.Text = "等待图表数据";
             EmptyStateBorder.Visibility = Visibility.Visible;
             PlotBorder.Visibility = Visibility.Collapsed;
+            ResetChartSurfaceWidth();
             _plotHost.Plot.Clear();
             _plotHost.Refresh();
             return;
@@ -241,6 +251,7 @@ public partial class TelemetryChartControl : UserControl
         var hasData = panel.HasData && plottableSeries.Length > 0;
         EmptyStateBorder.Visibility = hasData ? Visibility.Collapsed : Visibility.Visible;
         PlotBorder.Visibility = hasData ? Visibility.Visible : Visibility.Collapsed;
+        UpdateChartSurfaceWidth(panel, plottableSeries.SelectMany(series => series.Points).ToArray());
 
         var plot = _plotHost.Plot;
         plot.Clear();
@@ -338,6 +349,62 @@ public partial class TelemetryChartControl : UserControl
         }
 
         plot.Axes.SetLimits(xMinimum, xMaximum, yMinimum, yMaximum);
+    }
+
+    private void UpdateChartSurfaceWidthFromCurrentPanel()
+    {
+        var panel = _chartPanel ?? DataContext as ChartPanelViewModel;
+        if (panel is null)
+        {
+            ResetChartSurfaceWidth();
+            return;
+        }
+
+        var points = panel.Series
+            .SelectMany(series => ToCoordinates(series.Points))
+            .ToArray();
+        UpdateChartSurfaceWidth(panel, points);
+    }
+
+    private void UpdateChartSurfaceWidth(ChartPanelViewModel panel, IReadOnlyList<Coordinates> points)
+    {
+        if (!panel.UsesLapNumberXAxis || points.Count == 0)
+        {
+            ResetChartSurfaceWidth();
+            return;
+        }
+
+        var availableWidth = GetChartSurfaceAvailableWidth();
+        var compactWidth = ChartAxisRangeHelper.GetCompactLapPlotWidth(points.Select(point => point.X), availableWidth);
+        if (!double.IsFinite(compactWidth) || !double.IsFinite(availableWidth) || compactWidth >= availableWidth - 1d)
+        {
+            ResetChartSurfaceWidth();
+            return;
+        }
+
+        ChartSurfaceGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+        ChartSurfaceGrid.MaxWidth = compactWidth;
+    }
+
+    private void ResetChartSurfaceWidth()
+    {
+        ChartSurfaceGrid.HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch;
+        ChartSurfaceGrid.MaxWidth = double.PositiveInfinity;
+    }
+
+    private double GetChartSurfaceAvailableWidth()
+    {
+        if (double.IsFinite(ActualWidth) && ActualWidth > 0d)
+        {
+            return Math.Max(0d, ActualWidth - 36d);
+        }
+
+        if (double.IsFinite(ChartSurfaceGrid.ActualWidth) && ChartSurfaceGrid.ActualWidth > 0d)
+        {
+            return ChartSurfaceGrid.ActualWidth;
+        }
+
+        return double.PositiveInfinity;
     }
 
     private double GetChartWidth()

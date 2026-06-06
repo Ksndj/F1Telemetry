@@ -98,4 +98,38 @@ public sealed class ChartAxisRangeHelperTests
         Assert.True(ticks.Values.Count < 29);
         Assert.All(ticks.Labels, label => Assert.DoesNotContain(".", label, StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Verifies sparse lap charts do not stretch a few laps across a very wide card.
+    /// </summary>
+    [Fact]
+    public void GetCompactLapPlotWidth_WithSparseWideLapRange_ReducesPlotWidth()
+    {
+        var width = ChartAxisRangeHelper.GetCompactLapPlotWidth([4d, 6d, 7d, 8d], availableWidth: 1500d);
+
+        Assert.InRange(width, 360d, 780d);
+        Assert.True(width < 1500d);
+    }
+
+    /// <summary>
+    /// Verifies dense lap charts keep the full available plot width.
+    /// </summary>
+    [Fact]
+    public void GetCompactLapPlotWidth_WithDenseLongLapRange_KeepsAvailableWidth()
+    {
+        var width = ChartAxisRangeHelper.GetCompactLapPlotWidth(Enumerable.Range(1, 29).Select(value => (double)value), availableWidth: 1500d);
+
+        Assert.Equal(1500d, width);
+    }
+
+    /// <summary>
+    /// Verifies compact lap widths never exceed a narrow available area.
+    /// </summary>
+    [Fact]
+    public void GetCompactLapPlotWidth_WithNarrowAvailableWidth_DoesNotGrowPlot()
+    {
+        var width = ChartAxisRangeHelper.GetCompactLapPlotWidth([4d, 6d, 7d, 8d], availableWidth: 320d);
+
+        Assert.Equal(320d, width);
+    }
 }

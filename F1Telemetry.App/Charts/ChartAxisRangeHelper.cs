@@ -30,6 +30,11 @@ public sealed record ChartEmptyState(string EmptyReason, bool HasEnoughData, str
 public static class ChartAxisRangeHelper
 {
     private const double DefaultNonNegativeMaximum = 1d;
+    private const double CompactLapSlotWidth = 90d;
+    private const double CompactLapBaseWidth = 220d;
+    private const double CompactLapMinimumWidth = 360d;
+    private const double CompactLapMaximumWidth = 780d;
+    private const int CompactLapMaximumSpan = 9;
 
     /// <summary>
     /// Gets a padded axis range while allowing negative values only for relative charts.
@@ -104,6 +109,42 @@ public static class ChartAxisRangeHelper
         }
 
         return new ChartAxisRange(minimum, maximum);
+    }
+
+    /// <summary>
+    /// Gets a compact plot width for sparse lap-number charts on wide cards.
+    /// </summary>
+    /// <param name="lapNumbers">The lap numbers plotted on the X axis.</param>
+    /// <param name="availableWidth">The available plot area width in device-independent pixels.</param>
+    public static double GetCompactLapPlotWidth(IEnumerable<double> lapNumbers, double availableWidth)
+    {
+        if (!double.IsFinite(availableWidth) || availableWidth <= 0d)
+        {
+            return double.PositiveInfinity;
+        }
+
+        var finiteLaps = GetFiniteValues(lapNumbers)
+            .Select(value => Math.Max(1, (int)Math.Round(value, MidpointRounding.AwayFromZero)))
+            .Distinct()
+            .Order()
+            .ToArray();
+        if (finiteLaps.Length == 0)
+        {
+            return availableWidth;
+        }
+
+        var lapSpan = Math.Max(1, finiteLaps[^1] - finiteLaps[0] + 1);
+        if (lapSpan > CompactLapMaximumSpan)
+        {
+            return availableWidth;
+        }
+
+        var compactWidth = Math.Clamp(
+            CompactLapBaseWidth + (lapSpan * CompactLapSlotWidth),
+            CompactLapMinimumWidth,
+            CompactLapMaximumWidth);
+
+        return Math.Min(availableWidth, compactWidth);
     }
 
     /// <summary>

@@ -289,6 +289,45 @@ public sealed class ChartPanelViewModelTests
     }
 
     /// <summary>
+    /// Verifies sparse lap charts use a compact plot surface instead of stretching a few laps across a wide card.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WithSparseLapAxis_CompactsPlotSurfaceWidth()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                Height = 300d,
+                DataContext = CreateSparseLapPanel()
+            };
+            var window = new Window
+            {
+                Width = 1500d,
+                Height = 420d,
+                Content = control,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.ToolWindow
+            };
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                control.UpdateLayout();
+
+                var chartSurface = Assert.IsType<Grid>(control.FindName("ChartSurfaceGrid"));
+                Assert.Equal(HorizontalAlignment.Center, chartSurface.HorizontalAlignment);
+                Assert.InRange(chartSurface.MaxWidth, 360d, 780d);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies chart wheel handling runs before a parent scroll viewer can move the page.
     /// </summary>
     [Fact]
@@ -403,6 +442,33 @@ public sealed class ChartPanelViewModelTests
                         new ChartPointModel { X = 1d, Y = 0d },
                         new ChartPointModel { X = 2d, Y = 1.2d },
                         new ChartPointModel { X = 3d, Y = 1.4d }
+                    ]
+                }
+            ],
+            usesLapNumberXAxis: true,
+            usesNonNegativeYAxis: true);
+    }
+
+    private static ChartPanelViewModel CreateSparseLapPanel()
+    {
+        return new ChartPanelViewModel(
+            title: "四轮胎磨趋势",
+            xAxisLabel: "圈号",
+            yAxisLabel: "%",
+            emptyMessage: "暂无图表数据",
+            isEmpty: false,
+            series:
+            [
+                new ChartSeriesModel
+                {
+                    Name = "黄胎 后左",
+                    StrokeBrush = Brushes.Gold,
+                    Points =
+                    [
+                        new ChartPointModel { X = 4d, Y = 18d },
+                        new ChartPointModel { X = 6d, Y = 4d },
+                        new ChartPointModel { X = 7d, Y = 5d },
+                        new ChartPointModel { X = 8d, Y = 6d }
                     ]
                 }
             ],
