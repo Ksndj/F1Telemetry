@@ -5449,17 +5449,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
+        if (!bypassDuplicateKey &&
+            string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
+        {
+            return;
+        }
+
         if (!TryValidatePostRaceAiConfiguration(out var configurationFailureReason))
         {
             _lastPostRaceAiSummaryKey = summaryKey;
             SetPostRaceAiReportFailed(configurationFailureReason);
             EnqueueAiAnalysisLog("AI", BuildAiFailureLogText(lastLap.LapNumber, configurationFailureReason));
-            return;
-        }
-
-        if (!bypassDuplicateKey &&
-            string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
-        {
             return;
         }
 

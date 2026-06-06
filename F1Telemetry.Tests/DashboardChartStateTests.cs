@@ -205,6 +205,56 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies repeated automatic preflight failures do not refill the AI analysis log.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithRepeatedPreflightFailure_SuppressesDuplicateAutoLog()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                PrimeSuccessfulPostRaceAiReport(viewModel);
+                viewModel.AiApiKey = string.Empty;
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+                var logCountAfterFirstFailure = viewModel.AiAnalysisLogs.Count;
+                var apiKeyFailureLogsAfterFirstFailure = viewModel.AiAnalysisLogs.Count(
+                    log => log.Message.Contains("API Key", StringComparison.Ordinal));
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                Assert.Equal(logCountAfterFirstFailure, viewModel.AiAnalysisLogs.Count);
+                Assert.Equal(
+                    apiKeyFailureLogsAfterFirstFailure,
+                    viewModel.AiAnalysisLogs.Count(log => log.Message.Contains("API Key", StringComparison.Ordinal)));
+                Assert.Equal(0, aiService.AnalyzeCallCount);
+                AssertPostRaceAiReportCleared(viewModel, "API Key");
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+                InvokeDrainPendingAiAnalysisLogs(viewModel);
+
+                Assert.Equal(logCountAfterFirstFailure + 1, viewModel.AiAnalysisLogs.Count);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies disabled AI preflight clears stale post-race AI report details.
     /// </summary>
     [Fact]
@@ -565,6 +615,16 @@ public sealed class DashboardChartStateTests
             viewModel,
             new object?[] { sessionState, sessionState.PlayerCar, true, bypassDuplicateKey }));
         task.GetAwaiter().GetResult();
+    }
+
+    private static void InvokeDrainPendingAiAnalysisLogs(DashboardViewModel viewModel)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "DrainPendingAiAnalysisLogs",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, null);
     }
 
     private static void PrimeSuccessfulPostRaceAiReport(DashboardViewModel viewModel)
