@@ -163,6 +163,87 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies status refreshes do not hide the latest generated or failed AI report state.
+    /// </summary>
+    [Fact]
+    public void RefreshPostRaceAiStatus_PreservesGeneratedAndFailedReportState()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult
+            {
+                IsSuccess = true,
+                Summary = "稳定完赛",
+                KeyProblems = ["进站偏晚"]
+            });
+            aiService.Results.Enqueue(new AIAnalysisResult
+            {
+                IsSuccess = false,
+                ErrorMessage = "网络错误"
+            });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer(),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = CreateCompletedRaceState();
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionState);
+
+                Assert.Contains("已生成", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("稳定完赛", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionState);
+
+                Assert.False(viewModel.PostRaceAiHasReport);
+                Assert.Contains("生成失败", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("网络错误", viewModel.PostRaceAiStatusText, StringComparison.Ordinal);
+                Assert.Contains("网络错误", viewModel.PostRaceAiFailureReason, StringComparison.Ordinal);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies automatic generation is disabled when the current session is not ready for post-race summary.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithAutoDataNotReady_IsDisabled()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                InvokeRefreshPostRaceAiStatus(viewModel, new SessionState());
+
+                Assert.False(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.False(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies missing API key preflight clears stale post-race AI report details.
     /// </summary>
     [Fact]
@@ -273,7 +354,6 @@ public sealed class DashboardChartStateTests
                 PrimeSuccessfulPostRaceAiReport(viewModel);
                 viewModel.AiEnabled = false;
 
-                Assert.True(viewModel.CanGeneratePostRaceAiSummary);
                 InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, CreateCompletedRaceState(), bypassDuplicateKey: true);
 
                 AssertPostRaceAiReportCleared(viewModel, "AI 未启用");
@@ -599,6 +679,18 @@ public sealed class DashboardChartStateTests
 
         Assert.NotNull(method);
         method!.Invoke(viewModel, new object[] { result, lastLap, DateTimeOffset.UtcNow });
+    }
+
+    private static void InvokeRefreshPostRaceAiStatus(
+        DashboardViewModel viewModel,
+        SessionState sessionState)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "RefreshPostRaceAiStatus",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        method!.Invoke(viewModel, new object[] { sessionState });
     }
 
     private static void InvokeTriggerPostRaceAiAnalysisIfReadyAsync(

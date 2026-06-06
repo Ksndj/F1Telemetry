@@ -2176,7 +2176,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets a value indicating whether the manual post-race AI summary command can run.
     /// </summary>
     public bool CanGeneratePostRaceAiSummary =>
-        !_isAiAnalysisRunning && CaptureAiSummaryLap(_sessionStateStore.CaptureState()) is not null;
+        CanGeneratePostRaceAiSummaryForState(_sessionStateStore.CaptureState());
 
     /// <summary>
     /// Gets the current-lap speed chart panel state.
@@ -5529,6 +5529,20 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
+        if (PostRaceAiHasReport)
+        {
+            PostRaceAiStatusText = $"赛后 AI 总结已生成：{PostRaceAiReportSummaryText}";
+            RaisePostRaceAiSummaryCommandStateChanged();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(PostRaceAiFailureReason))
+        {
+            PostRaceAiStatusText = $"生成失败：{PostRaceAiFailureReason}";
+            RaisePostRaceAiSummaryCommandStateChanged();
+            return;
+        }
+
         PostRaceAiStatusText = completion.ShouldGenerate
             ? "正赛已完成，等待生成赛后 AI 总结。"
             : completion.ShouldStage
@@ -5548,6 +5562,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         return completion.ShouldGenerate
             ? "数据可用于生成"
             : "数据不足，暂无法生成";
+    }
+
+    private bool CanGeneratePostRaceAiSummaryForState(SessionState sessionState)
+    {
+        return !_isAiAnalysisRunning &&
+            CaptureAiSummaryLap(sessionState) is not null &&
+            EvaluatePostRaceAiCompletion(sessionState, force: false).ShouldGenerate;
     }
 
     private void RaisePostRaceAiSummaryCommandStateChanged()

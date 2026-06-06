@@ -69,8 +69,8 @@ public sealed class AiBroadcastConversionTests
 
         Assert.Contains("AI 分析播报", xaml, StringComparison.Ordinal);
         Assert.Contains("AiAnalysisLogs", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiTtsLogs", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiCompletionModes", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("AiTtsLogs", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("TelemetryChartControl", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("实时图表", xaml, StringComparison.Ordinal);
     }
@@ -89,10 +89,12 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("x:Name=\"AiAnalysisTitleCard\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisStatusCardsPanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource ResponsiveStatusCardsPanelStyle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("TargetType=\"{x:Type UniformGrid}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Columns\" Value=\"4\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Rows\" Value=\"1\" />", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("<WrapPanel x:Name=\"AiAnalysisStatusCardsPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TargetType=\"{x:Type controls:ResponsiveStatusCardsPanel}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("WideColumns=\"4\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("MediumColumns=\"2\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("NarrowColumns=\"1\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("TargetType=\"{x:Type UniformGrid}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Setter Property=\"Columns\" Value=\"4\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisOperationCard\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisReportDetailCard\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisLogsCard\"", xaml, StringComparison.Ordinal);
@@ -127,6 +129,8 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("PostRaceAiErsFuelReviewText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiOpponentReviewText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiImprovementsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiFailureReason", xaml, StringComparison.Ordinal);
+        Assert.Contains("生成失败：{0}", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding GeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding RegeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding PostRaceAiStatusText}\"", xaml, StringComparison.Ordinal);
@@ -157,6 +161,7 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("Orientation=\"Horizontal\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("StackPanel Width=\"280\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding AiAnalysisLogs}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding AiTtsLogs}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextWrapping=\"Wrap\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"None\"", xaml, StringComparison.Ordinal);
