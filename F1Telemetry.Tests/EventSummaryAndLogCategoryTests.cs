@@ -258,6 +258,7 @@ public sealed class EventSummaryAndLogCategoryTests
 
         Assert.Contains("Text=\"损伤\"", text, StringComparison.Ordinal);
         Assert.Contains("OverviewDamageText", text, StringComparison.Ordinal);
+        Assert.Contains("OverviewDamageTooltipText", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -270,6 +271,7 @@ public sealed class EventSummaryAndLogCategoryTests
         var document = XDocument.Load(filePath);
         var text = document.ToString(SaveOptions.DisableFormatting);
         var source = File.ReadAllText(filePath);
+        var viewModelSource = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "ViewModels", "DashboardViewModel.cs"));
 
         Assert.Contains("x:Name=\"OverviewScrollViewer\"", text, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", text, StringComparison.Ordinal);
@@ -317,7 +319,6 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("x:Name=\"TyreDamageLabel\"", source, StringComparison.Ordinal);
         Assert.Contains("Property=\"ToolTip\" Value=\"{Binding Text, RelativeSource={RelativeSource Self}}\"", source, StringComparison.Ordinal);
         Assert.Contains("DamageValueContentStyle", source, StringComparison.Ordinal);
-        Assert.Contains("暂无损伤", source, StringComparison.Ordinal);
         Assert.Contains("等待数据", text, StringComparison.Ordinal);
         Assert.Contains("连接后显示", text, StringComparison.Ordinal);
         Assert.Contains("等待玩家车辆状态", text, StringComparison.Ordinal);
@@ -327,7 +328,10 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("等待数据以生成建议", text, StringComparison.Ordinal);
         Assert.Contains("等待播报内容", text, StringComparison.Ordinal);
         Assert.Contains("等待比赛开始或数据连接", text, StringComparison.Ordinal);
-        Assert.Contains("等待 CarDamage 包", text, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding OverviewDamageTooltipText}\"", source, StringComparison.Ordinal);
+        Assert.Contains("未收到 CarDamage 包", viewModelSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tag=\"等待 CarDamage 包\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"等待 CarDamage 包\"", source, StringComparison.Ordinal);
         Assert.Contains("圈速", text, StringComparison.Ordinal);
         Assert.Contains("轮胎", text, StringComparison.Ordinal);
         Assert.Contains("燃油", text, StringComparison.Ordinal);
@@ -346,7 +350,8 @@ public sealed class EventSummaryAndLogCategoryTests
     [Fact]
     public void DamageSummaryFormatter_WithMissingPacket_ReturnsOverviewEmptyState()
     {
-        Assert.Equal("等待 CarDamage 包", DamageSummaryFormatter.Format(null, "等待 CarDamage 包"));
+        Assert.Equal("等待数据", DamageSummaryFormatter.Format(null, "等待数据"));
+        Assert.Equal("暂无损伤", DamageSummaryFormatter.Format(new DamageSnapshot()));
     }
 
     /// <summary>

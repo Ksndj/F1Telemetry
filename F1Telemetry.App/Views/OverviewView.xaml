@@ -141,11 +141,13 @@
                BasedOn="{StaticResource MetricValueContentStyle}"
                TargetType="{x:Type ContentControl}" />
 
-        <Style x:Key="DamageValueContentStyle" TargetType="{x:Type ContentControl}">
+        <Style x:Key="DamageValueContentStyle"
+               BasedOn="{StaticResource MetricValueContentStyle}"
+               TargetType="{x:Type ContentControl}">
             <Setter Property="Margin" Value="0,6,0,0" />
             <Setter Property="FontSize" Value="16" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Tag" Value="等待 CarDamage 包" />
+            <Setter Property="Tag" Value="等待数据" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ContentControl}">
@@ -156,22 +158,14 @@
                                        Foreground="#F8FAFC"
                                        Text="{TemplateBinding Content}"
                                        TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding Content}" />
-                            <TextBlock x:Name="NoDamageText"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       FontWeight="{TemplateBinding FontWeight}"
-                                       Foreground="#F8FAFC"
-                                       Text="暂无损伤"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="暂无损伤"
-                                       Visibility="Collapsed" />
+                                       ToolTip="{TemplateBinding ToolTip}" />
                             <TextBlock x:Name="MissingPacketText"
                                        FontSize="{TemplateBinding FontSize}"
                                        FontWeight="{TemplateBinding FontWeight}"
                                        Foreground="#B7C9E2"
                                        Text="{TemplateBinding Tag}"
                                        TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding Tag}"
+                                       ToolTip="{TemplateBinding ToolTip}"
                                        Visibility="Collapsed" />
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -182,10 +176,6 @@
                             <Trigger Property="Content" Value="">
                                 <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
                                 <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="Content" Value="无明显损伤">
-                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="NoDamageText" Property="Visibility" Value="Visible" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -589,7 +579,8 @@
                                            Text="损伤" />
                                 <ContentControl Content="{Binding OverviewDamageText}"
                                                 Style="{StaticResource DamageValueContentStyle}"
-                                                Tag="等待 CarDamage 包" />
+                                                Tag="等待数据"
+                                                ToolTip="{Binding OverviewDamageTooltipText}" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

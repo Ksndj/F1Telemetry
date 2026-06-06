@@ -75,6 +75,62 @@ public sealed class AiBroadcastConversionTests
         Assert.DoesNotContain("实时图表", xaml, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies the AI broadcast page is structured as a post-race analysis workspace.
+    /// </summary>
+    [Fact]
+    public void ChartsView_DefinesAiPostRaceAnalysisWorkspace()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "ChartsView.xaml"));
+
+        Assert.Contains("x:Name=\"ChartsScrollViewer\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("HorizontalScrollBarVisibility=\"Disabled\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisTitleCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisStatusCardsPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisOperationCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisReportDetailCard\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiAnalysisLogsCard\"", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("AI 状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("赛后总结状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("TTS 状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("数据状态", xaml, StringComparison.Ordinal);
+        Assert.Contains("比赛结论", xaml, StringComparison.Ordinal);
+        Assert.Contains("主要问题", xaml, StringComparison.Ordinal);
+        Assert.Contains("策略回顾", xaml, StringComparison.Ordinal);
+        Assert.Contains("轮胎表现", xaml, StringComparison.Ordinal);
+        Assert.Contains("ERS / 燃油", xaml, StringComparison.Ordinal);
+        Assert.Contains("对手 / 攻防", xaml, StringComparison.Ordinal);
+        Assert.Contains("下次改进建议", xaml, StringComparison.Ordinal);
+        Assert.Contains("暂无 AI 分析报告", xaml, StringComparison.Ordinal);
+        Assert.Contains("完赛后或手动点击生成赛后总结", xaml, StringComparison.Ordinal);
+
+        Assert.Contains("AiEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiApiKeyStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("AiModel", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiCompletionText", xaml, StringComparison.Ordinal);
+        Assert.Contains("TtsEnabled", xaml, StringComparison.Ordinal);
+        Assert.Contains("TtsVoiceName", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiDataStatusText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiLastAnalysisText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiReportSummaryText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiKeyProblemsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiStrategyReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiTyreReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiErsFuelReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiOpponentReviewText", xaml, StringComparison.Ordinal);
+        Assert.Contains("PostRaceAiImprovementsText", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding GeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding AiAnalysisLogs}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1120\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Width=\"1000\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("<Viewbox", xaml, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryFile(params string[] pathParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
