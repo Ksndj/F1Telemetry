@@ -101,11 +101,154 @@
             <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
         </Style>
 
-        <Style x:Key="ActionButtonBaseStyle" TargetType="{x:Type Button}">
-            <Setter Property="MinWidth" Value="132" />
-            <Setter Property="MinHeight" Value="34" />
+        <Style x:Key="DarkComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="10,6" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#0B1728" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                        <Border x:Name="ItemChrome"
+                                Padding="{TemplateBinding Padding}"
+                                CornerRadius="6"
+                                Background="{TemplateBinding Background}">
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#17365C" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="#1C4D82" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7F95AE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkComboBoxStyle" TargetType="{x:Type ComboBox}">
+            <Setter Property="Width" Value="224" />
+            <Setter Property="Height" Value="34" />
             <Setter Property="Margin" Value="0,0,10,10" />
-            <Setter Property="Padding" Value="14,6" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Foreground" Value="#F8FAFC" />
+            <Setter Property="Background" Value="#0B1728" />
+            <Setter Property="BorderBrush" Value="#244263" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MaxDropDownHeight" Value="240" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ComboBox}">
+                        <Grid x:Name="ComboRoot"
+                              SnapsToDevicePixels="True"
+                              TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ToggleButton x:Name="ComboToggle"
+                                          Background="{TemplateBinding Background}"
+                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                          ClickMode="Press"
+                                          Focusable="False"
+                                          IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                        <Border x:Name="ComboChrome"
+                                                CornerRadius="8"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="30" />
+                                                </Grid.ColumnDefinitions>
+                                                <Path x:Name="ComboArrow"
+                                                      Grid.Column="1"
+                                                      Width="8"
+                                                      Height="5"
+                                                      HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center"
+                                                      Data="M 0 0 L 4 5 L 8 0 Z"
+                                                      Fill="#8CB5E5" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#10233A" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#3A79B8" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#60A5FA" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#102A4B" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#4AA3FF" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#9BD3FF" />
+                                            </Trigger>
+                                            <Trigger Property="IsEnabled" Value="False">
+                                                <Setter TargetName="ComboChrome" Property="Background" Value="#14243A" />
+                                                <Setter TargetName="ComboChrome" Property="BorderBrush" Value="#243B56" />
+                                                <Setter TargetName="ComboArrow" Property="Fill" Value="#6F86A3" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <ContentPresenter x:Name="ContentSite"
+                                              Margin="10,0,34,0"
+                                              HorizontalAlignment="Left"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              IsHitTestVisible="False"
+                                              RecognizesAccessKey="True" />
+
+                            <Popup x:Name="PART_Popup"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   PopupAnimation="Fade">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border x:Name="DropDownBorder"
+                                            Padding="3"
+                                            CornerRadius="8"
+                                            Background="#0B1728"
+                                            BorderBrush="#244263"
+                                            BorderThickness="1">
+                                        <ScrollViewer CanContentScroll="True"
+                                                      SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}">
+                                            <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="ComboToggle" Property="BorderBrush" Value="#6BB6FF" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#7F95AE" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AnalysisActionButtonBaseStyle" TargetType="{x:Type Button}">
+            <Setter Property="Width" Value="128" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="0,0,10,10" />
+            <Setter Property="Padding" Value="12,5" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Cursor" Value="Hand" />
@@ -138,7 +281,7 @@
                                 <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#9BD3FF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Foreground" Value="#7F95AE" />
+                                <Setter Property="Foreground" Value="#B7C9E2" />
                                 <Setter TargetName="ButtonChrome" Property="Background" Value="#21405F" />
                                 <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="#2B4B6B" />
                             </Trigger>
@@ -148,12 +291,12 @@
             </Setter>
         </Style>
 
-        <Style x:Key="PrimaryActionButtonStyle"
-               BasedOn="{StaticResource ActionButtonBaseStyle}"
+        <Style x:Key="AnalysisPrimaryButtonStyle"
+               BasedOn="{StaticResource AnalysisActionButtonBaseStyle}"
                TargetType="{x:Type Button}" />
 
-        <Style x:Key="SecondaryActionButtonStyle"
-               BasedOn="{StaticResource ActionButtonBaseStyle}"
+        <Style x:Key="AnalysisSecondaryButtonStyle"
+               BasedOn="{StaticResource AnalysisActionButtonBaseStyle}"
                TargetType="{x:Type Button}">
             <Setter Property="Background" Value="#10233A" />
             <Setter Property="BorderBrush" Value="#315C86" />
@@ -343,28 +486,30 @@
                                    Text="操作区" />
                     </Grid>
 
-                    <WrapPanel Grid.Row="2">
-                        <StackPanel Width="280"
-                                    Margin="0,0,10,10">
-                            <TextBlock Style="{StaticResource CardLabelTextStyle}" Text="赛后总结模式" />
-                            <ComboBox Margin="0,6,0,0"
-                                      MinHeight="34"
-                                      Padding="8,5"
-                                      DisplayMemberPath="DisplayName"
-                                      ItemsSource="{Binding PostRaceAiCompletionModes}"
-                                      SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
-                        </StackPanel>
-                        <Button Style="{StaticResource PrimaryActionButtonStyle}"
+                    <WrapPanel x:Name="AiAnalysisOperationPanel"
+                               Grid.Row="2"
+                               Orientation="Horizontal">
+                        <TextBlock Margin="0,0,8,10"
+                                   VerticalAlignment="Center"
+                                   Style="{StaticResource CardLabelTextStyle}"
+                                   Text="赛后总结模式" />
+                        <ComboBox Style="{StaticResource DarkComboBoxStyle}"
+                                  DisplayMemberPath="DisplayName"
+                                  ItemsSource="{Binding PostRaceAiCompletionModes}"
+                                  SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
+                        <Button Style="{StaticResource AnalysisPrimaryButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="生成赛后总结" />
-                        <Button Style="{StaticResource SecondaryActionButtonStyle}"
+                        <Button Style="{StaticResource AnalysisSecondaryButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="重新生成" />
-                        <TextBlock MinWidth="240"
-                                   Margin="0,4,0,10"
+                        <TextBlock MinWidth="180"
+                                   MaxWidth="360"
+                                   Margin="0,0,0,10"
                                    VerticalAlignment="Center"
                                    Style="{StaticResource BodyTextStyle}"
-                                   Text="{Binding PostRaceAiDataStatusText}" />
+                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   ToolTip="{Binding PostRaceAiStatusText}" />
                     </WrapPanel>
                 </Grid>
             </Border>
