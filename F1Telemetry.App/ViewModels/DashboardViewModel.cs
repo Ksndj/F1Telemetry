@@ -5579,9 +5579,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private bool CanGeneratePostRaceAiSummaryForState(SessionState sessionState)
     {
+        var completion = EvaluatePostRaceAiCompletion(sessionState, force: false);
         return !_isAiAnalysisRunning &&
             CaptureAiSummaryLap(sessionState) is not null &&
-            EvaluatePostRaceAiCompletion(sessionState, force: false).ShouldGenerate;
+            (completion.ShouldGenerate || completion.ShouldStage);
     }
 
     private void RaisePostRaceAiSummaryCommandStateChanged()

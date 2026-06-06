@@ -244,6 +244,44 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies manual post-race summary remains available when auto completion is still waiting for final classification.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiSummaryCommand_WithStagedRaceLap_AllowsManualGeneration()
+    {
+        RunOnStaThread(() =>
+        {
+            var sessionStateStore = new SessionStateStore(new CarStateStore());
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                sessionStateStore,
+                lapAnalyzer: CreateSingleLapAnalyzer());
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+
+            try
+            {
+                var aggregator = new StateAggregator(sessionStateStore);
+                aggregator.ApplyPacket(CreateParsedPacket(CreateRaceSessionPacket(), playerCarIndex: 0));
+                aggregator.ApplyPacket(CreateParsedPacket(
+                    new EventPacket("CHQF", EventCode.ChequeredFlag, new EmptyEventDetail()),
+                    playerCarIndex: 0));
+
+                InvokeRefreshPostRaceAiStatus(viewModel, sessionStateStore.CaptureState());
+
+                Assert.Contains("等待 FinalClassification", viewModel.PostRaceAiCompletionText, StringComparison.Ordinal);
+                Assert.True(viewModel.CanGeneratePostRaceAiSummary);
+                Assert.True(viewModel.GeneratePostRaceAiSummaryCommand.CanExecute(null));
+                Assert.True(viewModel.RegeneratePostRaceAiSummaryCommand.CanExecute(null));
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies missing API key preflight clears stale post-race AI report details.
     /// </summary>
     [Fact]
@@ -863,6 +901,88 @@ public sealed class DashboardChartStateTests
         };
     }
 
+    private static SessionPacket CreateRaceSessionPacket()
+    {
+        return new SessionPacket(
+            Weather: 2,
+            TrackTemperature: 31,
+            AirTemperature: 24,
+            TotalLaps: 29,
+            TrackLength: 5400,
+            SessionType: 15,
+            TrackId: 10,
+            Formula: 0,
+            SessionTimeLeft: 1800,
+            SessionDuration: 3600,
+            PitSpeedLimit: 80,
+            GamePaused: false,
+            IsSpectating: false,
+            SpectatorCarIndex: 0,
+            SliProNativeSupport: false,
+            NumMarshalZones: 0,
+            MarshalZones: Array.Empty<MarshalZoneData>(),
+            SafetyCarStatus: 0,
+            NetworkGame: false,
+            NumWeatherForecastSamples: 0,
+            WeatherForecastSamples: Array.Empty<WeatherForecastSampleData>(),
+            ForecastAccuracy: 0,
+            AiDifficulty: 80,
+            SeasonLinkIdentifier: 1,
+            WeekendLinkIdentifier: 2,
+            SessionLinkIdentifier: 3,
+            PitStopWindowIdealLap: 0,
+            PitStopWindowLatestLap: 0,
+            PitStopRejoinPosition: 0,
+            SteeringAssist: false,
+            BrakingAssist: 0,
+            GearboxAssist: 0,
+            PitAssist: false,
+            PitReleaseAssist: false,
+            ErsAssist: false,
+            DrsAssist: false,
+            DynamicRacingLine: 0,
+            DynamicRacingLineType: 0,
+            GameMode: 0,
+            RuleSet: 0,
+            TimeOfDay: 0,
+            SessionLength: 0,
+            SpeedUnitsLeadPlayer: 0,
+            TemperatureUnitsLeadPlayer: 0,
+            SpeedUnitsSecondaryPlayer: 0,
+            TemperatureUnitsSecondaryPlayer: 0,
+            NumSafetyCarPeriods: 0,
+            NumVirtualSafetyCarPeriods: 0,
+            NumRedFlagPeriods: 0,
+            EqualCarPerformance: true,
+            RecoveryMode: 0,
+            FlashbackLimit: 0,
+            SurfaceType: 0,
+            LowFuelMode: false,
+            RaceStarts: true,
+            TyreTemperature: true,
+            PitLaneTyreSim: false,
+            CarDamage: 0,
+            CarDamageRate: 0,
+            Collisions: 0,
+            CollisionsOffForFirstLapOnly: false,
+            MpUnsafePitRelease: false,
+            MpOffForGriefing: false,
+            CornerCuttingStringency: 0,
+            ParcFermeRules: true,
+            PitStopExperience: 0,
+            SafetyCar: 0,
+            SafetyCarExperience: 0,
+            FormationLap: false,
+            FormationLapExperience: false,
+            RedFlags: 0,
+            AffectsLicenceLevelSolo: false,
+            AffectsLicenceLevelMp: false,
+            NumSessionsInWeekend: 0,
+            WeekendStructure: Array.Empty<byte>(),
+            Sector2LapDistanceStart: 0f,
+            Sector3LapDistanceStart: 0f);
+    }
+
     private static FakeLapAnalyzer CreateSingleLapAnalyzer()
     {
         return new FakeLapAnalyzer([new LapSummary { LapNumber = 22, LapTimeInMs = 88_000 }]);
@@ -876,7 +996,7 @@ public sealed class DashboardChartStateTests
             GameMajorVersion: 1,
             GameMinorVersion: 0,
             PacketVersion: 1,
-            RawPacketId: (byte)PacketId.CarTelemetry,
+            RawPacketId: GetPacketId(packet),
             SessionUid: 123UL,
             SessionTime: 0,
             FrameIdentifier: 1,
@@ -884,7 +1004,18 @@ public sealed class DashboardChartStateTests
             PlayerCarIndex: playerCarIndex,
             SecondaryPlayerCarIndex: 255);
         var datagram = new UdpDatagram(Array.Empty<byte>(), new IPEndPoint(IPAddress.Loopback, 20777), DateTimeOffset.UtcNow);
-        return new ParsedPacket(PacketId.CarTelemetry, header, packet, datagram);
+        return new ParsedPacket((PacketId)header.RawPacketId, header, packet, datagram);
+    }
+
+    private static byte GetPacketId(IUdpPacket packet)
+    {
+        return packet switch
+        {
+            SessionPacket => (byte)PacketId.Session,
+            EventPacket => (byte)PacketId.Event,
+            CarTelemetryPacket => (byte)PacketId.CarTelemetry,
+            _ => throw new ArgumentOutOfRangeException(nameof(packet))
+        };
     }
 
     private static CarTelemetryData[] BuildTelemetryCars()
