@@ -396,7 +396,7 @@
                         </Grid>
                         <TextBlock Margin="0,12,0,0"
                                    Style="{StaticResource CardValueTextStyle}"
-                                   Text="{Binding PostRaceAiDataStatusText}"
+                                   Text="{Binding PostRaceAiStatusText}"
                                    ToolTip="{Binding PostRaceAiStatusText}" />
                         <TextBlock Style="{StaticResource BodyTextStyle}"
                                    Text="{Binding PostRaceAiDataStatusText}"
@@ -501,7 +501,7 @@
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="生成赛后总结" />
                         <Button Style="{StaticResource AnalysisSecondaryButtonStyle}"
-                                Command="{Binding GeneratePostRaceAiSummaryCommand}"
+                                Command="{Binding RegeneratePostRaceAiSummaryCommand}"
                                 Content="重新生成" />
                         <TextBlock MinWidth="180"
                                    MaxWidth="360"
@@ -683,7 +683,8 @@
                                         <TextBlock Grid.Column="2"
                                                    Foreground="#F8FAFC"
                                                    Text="{Binding Message}"
-                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="Wrap"
+                                                   TextTrimming="None"
                                                    ToolTip="{Binding Message}" />
                                     </Grid>
                                 </Border>

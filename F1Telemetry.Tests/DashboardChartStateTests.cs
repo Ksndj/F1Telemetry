@@ -131,6 +131,86 @@ public sealed class DashboardChartStateTests
     }
 
     /// <summary>
+    /// Verifies failed post-race AI attempts remain visible in the report detail area.
+    /// </summary>
+    [Fact]
+    public void UpdatePostRaceAiReportDetails_WithFailure_ShowsFailureDetails()
+    {
+        RunOnStaThread(() =>
+        {
+            var viewModel = CreateDashboardViewModel(new FakePacketDispatcher());
+
+            try
+            {
+                InvokeUpdatePostRaceAiReportDetails(
+                    viewModel,
+                    new AIAnalysisResult
+                    {
+                        IsSuccess = false,
+                        ErrorMessage = "网络或 API 返回异常"
+                    },
+                    new LapSummary { LapNumber = 12 });
+
+                Assert.True(viewModel.PostRaceAiHasReport);
+                Assert.Equal("生成失败：网络或 API 返回异常", viewModel.PostRaceAiReportSummaryText);
+                Assert.Equal("等待重新生成", viewModel.PostRaceAiImprovementsText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies explicit regeneration can rerun AI analysis for the same session lap.
+    /// </summary>
+    [Fact]
+    public void PostRaceAiAnalysis_WithBypassDuplicateKey_RegeneratesSameLap()
+    {
+        RunOnStaThread(() =>
+        {
+            var aiService = new FakeAiAnalysisService();
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "第一次报告" });
+            aiService.Results.Enqueue(new AIAnalysisResult { IsSuccess = true, Summary = "第二次报告" });
+            var viewModel = CreateDashboardViewModel(
+                new FakePacketDispatcher(),
+                lapAnalyzer: new FakeLapAnalyzer([new LapSummary { LapNumber = 22, LapTimeInMs = 88_000 }]),
+                aiAnalysisService: aiService);
+            viewModel.AiEnabled = true;
+            viewModel.AiApiKey = "test-key";
+            var sessionState = new SessionState
+            {
+                SeasonLinkIdentifier = 1,
+                WeekendLinkIdentifier = 2,
+                SessionLinkIdentifier = 3,
+                SessionType = 15,
+                HasFinalClassification = true,
+                PlayerFinalClassificationLaps = 22,
+                PlayerFinalClassificationPosition = 1
+            };
+
+            try
+            {
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: false);
+
+                Assert.Equal(1, aiService.AnalyzeCallCount);
+                Assert.Equal("第一次报告", viewModel.PostRaceAiReportSummaryText);
+
+                InvokeTriggerPostRaceAiAnalysisIfReadyAsync(viewModel, sessionState, bypassDuplicateKey: true);
+
+                Assert.Equal(2, aiService.AnalyzeCallCount);
+                Assert.Equal("第二次报告", viewModel.PostRaceAiReportSummaryText);
+            }
+            finally
+            {
+                viewModel.Dispose();
+            }
+        });
+    }
+
+    /// <summary>
     /// Verifies tyre condition summaries switch from waiting text to live telemetry values.
     /// </summary>
     [Fact]
@@ -256,7 +336,8 @@ public sealed class DashboardChartStateTests
         FakePacketDispatcher dispatcher,
         SessionStateStore? sessionStateStore = null,
         ILapAnalyzer? lapAnalyzer = null,
-        FakeStoragePersistenceService? storagePersistenceService = null)
+        FakeStoragePersistenceService? storagePersistenceService = null,
+        FakeAiAnalysisService? aiAnalysisService = null)
     {
         var ttsQueue = new TtsQueue(new FakeTtsService(), new TtsOptions());
         return new DashboardViewModel(
@@ -265,7 +346,7 @@ public sealed class DashboardChartStateTests
             sessionStateStore ?? new SessionStateStore(new CarStateStore()),
             lapAnalyzer ?? new LapAnalyzer(),
             new EventDetectionService(),
-            new FakeAiAnalysisService(),
+            aiAnalysisService ?? new FakeAiAnalysisService(),
             new FakeAppSettingsStore(),
             new FakeUdpRawLogWriter(),
             new TtsMessageFactory(),
@@ -296,6 +377,22 @@ public sealed class DashboardChartStateTests
 
         Assert.NotNull(method);
         method!.Invoke(viewModel, new object[] { result, lastLap, DateTimeOffset.UtcNow });
+    }
+
+    private static void InvokeTriggerPostRaceAiAnalysisIfReadyAsync(
+        DashboardViewModel viewModel,
+        SessionState sessionState,
+        bool bypassDuplicateKey)
+    {
+        var method = typeof(DashboardViewModel).GetMethod(
+            "TriggerPostRaceAiAnalysisIfReadyAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        var task = Assert.IsAssignableFrom<Task>(method!.Invoke(
+            viewModel,
+            new object?[] { sessionState, sessionState.PlayerCar, true, bypassDuplicateKey }));
+        task.GetAwaiter().GetResult();
     }
 
     private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
@@ -458,12 +555,17 @@ public sealed class DashboardChartStateTests
 
     private sealed class FakeAiAnalysisService : IAIAnalysisService
     {
+        public Queue<AIAnalysisResult> Results { get; } = new();
+
+        public int AnalyzeCallCount { get; private set; }
+
         public Task<AIAnalysisResult> AnalyzeAsync(
             AIAnalysisContext context,
             AISettings settings,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(new AIAnalysisResult());
+            AnalyzeCallCount++;
+            return Task.FromResult(Results.TryDequeue(out var result) ? result : new AIAnalysisResult());
         }
     }
 

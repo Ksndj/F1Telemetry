@@ -108,6 +108,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private readonly RelayCommand _openAppLogDirectoryCommand;
     private readonly RelayCommand _openRaceAssistantLogDirectoryCommand;
     private readonly RelayCommand _generatePostRaceAiSummaryCommand;
+    private readonly RelayCommand _regeneratePostRaceAiSummaryCommand;
     private readonly RelayCommand _readTyreSetsInventoryCommand;
     private readonly RelayCommand _clearTyreInventoryCommand;
     private readonly RelayCommand _saveTyreInventoryCommand;
@@ -514,6 +515,17 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 _ = TriggerPostRaceAiAnalysisIfReadyAsync(sessionState, sessionState.PlayerCar, force: true);
             },
             () => CanGeneratePostRaceAiSummary);
+        _regeneratePostRaceAiSummaryCommand = new RelayCommand(
+            () =>
+            {
+                var sessionState = _sessionStateStore.CaptureState();
+                _ = TriggerPostRaceAiAnalysisIfReadyAsync(
+                    sessionState,
+                    sessionState.PlayerCar,
+                    force: true,
+                    bypassDuplicateKey: true);
+            },
+            () => CanGeneratePostRaceAiSummary);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -844,8 +856,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+                RaisePostRaceAiSummaryCommandStateChanged();
                 QueuePersistAiSettings();
             }
         }
@@ -893,8 +904,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             {
                 _lastPostRaceAiSummaryKey = null;
                 OnPropertyChanged(nameof(AiApiKeyStatusText));
-                OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-                _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+                RaisePostRaceAiSummaryCommandStateChanged();
                 QueuePersistAiSettings();
             }
         }
@@ -2220,6 +2230,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the command that manually generates a post-race AI summary from staged race data.
     /// </summary>
     public ICommand GeneratePostRaceAiSummaryCommand => _generatePostRaceAiSummaryCommand;
+
+    /// <summary>
+    /// Gets the command that regenerates the current post-race AI summary even for the same lap.
+    /// </summary>
+    public ICommand RegeneratePostRaceAiSummaryCommand => _regeneratePostRaceAiSummaryCommand;
 
     /// <summary>
     /// Gets or sets the UDP port text.
@@ -5401,7 +5416,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private async Task TriggerPostRaceAiAnalysisIfReadyAsync(
         SessionState sessionState,
         CarSnapshot? playerCar,
-        bool force = false)
+        bool force = false,
+        bool bypassDuplicateKey = false)
     {
         if (_isAiAnalysisRunning || !AiEnabled)
         {
@@ -5421,7 +5437,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var summaryKey = BuildPostRaceAiSummaryKey(sessionState, lastLap.LapNumber, completion.IsManual);
-        if (string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
+        if (!bypassDuplicateKey &&
+            string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
         {
             return;
         }
@@ -5436,8 +5453,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
         _lastPostRaceAiSummaryKey = summaryKey;
         _isAiAnalysisRunning = true;
-        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+        RaisePostRaceAiSummaryCommandStateChanged();
         var analysisSessionUid = _activeSessionUid;
         PostRaceAiStatusText = completion.IsManual
             ? "用户已标记完赛，正在生成赛后 AI 总结..."
@@ -5486,8 +5502,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         finally
         {
             _isAiAnalysisRunning = false;
-            OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-            _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+            RaisePostRaceAiSummaryCommandStateChanged();
         }
     }
 
@@ -5508,8 +5523,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 ? "正赛尚未完成；如中途退出，本次运行会暂存并等待完赛后总结。"
                 : completion.StatusText;
 
-        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
-        _generatePostRaceAiSummaryCommand.RaiseCanExecuteChanged();
+        RaisePostRaceAiSummaryCommandStateChanged();
     }
 
     private string BuildPostRaceAiDataStatusText(SessionState sessionState, PostRaceAiCompletionEvaluation completion)
@@ -5522,6 +5536,13 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         return completion.ShouldGenerate
             ? "数据可用于生成"
             : "数据不足，暂无法生成";
+    }
+
+    private void RaisePostRaceAiSummaryCommandStateChanged()
+    {
+        OnPropertyChanged(nameof(CanGeneratePostRaceAiSummary));
+        _generatePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
+        _regeneratePostRaceAiSummaryCommand?.RaiseCanExecuteChanged();
     }
 
     private PostRaceAiCompletionEvaluation EvaluatePostRaceAiCompletion(SessionState sessionState, bool force)
@@ -5687,7 +5708,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private void UpdatePostRaceAiReportDetails(AIAnalysisResult result, LapSummary lastLap, DateTimeOffset generatedAt)
     {
         PostRaceAiLastAnalysisText = $"最近分析：Lap {lastLap.LapNumber} · {generatedAt.ToLocalTime():yyyy-MM-dd HH:mm}";
-        PostRaceAiHasReport = result.IsSuccess;
+        PostRaceAiHasReport = true;
 
         if (!result.IsSuccess)
         {

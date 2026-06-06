@@ -128,6 +128,8 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("PostRaceAiOpponentReviewText", xaml, StringComparison.Ordinal);
         Assert.Contains("PostRaceAiImprovementsText", xaml, StringComparison.Ordinal);
         Assert.Contains("Command=\"{Binding GeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding RegeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding PostRaceAiStatusText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource DarkComboBoxStyle}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"DarkComboBoxStyle\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"DarkComboBoxItemStyle\"", xaml, StringComparison.Ordinal);
@@ -156,6 +158,8 @@ public sealed class AiBroadcastConversionTests
         Assert.DoesNotContain("StackPanel Width=\"280\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding AiAnalysisLogs}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextWrapping=\"Wrap\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming=\"None\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisReportEmptyIcon\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Width=\"48\"", xaml, StringComparison.Ordinal);
