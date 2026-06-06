@@ -180,7 +180,9 @@ public sealed class StoredLapSessionComparisonChartBuilder
             yAxisLabel: yAxisLabel,
             emptyMessage: emptyStateText,
             isEmpty: false,
-            series: series);
+            series: series,
+            usesLapNumberXAxis: true,
+            usesNonNegativeYAxis: true);
     }
 
     private static ChartPanelViewModel CreateEmptyPanel(
@@ -195,7 +197,9 @@ public sealed class StoredLapSessionComparisonChartBuilder
             yAxisLabel: yAxisLabel,
             emptyMessage: emptyStateText,
             isEmpty: true,
-            series: Array.Empty<ChartSeriesModel>());
+            series: Array.Empty<ChartSeriesModel>(),
+            usesLapNumberXAxis: true,
+            usesNonNegativeYAxis: true);
     }
 }
 

@@ -25,7 +25,8 @@
                            Text="{Binding XAxisLabel}" />
             </StackPanel>
 
-            <Grid Grid.Row="1"
+            <Grid x:Name="ChartSurfaceGrid"
+                  Grid.Row="1"
                   Margin="0,16,0,0">
                 <Border x:Name="EmptyStateBorder"
                         CornerRadius="14"

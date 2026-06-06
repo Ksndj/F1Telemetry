@@ -26,6 +26,8 @@ public sealed class PostRaceReviewChartBuilderTests
 
         Assert.True(panel.HasData);
         Assert.Equal("圈速趋势", panel.Title);
+        Assert.True(panel.UsesLapNumberXAxis);
+        Assert.True(panel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { 1d, 2d }, panel.Series[0].Points.Select(point => point.X));
         Assert.Equal(new[] { 90d, 91.5d }, panel.Series[0].Points.Select(point => point.Y));
     }
@@ -45,6 +47,8 @@ public sealed class PostRaceReviewChartBuilderTests
         ]);
 
         Assert.True(panel.HasData);
+        Assert.True(panel.UsesLapNumberXAxis);
+        Assert.True(panel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { "S1", "S3" }, panel.Series.Select(series => series.Name));
     }
 
@@ -61,8 +65,12 @@ public sealed class PostRaceReviewChartBuilderTests
         var ersPanel = builder.BuildErsPanel(laps);
 
         Assert.False(fuelPanel.HasData);
+        Assert.True(fuelPanel.UsesLapNumberXAxis);
+        Assert.True(fuelPanel.UsesNonNegativeYAxis);
         Assert.Contains("燃油", fuelPanel.EmptyStateText, StringComparison.Ordinal);
         Assert.False(ersPanel.HasData);
+        Assert.True(ersPanel.UsesLapNumberXAxis);
+        Assert.True(ersPanel.UsesNonNegativeYAxis);
         Assert.Contains("ERS", ersPanel.EmptyStateText, StringComparison.Ordinal);
     }
 
@@ -81,6 +89,8 @@ public sealed class PostRaceReviewChartBuilderTests
         ]);
 
         Assert.True(panel.HasData);
+        Assert.True(panel.UsesLapNumberXAxis);
+        Assert.True(panel.UsesNonNegativeYAxis);
         Assert.Equal(new[] { "红胎 后左", "红胎 后右", "红胎 前左", "红胎 前右" }, panel.Series.Select(series => series.Name));
         Assert.Equal(new[] { 1d, 2d }, panel.Series[0].Points.Select(point => point.X));
         Assert.Equal(12.1d, panel.Series[0].Points[0].Y, precision: 1);

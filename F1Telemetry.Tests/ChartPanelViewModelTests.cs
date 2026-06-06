@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using F1Telemetry.App.Charts;
 using F1Telemetry.App.ViewModels;
@@ -231,6 +232,159 @@ public sealed class ChartPanelViewModelTests
     }
 
     /// <summary>
+    /// Verifies fixed historical charts disable ScottPlot zoom, pan, and context menu interaction.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WithData_DisablesFixedChartInteractions()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                DataContext = CreateHistoricalPanel()
+            };
+            control.UpdateLayout();
+            var plotHost = GetPlotHost(control);
+            var beforeLimits = plotHost.Plot.Axes.GetLimits();
+
+            var wheelArgs = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, 120)
+            {
+                RoutedEvent = UIElement.PreviewMouseWheelEvent,
+                Source = plotHost
+            };
+            plotHost.RaiseEvent(wheelArgs);
+            var afterLimits = plotHost.Plot.Axes.GetLimits();
+
+            Assert.False(plotHost.UserInputProcessor.IsEnabled);
+            Assert.NotNull(plotHost.Menu);
+            Assert.Empty(plotHost.Menu!.ContextMenuItems);
+            Assert.True(wheelArgs.Handled);
+            Assert.Equal(beforeLimits.Left, afterLimits.Left);
+            Assert.Equal(beforeLimits.Right, afterLimits.Right);
+            Assert.Equal(beforeLimits.Bottom, afterLimits.Bottom);
+            Assert.Equal(beforeLimits.Top, afterLimits.Top);
+        });
+    }
+
+    /// <summary>
+    /// Verifies lap-number historical charts keep legal X ranges and non-negative Y ranges.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WithLapAndNonNegativeAxes_AppliesSafeAxisRanges()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                DataContext = CreateHistoricalPanel()
+            };
+            control.UpdateLayout();
+            var limits = GetPlotHost(control).Plot.Axes.GetLimits();
+
+            Assert.True(limits.Left >= 1d);
+            Assert.Equal(0d, limits.Bottom);
+            Assert.True(limits.Right >= 3d);
+            Assert.True(limits.Top > 1.4d);
+        });
+    }
+
+    /// <summary>
+    /// Verifies sparse lap charts use a compact plot surface instead of stretching a few laps across a wide card.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WithSparseLapAxis_CompactsPlotSurfaceWidth()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                Height = 300d,
+                DataContext = CreateSparseLapPanel()
+            };
+            var window = new Window
+            {
+                Width = 1500d,
+                Height = 420d,
+                Content = control,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.ToolWindow
+            };
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                control.UpdateLayout();
+
+                var chartSurface = Assert.IsType<Grid>(control.FindName("ChartSurfaceGrid"));
+                Assert.Equal(HorizontalAlignment.Center, chartSurface.HorizontalAlignment);
+                Assert.InRange(chartSurface.MaxWidth, 360d, 780d);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies chart wheel handling runs before a parent scroll viewer can move the page.
+    /// </summary>
+    [Fact]
+    public void TelemetryChartControl_WhenHostedInScrollViewer_HandlesWheelBeforeParentScroll()
+    {
+        RunOnStaThread(() =>
+        {
+            var control = new TelemetryChartControl
+            {
+                Height = 260d,
+                DataContext = CreateHistoricalPanel()
+            };
+            var scrollViewer = new ScrollViewer
+            {
+                Height = 320d,
+                Content = new StackPanel
+                {
+                    Children =
+                    {
+                        control,
+                        new Border { Height = 900d }
+                    }
+                }
+            };
+            var window = new Window
+            {
+                Width = 800d,
+                Height = 500d,
+                Content = scrollViewer,
+                ShowInTaskbar = false,
+                WindowStyle = WindowStyle.ToolWindow
+            };
+
+            try
+            {
+                window.Show();
+                window.UpdateLayout();
+                var plotHost = GetPlotHost(control);
+                var wheelArgs = new MouseWheelEventArgs(Mouse.PrimaryDevice, Environment.TickCount, -120)
+                {
+                    RoutedEvent = UIElement.PreviewMouseWheelEvent,
+                    Source = plotHost
+                };
+
+                plotHost.RaiseEvent(wheelArgs);
+
+                Assert.True(wheelArgs.Handled);
+                Assert.Equal(0d, scrollViewer.VerticalOffset);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    /// <summary>
     /// Returns series shapes that contain no finite plottable points.
     /// </summary>
     public static TheoryData<IReadOnlyList<ChartSeriesModel>> NonPlottableSeries()
@@ -267,6 +421,59 @@ public sealed class ChartPanelViewModelTests
     {
         var field = typeof(TelemetryChartControl).GetField("_plotHost", BindingFlags.Instance | BindingFlags.NonPublic);
         return Assert.IsType<WpfPlot>(field?.GetValue(control));
+    }
+
+    private static ChartPanelViewModel CreateHistoricalPanel()
+    {
+        return new ChartPanelViewModel(
+            title: "燃油趋势",
+            xAxisLabel: "圈号",
+            yAxisLabel: "L",
+            emptyMessage: "暂无图表数据",
+            isEmpty: false,
+            series:
+            [
+                new ChartSeriesModel
+                {
+                    Name = "燃油",
+                    StrokeBrush = Brushes.Gold,
+                    Points =
+                    [
+                        new ChartPointModel { X = 1d, Y = 0d },
+                        new ChartPointModel { X = 2d, Y = 1.2d },
+                        new ChartPointModel { X = 3d, Y = 1.4d }
+                    ]
+                }
+            ],
+            usesLapNumberXAxis: true,
+            usesNonNegativeYAxis: true);
+    }
+
+    private static ChartPanelViewModel CreateSparseLapPanel()
+    {
+        return new ChartPanelViewModel(
+            title: "四轮胎磨趋势",
+            xAxisLabel: "圈号",
+            yAxisLabel: "%",
+            emptyMessage: "暂无图表数据",
+            isEmpty: false,
+            series:
+            [
+                new ChartSeriesModel
+                {
+                    Name = "黄胎 后左",
+                    StrokeBrush = Brushes.Gold,
+                    Points =
+                    [
+                        new ChartPointModel { X = 4d, Y = 18d },
+                        new ChartPointModel { X = 6d, Y = 4d },
+                        new ChartPointModel { X = 7d, Y = 5d },
+                        new ChartPointModel { X = 8d, Y = 6d }
+                    ]
+                }
+            ],
+            usesLapNumberXAxis: true,
+            usesNonNegativeYAxis: true);
     }
 
     private static void RunOnStaThread(Action action)
