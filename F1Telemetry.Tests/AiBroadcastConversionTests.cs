@@ -137,6 +137,9 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("Style=\"{StaticResource DarkComboBoxStyle}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"DarkComboBoxStyle\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"DarkComboBoxItemStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter Property=\"TextSearch.TextPath\" Value=\"DisplayName\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip=\"{Binding SelectedPostRaceAiCompletionMode.Description}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Background\" Value=\"#0B1728\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Foreground\" Value=\"#F8FAFC\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);

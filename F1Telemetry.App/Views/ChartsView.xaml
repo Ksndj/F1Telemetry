@@ -147,6 +147,7 @@
             <Setter Property="BorderBrush" Value="#244263" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="MaxDropDownHeight" Value="240" />
+            <Setter Property="TextSearch.TextPath" Value="DisplayName" />
             <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -204,15 +205,14 @@
                                 </ToggleButton.Template>
                             </ToggleButton>
 
-                            <ContentPresenter x:Name="ContentSite"
-                                              Margin="10,0,34,0"
-                                              HorizontalAlignment="Left"
-                                              VerticalAlignment="Center"
-                                              Content="{TemplateBinding SelectionBoxItem}"
-                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
-                                              IsHitTestVisible="False"
-                                              RecognizesAccessKey="True" />
+                            <TextBlock x:Name="ContentSite"
+                                       Margin="10,0,34,0"
+                                       HorizontalAlignment="Left"
+                                       VerticalAlignment="Center"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       IsHitTestVisible="False"
+                                       Text="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}"
+                                       TextTrimming="CharacterEllipsis" />
 
                             <Popup x:Name="PART_Popup"
                                    AllowsTransparency="True"
@@ -534,7 +534,8 @@
                         <ComboBox Style="{StaticResource DarkComboBoxStyle}"
                                   DisplayMemberPath="DisplayName"
                                   ItemsSource="{Binding PostRaceAiCompletionModes}"
-                                  SelectedItem="{Binding SelectedPostRaceAiCompletionMode}" />
+                                  SelectedItem="{Binding SelectedPostRaceAiCompletionMode}"
+                                  ToolTip="{Binding SelectedPostRaceAiCompletionMode.Description}" />
                         <Button Style="{StaticResource AnalysisPrimaryButtonStyle}"
                                 Command="{Binding GeneratePostRaceAiSummaryCommand}"
                                 Content="生成赛后总结" />
