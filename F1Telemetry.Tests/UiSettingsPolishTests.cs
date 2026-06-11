@@ -186,27 +186,7 @@ public sealed class UiSettingsPolishTests
 
     private static void RunOnStaThread(Action action)
     {
-        Exception? capturedException = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (capturedException is not null)
-        {
-            throw capturedException;
-        }
+        WpfApplicationHelper.RunOnStaThread(action);
     }
 
     private static string FindRepositoryFile(params string[] pathParts)

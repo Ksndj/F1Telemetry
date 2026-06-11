@@ -1,0 +1,30 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- === Spacing === -->
+    <sys:Double x:Key="SpacingXSmall">4</sys:Double>
+    <sys:Double x:Key="SpacingSmall">8</sys:Double>
+    <sys:Double x:Key="SpacingMedium">12</sys:Double>
+    <sys:Double x:Key="SpacingLarge">16</sys:Double>
+    <sys:Double x:Key="SpacingXLarge">20</sys:Double>
+
+    <!-- === Corner Radius === -->
+    <CornerRadius x:Key="CornerRadiusSmall">6</CornerRadius>
+    <CornerRadius x:Key="CornerRadiusMedium">8</CornerRadius>
+    <CornerRadius x:Key="CornerRadiusCard">9</CornerRadius>
+    <CornerRadius x:Key="CornerRadiusLarge">14</CornerRadius>
+    <CornerRadius x:Key="CornerRadiusXLarge">16</CornerRadius>
+
+    <!-- === Standard Padding / Margin === -->
+    <Thickness x:Key="CardPadding">16</Thickness>
+    <Thickness x:Key="InnerCardPadding">14</Thickness>
+    <Thickness x:Key="MetricTilePadding">12</Thickness>
+    <Thickness x:Key="InputPadding">10,4</Thickness>
+    <Thickness x:Key="ButtonPadding">12,6</Thickness>
+    <Thickness x:Key="NavListItemPadding">14,11</Thickness>
+    <Thickness x:Key="ChipPadding">13,10</Thickness>
+    <Thickness x:Key="ChipMargin">0,0,8,8</Thickness>
+    <Thickness x:Key="MetricTileMargin">0,0,8,8</Thickness>
+
+</ResourceDictionary>

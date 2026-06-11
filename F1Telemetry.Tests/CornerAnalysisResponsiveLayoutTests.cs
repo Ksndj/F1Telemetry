@@ -30,15 +30,18 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         var xaml = ReadCornerAnalysisViewXaml();
         var codeBehind = ReadCornerAnalysisViewCodeBehind();
 
-        Assert.Contains("SizeChanged=\"CornerAnalysisView_SizeChanged\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("attached:ResponsiveLayoutBehavior.Breakpoints=\"1000,1300\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Narrow\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Medium\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Wide\">", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisListColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailsColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisMainGapRow", xaml, StringComparison.Ordinal);
-        Assert.Contains("WideLayoutBreakpoint = 1300d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("NarrowLayoutBreakpoint = 1000d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 2d : 1d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 3d : 1d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisRightDetails\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SizeChanged=\"CornerAnalysisView_SizeChanged\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("WideLayoutBreakpoint", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("NarrowLayoutBreakpoint", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyResponsiveLayout", codeBehind, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -88,10 +91,10 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("x:Name=\"CornerAnalysisTrackMapPanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisVisualEvidencePanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisEngineerAdvicePanel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisTrackMapPanel, row: 2", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 4", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 2, column: 0, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 2, column: 2, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisVisualEvidencePanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PlaceRightPanel", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
     }
 

@@ -11,14 +11,14 @@
                   VerticalScrollBarVisibility="Auto">
         <Border Padding="20"
                 CornerRadius="20"
-                Background="#0F1B2E">
+                Background="{StaticResource BgPanelBrush}">
             <StackPanel>
                 <TextBlock FontSize="20"
                            FontWeight="SemiBold"
-                           Foreground="White"
+                           Foreground="{StaticResource FgPrimaryBrush}"
                            Text="事件日志" />
                 <TextBlock Margin="0,6,0,0"
-                           Foreground="#9AB0C9"
+                           Foreground="{StaticResource FgSectionBrush}"
                            Text="完整日志按 System / UDP / RaceEvent / AI / TTS / Storage 分类显示。"
                            TextWrapping="Wrap" />
 
@@ -29,17 +29,17 @@
                             <Border Margin="0,0,0,8"
                                     Padding="12"
                                     CornerRadius="12"
-                                    Background="#132743">
+                                    Background="{StaticResource BgCardBrush}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="70" />
                                         <ColumnDefinition Width="54" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
-                                    <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding Category}" />
+                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
+                                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding Category}" />
                                     <TextBlock Grid.Column="2"
-                                               Foreground="White"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
                                                Text="{Binding Message}"
                                                TextWrapping="Wrap" />
                                 </Grid>

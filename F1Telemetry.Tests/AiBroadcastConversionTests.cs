@@ -82,6 +82,7 @@ public sealed class AiBroadcastConversionTests
     public void ChartsView_DefinesAiPostRaceAnalysisWorkspace()
     {
         var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "ChartsView.xaml"));
+        var sharedStylesXaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Styles", "SharedStyles.xaml"));
 
         Assert.Contains("x:Name=\"ChartsScrollViewer\"", xaml, StringComparison.Ordinal);
         Assert.Contains("VerticalScrollBarVisibility=\"Auto\"", xaml, StringComparison.Ordinal);
@@ -136,21 +137,13 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("Command=\"{Binding RegeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding PostRaceAiStatusText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource DarkComboBoxStyle}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Key=\"DarkComboBoxStyle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Key=\"DarkComboBoxItemStyle\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"TextSearch.TextPath\" Value=\"DisplayName\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"DarkComboBoxStyle\"", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("ItemContainerStyle\" Value=\"{StaticResource DarkComboBoxItemStyle}\"", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("PART_Popup", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem.DisplayName", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Value=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Foreground=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding SelectedPostRaceAiCompletionMode.Description}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Background\" Value=\"#0B1728\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Foreground\" Value=\"#F8FAFC\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"PART_Popup\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("DropDownBorder", xaml, StringComparison.Ordinal);
-        Assert.Contains("Fill=\"#8CB5E5\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsMouseOver", xaml, StringComparison.Ordinal);
-        Assert.Contains("IsKeyboardFocusWithin", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("Background=\"White\"", xaml, StringComparison.Ordinal);
-        Assert.DoesNotContain("SystemColors.WindowBrushKey", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource AnalysisPrimaryButtonStyle}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource AnalysisSecondaryButtonStyle}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding PostRaceAiSummaryCommandTooltipText}\"", xaml, StringComparison.Ordinal);
@@ -158,8 +151,10 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("<Setter Property=\"Width\" Value=\"128\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("<Setter Property=\"Height\" Value=\"34\" />", xaml, StringComparison.Ordinal);
         Assert.Contains("Trigger Property=\"IsEnabled\" Value=\"False\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Foreground\" Value=\"#B7C9E2\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("Background\" Value=\"#21405F\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("FgDisabledBrush", xaml, StringComparison.Ordinal);
+        Assert.Contains("Background\" Value=\"{StaticResource BgActionDisabledBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("BorderBrush\" Value=\"{StaticResource BorderActionDisabledBrush}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Background\" Value=\"#21405F\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Style=\"{StaticResource CompactButtonStyle}\"", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Style=\"{x:Null}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"AiAnalysisOperationPanel\"", xaml, StringComparison.Ordinal);

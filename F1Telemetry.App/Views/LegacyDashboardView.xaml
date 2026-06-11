@@ -22,55 +22,55 @@
                 <ColumnDefinition Width="360" />
             </Grid.ColumnDefinitions>
 
-            <Border Padding="20" CornerRadius="20" Background="#0F1B2E">
+            <Border Padding="20" CornerRadius="20" Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="20"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="玩家实时卡片" />
 
-                    <Border Margin="0,18,0,0" Padding="16" CornerRadius="16" Background="#132743">
+                    <Border Margin="0,18,0,0" Padding="16" CornerRadius="16" Background="{StaticResource BgCardBrush}">
                         <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="车手" />
-                            <TextBlock Margin="0,6,0,0" FontSize="18" Foreground="White" Text="{Binding PlayerName}" />
+                            <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="车手" />
+                            <TextBlock Margin="0,6,0,0" FontSize="18" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerName}" />
                         </StackPanel>
                     </Border>
 
                     <UniformGrid Margin="0,16,0,0" Columns="2">
-                        <Border Margin="0,0,8,8" Padding="14" CornerRadius="14" Background="#111F35">
+                        <Border Margin="0,0,8,8" Padding="14" CornerRadius="14" Background="{StaticResource BgCardInnerBrush}">
                             <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="当前圈" />
-                                <TextBlock Margin="0,6,0,0" Foreground="White" Text="{Binding PlayerCurrentLapText}" />
+                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="当前圈" />
+                                <TextBlock Margin="0,6,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerCurrentLapText}" />
                             </StackPanel>
                         </Border>
-                        <Border Margin="8,0,0,8" Padding="14" CornerRadius="14" Background="#111F35">
+                        <Border Margin="8,0,0,8" Padding="14" CornerRadius="14" Background="{StaticResource BgCardInnerBrush}">
                             <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="位置" />
-                                <TextBlock Margin="0,6,0,0" Foreground="White" Text="{Binding PlayerPositionText}" />
+                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="位置" />
+                                <TextBlock Margin="0,6,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerPositionText}" />
                             </StackPanel>
                         </Border>
-                        <Border Margin="0,8,8,8" Padding="14" CornerRadius="14" Background="#111F35">
+                        <Border Margin="0,8,8,8" Padding="14" CornerRadius="14" Background="{StaticResource BgCardInnerBrush}">
                             <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="上圈" />
-                                <TextBlock Margin="0,6,0,0" Foreground="White" Text="{Binding PlayerLastLapText}" />
+                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="上圈" />
+                                <TextBlock Margin="0,6,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerLastLapText}" />
                             </StackPanel>
                         </Border>
-                        <Border Margin="8,8,0,8" Padding="14" CornerRadius="14" Background="#111F35">
+                        <Border Margin="8,8,0,8" Padding="14" CornerRadius="14" Background="{StaticResource BgCardInnerBrush}">
                             <StackPanel>
-                                <TextBlock Foreground="#7FA5D8" Text="最佳圈" />
-                                <TextBlock Margin="0,6,0,0" Foreground="White" Text="{Binding PlayerBestLapText}" />
+                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="最佳圈" />
+                                <TextBlock Margin="0,6,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerBestLapText}" />
                             </StackPanel>
                         </Border>
                     </UniformGrid>
 
-                    <Border Margin="0,8,0,0" Padding="16" CornerRadius="16" Background="#132743">
+                    <Border Margin="0,8,0,0" Padding="16" CornerRadius="16" Background="{StaticResource BgCardBrush}">
                         <StackPanel>
-                            <TextBlock Foreground="#7FA5D8" Text="前后车差距" />
-                            <TextBlock Margin="0,6,0,0" Foreground="White" Text="{Binding PlayerGapText}" />
+                            <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="前后车差距" />
+                            <TextBlock Margin="0,6,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerGapText}" />
                         </StackPanel>
                     </Border>
 
-                    <Border Margin="0,12,0,0" Padding="16" CornerRadius="16" Background="#132743">
+                    <Border Margin="0,12,0,0" Padding="16" CornerRadius="16" Background="{StaticResource BgCardBrush}">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -83,23 +83,23 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Foreground="#7FA5D8" Text="燃油" />
-                            <TextBlock Grid.Column="1" Foreground="White" Text="{Binding PlayerFuelText}" />
+                            <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="燃油" />
+                            <TextBlock Grid.Column="1" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerFuelText}" />
 
-                            <TextBlock Grid.Row="1" Margin="0,12,0,0" Foreground="#7FA5D8" Text="ERS" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,12,0,0" Foreground="White" Text="{Binding PlayerErsText}" />
+                            <TextBlock Grid.Row="1" Margin="0,12,0,0" Foreground="{StaticResource FgLabelBrush}" Text="ERS" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,12,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerErsText}" />
 
-                            <TextBlock Grid.Row="2" Margin="0,12,0,0" Foreground="#7FA5D8" Text="当前轮胎" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" Foreground="White" Text="{Binding PlayerTyreText}" />
+                            <TextBlock Grid.Row="2" Margin="0,12,0,0" Foreground="{StaticResource FgLabelBrush}" Text="当前轮胎" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,12,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerTyreText}" />
 
-                            <TextBlock Grid.Row="3" Margin="0,12,0,0" Foreground="#7FA5D8" Text="胎龄" />
-                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,12,0,0" Foreground="White" Text="{Binding PlayerTyreAgeText}" />
+                            <TextBlock Grid.Row="3" Margin="0,12,0,0" Foreground="{StaticResource FgLabelBrush}" Text="胎龄" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,12,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding PlayerTyreAgeText}" />
                         </Grid>
                     </Border>
                 </StackPanel>
             </Border>
 
-            <Border Grid.Column="2" Padding="20" CornerRadius="20" Background="#0F1B2E">
+            <Border Grid.Column="2" Padding="20" CornerRadius="20" Background="{StaticResource BgPanelBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -112,10 +112,10 @@
                     <StackPanel>
                         <TextBlock FontSize="20"
                                    FontWeight="SemiBold"
-                                   Foreground="White"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
                                    Text="AI 分析播报" />
                         <TextBlock Margin="0,6,0,0"
-                                   Foreground="#9AB0C9"
+                                   Foreground="{StaticResource FgSectionBrush}"
                                    Text="速度、输入、燃油和胎磨趋势进入 AI 短分析，由 TTS 播报关键结论。" />
                     </StackPanel>
 
@@ -126,19 +126,19 @@
                                     <Border Margin="0,0,0,8"
                                             Padding="10"
                                             CornerRadius="10"
-                                            Background="#132743">
+                                            Background="{StaticResource BgCardBrush}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="74" />
                                                 <ColumnDefinition Width="62" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
+                                            <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
                                             <TextBlock Grid.Column="1"
-                                                       Foreground="#D7E4F3"
+                                                       Foreground="{StaticResource FgSecondaryBrush}"
                                                        Text="{Binding Category}" />
                                             <TextBlock Grid.Column="2"
-                                                       Foreground="White"
+                                                       Foreground="{StaticResource FgPrimaryBrush}"
                                                        Text="{Binding Message}"
                                                        TextWrapping="Wrap" />
                                         </Grid>
@@ -151,10 +151,10 @@
                     <StackPanel Grid.Row="3">
                         <TextBlock FontSize="20"
                                    FontWeight="SemiBold"
-                                   Foreground="White"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
                                    Text="单圈历史" />
                         <TextBlock Margin="0,6,0,0"
-                                   Foreground="#9AB0C9"
+                                   Foreground="{StaticResource FgSectionBrush}"
                                    Text="缓存保留整场圈摘要，界面默认显示最近 12 圈，最新圈在最上方。" />
 
                         <Grid Margin="0,16,0,0">
@@ -164,21 +164,21 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <Border Padding="12" CornerRadius="14" Background="#132743">
+                            <Border Padding="12" CornerRadius="14" Background="{StaticResource BgCardBrush}">
                                 <StackPanel>
-                                    <TextBlock Foreground="#7FA5D8" Text="Best" />
+                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Best" />
                                     <TextBlock Margin="0,6,0,0"
-                                               Foreground="White"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
                                                Text="{Binding BestLapSummaryText}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
                             </Border>
 
-                            <Border Grid.Column="2" Padding="12" CornerRadius="14" Background="#132743">
+                            <Border Grid.Column="2" Padding="12" CornerRadius="14" Background="{StaticResource BgCardBrush}">
                                 <StackPanel>
-                                    <TextBlock Foreground="#7FA5D8" Text="Last" />
+                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Last" />
                                     <TextBlock Margin="0,6,0,0"
-                                               Foreground="White"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
                                                Text="{Binding LastLapSummaryText}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
@@ -188,7 +188,7 @@
 
                     <ListView Grid.Row="4"
                               Margin="0,18,0,0"
-                              Background="Transparent"
+                              Background="{StaticResource TransparentBrush}"
                               BorderThickness="0"
                               ItemsSource="{Binding RecentLapSummaries}">
                         <ListView.ItemTemplate>
@@ -196,7 +196,7 @@
                                 <Border Margin="0,0,0,10"
                                         Padding="14"
                                         CornerRadius="14"
-                                        Background="#132743">
+                                        Background="{StaticResource BgCardBrush}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="72" />
@@ -211,16 +211,16 @@
                                             <ColumnDefinition Width="96" />
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Foreground="White" Text="{Binding LapText}" />
-                                        <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding LapTimeText}" />
-                                        <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding SectorsText}" />
-                                        <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding AverageSpeedText}" />
-                                        <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding FuelUsedLitresText}" />
-                                        <TextBlock Grid.Column="5" Foreground="#D7E4F3" Text="{Binding ErsUsedText}" />
-                                        <TextBlock Grid.Column="6" Foreground="#D7E4F3" Text="{Binding TyreWearDeltaText}" />
-                                        <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="{Binding ValidityText}" />
-                                        <TextBlock Grid.Column="8" Foreground="#D7E4F3" Text="{Binding TyreWindowText}" />
-                                        <TextBlock Grid.Column="9" Foreground="#D7E4F3" Text="{Binding PitWindowText}" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding LapText}" />
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding LapTimeText}" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding SectorsText}" />
+                                        <TextBlock Grid.Column="3" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding AverageSpeedText}" />
+                                        <TextBlock Grid.Column="4" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding FuelUsedLitresText}" />
+                                        <TextBlock Grid.Column="5" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding ErsUsedText}" />
+                                        <TextBlock Grid.Column="6" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreWearDeltaText}" />
+                                        <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="{Binding ValidityText}" />
+                                        <TextBlock Grid.Column="8" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreWindowText}" />
+                                        <TextBlock Grid.Column="9" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PitWindowText}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -229,18 +229,18 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="4" Padding="20" CornerRadius="20" Background="#0F1B2E">
+            <Border Grid.Column="4" Padding="20" CornerRadius="20" Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="20"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="对手列表" />
                     <TextBlock Margin="0,6,0,0"
-                               Foreground="#9AB0C9"
+                               Foreground="{StaticResource FgSectionBrush}"
                                Text="车手、位置、轮胎、胎龄、pit 状态、与我差距" />
 
                     <ListView Margin="0,18,0,0"
-                              Background="Transparent"
+                              Background="{StaticResource TransparentBrush}"
                               BorderThickness="0"
                               ItemsSource="{Binding OpponentCars}">
                         <ListView.ItemTemplate>
@@ -248,7 +248,7 @@
                                 <Border Margin="0,0,0,10"
                                         Padding="14"
                                         CornerRadius="14"
-                                        Background="#132743">
+                                        Background="{StaticResource BgCardBrush}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -259,12 +259,12 @@
                                             <ColumnDefinition Width="86" />
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Foreground="White" Text="{Binding DisplayName}" />
-                                        <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding PositionText}" />
-                                        <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding TyreText}" />
-                                        <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding TyreAgeText}" />
-                                        <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
-                                        <TextBlock Grid.Column="5" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding DisplayName}" />
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PositionText}" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreText}" />
+                                        <TextBlock Grid.Column="3" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreAgeText}" />
+                                        <TextBlock Grid.Column="4" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PitStatusText}" />
+                                        <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="{Binding GapToPlayerText}" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -281,7 +281,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Border Padding="18" CornerRadius="20" Background="#0F1B2E">
+            <Border Padding="18" CornerRadius="20" Background="{StaticResource BgPanelBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -289,11 +289,11 @@
                     </Grid.RowDefinitions>
                     <TextBlock FontSize="18"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="事件日志" />
                     <ListView Grid.Row="1"
                               Margin="0,16,0,0"
-                              Background="Transparent"
+                              Background="{StaticResource TransparentBrush}"
                               BorderThickness="0"
                               ItemsSource="{Binding EventLogs}">
                         <ListView.ItemTemplate>
@@ -301,16 +301,16 @@
                                 <Border Margin="0,0,0,8"
                                         Padding="12"
                                         CornerRadius="12"
-                                        Background="#132743">
+                                        Background="{StaticResource BgCardBrush}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="70" />
                                             <ColumnDefinition Width="54" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
-                                        <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding Category}" />
-                                        <TextBlock Grid.Column="2" Foreground="White" Text="{Binding Message}" TextWrapping="Wrap" />
+                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding Category}" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding Message}" TextWrapping="Wrap" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>
@@ -319,7 +319,7 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Column="2" Padding="18" CornerRadius="20" Background="#0F1B2E">
+            <Border Grid.Column="2" Padding="18" CornerRadius="20" Background="{StaticResource BgPanelBrush}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -333,7 +333,7 @@
 
                         <Border Padding="14"
                                 CornerRadius="14"
-                                Background="#132743">
+                                Background="{StaticResource BgCardBrush}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="90" />
@@ -353,14 +353,14 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Foreground="#7FA5D8" Text="AI 开关" />
+                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="AI 开关" />
                                 <CheckBox Grid.Column="1"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding AiEnabled}" />
 
                                 <TextBlock Grid.Row="1"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="Base URL" />
                                 <TextBox Grid.Row="1"
                                          Grid.Column="1"
@@ -371,7 +371,7 @@
 
                                 <TextBlock Grid.Row="2"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="Model" />
                                 <TextBox Grid.Row="2"
                                          Grid.Column="1"
@@ -382,7 +382,7 @@
 
                                 <TextBlock Grid.Row="3"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="API Key" />
                                 <PasswordBox Grid.Row="3"
                                              Grid.Column="1"
@@ -393,17 +393,17 @@
                                             Grid.Column="2"
                                             Margin="0,12,0,0"
                                             VerticalAlignment="Center">
-                                    <TextBlock Foreground="#9AB0C9"
+                                    <TextBlock Foreground="{StaticResource FgSectionBrush}"
                                                Text="{Binding AiApiKeyStatusText}" />
                                     <TextBlock Margin="0,3,0,0"
-                                               Foreground="#7FA5D8"
+                                               Foreground="{StaticResource FgLabelBrush}"
                                                Text="{Binding AiSettingsSaveStatusText}"
                                                TextWrapping="Wrap" />
                                 </StackPanel>
 
                                 <TextBlock Grid.Row="4"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="TTS 开关" />
                                 <CheckBox Grid.Row="4"
                                           Grid.Column="1"
@@ -413,7 +413,7 @@
 
                                 <TextBlock Grid.Row="5"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="Voice" />
                                 <ComboBox Grid.Row="5"
                                           Grid.Column="1"
@@ -426,13 +426,13 @@
                                            Grid.Column="2"
                                            Margin="0,12,0,0"
                                            VerticalAlignment="Center"
-                                           Foreground="#9AB0C9"
+                                           Foreground="{StaticResource FgSectionBrush}"
                                            Text="{Binding TtsVoiceStatusText}"
                                            TextWrapping="Wrap" />
 
                                 <TextBlock Grid.Row="6"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="Volume" />
                                 <Slider Grid.Row="6"
                                         Grid.Column="1"
@@ -446,7 +446,7 @@
 
                                 <TextBlock Grid.Row="7"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="Rate" />
                                 <Slider Grid.Row="7"
                                         Grid.Column="1"
@@ -460,14 +460,14 @@
 
                                 <TextBlock Grid.Row="8"
                                            Margin="0,12,0,0"
-                                           Foreground="#7FA5D8"
+                                           Foreground="{StaticResource FgLabelBrush}"
                                            Text="当前版本" />
                                 <TextBlock Grid.Row="8"
                                            Grid.Column="1"
                                            Grid.ColumnSpan="2"
                                            Margin="0,12,0,0"
                                            VerticalAlignment="Center"
-                                           Foreground="#D7E4F3"
+                                           Foreground="{StaticResource FgSecondaryBrush}"
                                            Text="{Binding ApplicationVersionText}" />
 
                                 <Button Grid.Row="9"
@@ -490,11 +490,11 @@
                             </Grid.RowDefinitions>
                             <TextBlock FontSize="18"
                                        FontWeight="SemiBold"
-                                       Foreground="White"
+                                       Foreground="{StaticResource FgPrimaryBrush}"
                                        Text="AI / TTS 日志" />
                             <ListView Grid.Row="1"
                                       Margin="0,16,0,0"
-                              Background="Transparent"
+                              Background="{StaticResource TransparentBrush}"
                               BorderThickness="0"
                               ItemsSource="{Binding AiTtsLogs}">
                                 <ListView.ItemTemplate>
@@ -502,16 +502,16 @@
                                         <Border Margin="0,0,0,8"
                                                 Padding="12"
                                                 CornerRadius="12"
-                                                Background="#132743">
+                                                Background="{StaticResource BgCardBrush}">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="70" />
                                                     <ColumnDefinition Width="54" />
                                                     <ColumnDefinition Width="*" />
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Foreground="#7FA5D8" Text="{Binding Timestamp}" />
-                                                <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding Category}" />
-                                                <TextBlock Grid.Column="2" Foreground="White" Text="{Binding Message}" TextWrapping="Wrap" />
+                                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
+                                                <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding Category}" />
+                                                <TextBlock Grid.Column="2" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding Message}" TextWrapping="Wrap" />
                                             </Grid>
                                         </Border>
                                     </DataTemplate>

@@ -11,14 +11,14 @@
         <StackPanel>
             <Border Padding="20"
                     CornerRadius="18"
-                    Background="#0F1B2E">
+                    Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="22"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="设置" />
                     <TextBlock Margin="0,6,0,0"
-                               Foreground="#9AB0C9"
+                               Foreground="{StaticResource FgSectionBrush}"
                                Text="通用配置与发布入口"
                                TextWrapping="Wrap" />
 
@@ -38,39 +38,39 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Foreground="#7FA5D8" Text="UDP 端口" />
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="UDP 端口" />
                         <TextBlock Grid.Column="1"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding PortText}" />
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,14,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="监听中端口" />
                         <TextBlock Grid.Row="1"
                                    Grid.Column="1"
                                    Margin="0,14,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding ListeningPortText}" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,14,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="连接状态" />
                         <TextBlock Grid.Row="2"
                                    Grid.Column="1"
                                    Margin="0,14,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding ConnectionStateText}" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,14,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="状态消息" />
                         <TextBlock Grid.Row="3"
                                    Grid.Column="1"
                                    Margin="0,14,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding StatusMessage}"
                                    TextWrapping="Wrap" />
                     </Grid>
@@ -80,11 +80,11 @@
             <Border Margin="0,16,0,0"
                     Padding="20"
                     CornerRadius="18"
-                    Background="#0F1B2E">
+                    Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="22"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="App 日志" />
                     <Grid Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
@@ -93,15 +93,15 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <CheckBox Foreground="#D7E4F3"
+                            <CheckBox Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="App 分类日志"
                                       IsChecked="{Binding EnableAppFileLog, Mode=TwoWay}" />
                             <CheckBox Margin="18,0,0,0"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="RaceAssistant 问答记录"
                                       IsChecked="{Binding EnableRaceAssistantAuditLog, Mode=TwoWay}" />
                             <CheckBox Margin="18,0,0,0"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="Prompt 摘要"
                                       IsChecked="{Binding RaceAssistantLogPromptSummary, Mode=TwoWay}" />
                         </StackPanel>
@@ -136,80 +136,80 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Foreground="#7FA5D8" Text="App 日志目录" />
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="App 日志目录" />
                         <TextBlock Grid.Column="1"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding AppLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="App 最近文件" />
                         <TextBlock Grid.Row="1"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding AppLogLastFilePathText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="App 文件大小" />
                         <TextBlock Grid.Row="2"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding AppLogLastFileSizeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="App 最近写入" />
                         <TextBlock Grid.Row="3"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding AppLogLastWriteTimeText, Mode=OneWay}" />
 
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="问答日志目录" />
                         <TextBlock Grid.Row="4"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding RaceAssistantLogDirectoryText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="5"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="问答最近文件" />
                         <TextBlock Grid.Row="5"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding RaceAssistantLogLastFilePathText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="6"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="问答文件状态" />
                         <TextBlock Grid.Row="6"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3">
+                                   Foreground="{StaticResource FgSecondaryBrush}">
                             <Run Text="{Binding RaceAssistantLogLastFileSizeText, Mode=OneWay}" />
                             <Run Text=" · " />
                             <Run Text="{Binding RaceAssistantLogLastWriteTimeText, Mode=OneWay}" />
                         </TextBlock>
 
                         <TextBlock Grid.Column="2"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="最大 MB" />
                         <TextBox Grid.Column="3"
                                  Height="30"
@@ -218,7 +218,7 @@
                         <TextBlock Grid.Row="1"
                                    Grid.Column="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="保留天数" />
                         <TextBox Grid.Row="1"
                                  Grid.Column="3"
@@ -229,12 +229,12 @@
                         <TextBlock Grid.Row="2"
                                    Grid.Column="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="状态" />
                         <TextBlock Grid.Row="2"
                                    Grid.Column="3"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding LogSettingsStatusText}"
                                    TextWrapping="Wrap" />
                     </Grid>
@@ -244,11 +244,11 @@
             <Border Margin="0,16,0,0"
                     Padding="20"
                     CornerRadius="18"
-                    Background="#0F1B2E">
+                    Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="22"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="UDP Raw Log" />
                     <Grid Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
@@ -256,7 +256,7 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <CheckBox Foreground="#D7E4F3"
+                        <CheckBox Foreground="{StaticResource FgSecondaryBrush}"
                                   Content="启用 UDP Raw Log"
                                   IsChecked="{Binding UdpRawLogEnabled, Mode=TwoWay}" />
                         <Button Grid.Column="1"
@@ -281,64 +281,64 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Foreground="#7FA5D8" Text="状态" />
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="状态" />
                         <TextBlock Grid.Column="1"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogStatusText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="日志目录" />
                         <TextBlock Grid.Row="1"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogDirectoryText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="最近文件" />
                         <TextBlock Grid.Row="2"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogLastFilePathText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="文件大小" />
                         <TextBlock Grid.Row="3"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogLastFileSizeText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="最近写入时间" />
                         <TextBlock Grid.Row="4"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogLastWriteTimeText}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="5"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="已记录 / 丢弃" />
                         <TextBlock Grid.Row="5"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3">
+                                   Foreground="{StaticResource FgSecondaryBrush}">
                             <Run Text="{Binding UdpRawLogWrittenPacketCount, Mode=OneWay}" />
                             <Run Text=" / " />
                             <Run Text="{Binding UdpRawLogDroppedPacketCount, Mode=OneWay}" />
@@ -346,12 +346,12 @@
 
                         <TextBlock Grid.Row="6"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="最近错误" />
                         <TextBlock Grid.Row="6"
                                    Grid.Column="1"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding UdpRawLogLastErrorText}"
                                    TextWrapping="Wrap" />
                     </Grid>
@@ -361,14 +361,14 @@
             <Border Margin="0,16,0,0"
                     Padding="20"
                     CornerRadius="18"
-                    Background="#0F1B2E">
+                    Background="{StaticResource BgPanelBrush}">
                 <StackPanel>
                     <TextBlock FontSize="22"
                                FontWeight="SemiBold"
-                               Foreground="White"
+                               Foreground="{StaticResource FgPrimaryBrush}"
                                Text="方向盘语音 AI" />
                     <TextBlock Margin="0,6,0,0"
-                               Foreground="#9AB0C9"
+                               Foreground="{StaticResource FgSectionBrush}"
                                Text="按键触发麦克风提问与 TTS 回答"
                                TextWrapping="Wrap" />
 
@@ -387,16 +387,16 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock Foreground="#7FA5D8"
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}"
                                    Text="功能开关" />
                         <CheckBox Grid.Column="1"
-                                  Foreground="#D7E4F3"
+                                  Foreground="{StaticResource FgSecondaryBrush}"
                                   Content="启用语音 AI"
                                   IsChecked="{Binding VoiceAiEnabled, Mode=TwoWay}" />
 
                         <TextBlock Grid.Row="1"
                                    Margin="0,14,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="方向盘按钮" />
                         <StackPanel Grid.Row="1"
                                     Grid.Column="1"
@@ -416,14 +416,14 @@
                                    Grid.Column="2"
                                    Margin="0,14,0,0"
                                    VerticalAlignment="Center"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding VoiceAiBindingText}"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="说话模式" />
                         <ComboBox Grid.Row="2"
                                   Grid.Column="1"
@@ -436,13 +436,13 @@
                                    Grid.Column="2"
                                    Margin="0,12,0,0"
                                    VerticalAlignment="Center"
-                                   Foreground="#9AB0C9"
+                                   Foreground="{StaticResource FgSectionBrush}"
                                    Text="{Binding SelectedVoiceAiTalkModeOption.Description}"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="3"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="麦克风" />
                         <StackPanel Grid.Row="3"
                                     Grid.Column="1"
@@ -469,65 +469,65 @@
 
                         <TextBlock Grid.Row="4"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="音频处理" />
                         <WrapPanel Grid.Row="4"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0">
                             <CheckBox Margin="0,0,16,6"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="启用麦克风降噪"
                                       IsChecked="{Binding VoiceAiNoiseReductionEnabled, Mode=TwoWay}" />
                             <CheckBox Margin="0,0,16,6"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="启用风噪过滤"
                                       IsChecked="{Binding VoiceAiHighPassFilterEnabled, Mode=TwoWay}" />
                             <CheckBox Margin="0,0,16,6"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="启用噪声门"
                                       IsChecked="{Binding VoiceAiNoiseGateEnabled, Mode=TwoWay}" />
                             <CheckBox Margin="0,0,16,6"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="启用 VAD"
                                       IsChecked="{Binding VoiceAiVadEnabled, Mode=TwoWay}" />
                             <CheckBox Margin="0,0,16,6"
-                                      Foreground="#D7E4F3"
+                                      Foreground="{StaticResource FgSecondaryBrush}"
                                       Content="启用自动增益"
                                       IsChecked="{Binding VoiceAiAutoGainEnabled, Mode=TwoWay}" />
                         </WrapPanel>
 
                         <TextBlock Grid.Row="5"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="降噪参数" />
                         <WrapPanel Grid.Row="5"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0">
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="高通 Hz" />
                             <TextBox Width="72"
                                      Margin="0,0,16,0"
                                      Padding="8,5"
                                      Text="{Binding VoiceAiHighPassCutoffHzText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="噪声门 dB" />
                             <TextBox Width="72"
                                      Margin="0,0,16,0"
                                      Padding="8,5"
                                      Text="{Binding VoiceAiNoiseGateThresholdDbText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="最长秒" />
                             <TextBox Width="64"
                                      Margin="0,0,16,0"
                                      Padding="8,5"
                                      Text="{Binding VoiceAiMaxRecordingSecondsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="最低置信度" />
                             <TextBox Width="72"
                                      Padding="8,5"
@@ -536,28 +536,28 @@
 
                         <TextBlock Grid.Row="6"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="VAD 裁剪" />
                         <WrapPanel Grid.Row="6"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0">
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="前置 ms" />
                             <TextBox Width="72"
                                      Margin="0,0,16,0"
                                      Padding="8,5"
                                      Text="{Binding VoiceAiPreSpeechPaddingMsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="后置 ms" />
                             <TextBox Width="72"
                                      Margin="0,0,16,0"
                                      Padding="8,5"
                                      Text="{Binding VoiceAiPostSpeechPaddingMsText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                             <TextBlock Margin="0,6,6,0"
-                                       Foreground="#9AB0C9"
+                                       Foreground="{StaticResource FgSectionBrush}"
                                        Text="最短人声 ms" />
                             <TextBox Width="72"
                                      Padding="8,5"
@@ -566,7 +566,7 @@
 
                         <TextBlock Grid.Row="7"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="输入电平" />
                         <ProgressBar Grid.Row="7"
                                      Grid.Column="1"
@@ -579,33 +579,33 @@
                                    Grid.Column="2"
                                    Margin="0,12,0,0"
                                    VerticalAlignment="Center"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding VoiceAiMicrophoneStatusText}"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="8"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="运行状态" />
                         <TextBlock Grid.Row="8"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding VoiceAiStatusText}"
                                    TextTrimming="CharacterEllipsis"
                                    TextWrapping="Wrap" />
 
                         <TextBlock Grid.Row="9"
                                    Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="识别状态" />
                         <TextBlock Grid.Row="9"
                                    Grid.Column="1"
                                    Grid.ColumnSpan="2"
                                    Margin="0,12,0,0"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding VoiceAiRecognitionStatusDetailText, Mode=OneWay}"
                                    TextWrapping="Wrap" />
                     </Grid>
@@ -615,7 +615,7 @@
             <Border Margin="0,16,0,0"
                     Padding="20"
                     CornerRadius="18"
-                    Background="#0F1B2E">
+                    Background="{StaticResource BgPanelBrush}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -625,14 +625,14 @@
                     <StackPanel>
                         <TextBlock FontSize="22"
                                    FontWeight="SemiBold"
-                                   Foreground="White"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
                                    Text="版本与更新" />
                         <TextBlock Margin="0,12,0,0"
-                                   Foreground="#7FA5D8"
+                                   Foreground="{StaticResource FgLabelBrush}"
                                    Text="当前版本" />
                         <TextBlock Margin="0,4,0,0"
                                    FontSize="18"
-                                   Foreground="#D7E4F3"
+                                   Foreground="{StaticResource FgSecondaryBrush}"
                                    Text="{Binding ApplicationVersionText}" />
                     </StackPanel>
 

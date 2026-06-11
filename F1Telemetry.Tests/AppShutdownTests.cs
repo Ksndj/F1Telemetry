@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.IO;
-using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Threading;
 using System.Xml.Linq;
@@ -206,33 +205,7 @@ public sealed class AppShutdownTests
 
     private static void RunOnStaThread(Action action)
     {
-        Exception? capturedException = null;
-        var thread = new Thread(() =>
-        {
-            SynchronizationContext.SetSynchronizationContext(
-                new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-            finally
-            {
-                Dispatcher.CurrentDispatcher.InvokeShutdown();
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (capturedException is not null)
-        {
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-        }
+        WpfApplicationHelper.RunOnStaThread(action);
     }
 
     private sealed record DashboardViewModelHarness(
