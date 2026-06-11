@@ -140,9 +140,9 @@ public sealed class UiSettingsPolishTests
     /// Verifies the shell UDP port input writes edits back to the dashboard view model immediately.
     /// </summary>
     [Fact]
-    public void MainWindow_UdpPortTextBox_UsesTwoWayPropertyChangedBinding()
+    public void TopStatusBar_UdpPortTextBox_UsesTwoWayPropertyChangedBinding()
     {
-        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "MainWindow.xaml"));
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "Shell", "TopStatusBar.xaml"));
         var textBoxes = document.Descendants()
             .Where(element => element.Name.LocalName == "TextBox")
             .Select(element => element.Attribute("Text")?.Value)
@@ -154,11 +154,141 @@ public sealed class UiSettingsPolishTests
             textBoxes);
     }
 
+    /// <summary>
+    /// Verifies the voice AI settings rows are not collapsed into a shared final row.
+    /// </summary>
+    [Fact]
+    public void SettingsView_DefinesAllVoiceAiRows()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var voiceAiGrid = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "TextBlock"
+                && element.Attribute("Text")?.Value == "方向盘语音 AI")
+            .ElementsAfterSelf()
+            .First(element => element.Name.LocalName == "Grid");
+        var rowCount = voiceAiGrid.Descendants()
+            .Count(element => element.Name.LocalName == "RowDefinition");
+
+        Assert.True(rowCount >= 10);
+    }
+
+    /// <summary>
+    /// Verifies section titles keep a readable foreground on dark card backgrounds.
+    /// </summary>
+    [Fact]
+    public void SharedStyles_SectionTitleTextStyle_UsesReadableForeground()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Styles", "SharedStyles.xaml"));
+        var style = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "Style"
+                && element.Attributes().Any(attribute => attribute.Name.LocalName == "Key" && attribute.Value == "SectionTitleTextStyle"));
+        var foregroundSetter = style.Elements()
+            .First(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "Foreground");
+
+        Assert.Equal("{StaticResource FgPrimaryBrush}", foregroundSetter.Attribute("Value")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the settings page lays out the voice AI status rows without visual overlap.
+    /// </summary>
+    [Fact]
+    public void SettingsView_VisualLayout_DoesNotOverlapVoiceAiStatusRows()
+    {
+        RunOnStaThread(() =>
+        {
+            var view = new SettingsView();
+            var host = CreateOffscreenHost(view);
+
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                view.UpdateLayout();
+
+                var inputLevel = FindTextBlock(view, "输入电平");
+                var runStatus = FindTextBlock(view, "运行状态");
+                var recognitionStatus = FindTextBlock(view, "识别状态");
+                var inputBounds = GetBounds(inputLevel, view);
+                var runBounds = GetBounds(runStatus, view);
+                var recognitionBounds = GetBounds(recognitionStatus, view);
+
+                Assert.True(inputBounds.Bottom <= runBounds.Top);
+                Assert.True(runBounds.Bottom <= recognitionBounds.Top);
+            }
+            finally
+            {
+                host.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies shared section titles render with the readable foreground in real WPF views.
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(OverviewView), "玩家状态")]
+    [InlineData(typeof(ChartsView), "AI 状态")]
+    public void SharedSectionTitles_VisualForeground_IsReadable(Type viewType, string titleText)
+    {
+        RunOnStaThread(() =>
+        {
+            var view = Assert.IsAssignableFrom<FrameworkElement>(Activator.CreateInstance(viewType));
+            var host = CreateOffscreenHost(view);
+
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                view.UpdateLayout();
+
+                var title = FindTextBlock(view, titleText);
+                var expectedBrush = Assert.IsType<SolidColorBrush>(Application.Current.FindResource("FgPrimaryBrush"));
+                var actualBrush = Assert.IsType<SolidColorBrush>(title.Foreground);
+
+                Assert.Equal(expectedBrush.Color, actualBrush.Color);
+            }
+            finally
+            {
+                host.Close();
+            }
+        });
+    }
+
     private static void AssertBindingPath(DependencyObject target, DependencyProperty property, string expectedPath)
     {
         var binding = BindingOperations.GetBinding(target, property);
         Assert.NotNull(binding);
         Assert.Equal(expectedPath, binding.Path.Path);
+    }
+
+    private static Window CreateOffscreenHost(FrameworkElement content)
+    {
+        return new Window
+        {
+            Content = content,
+            Height = 1000,
+            Left = -20000,
+            ShowActivated = false,
+            ShowInTaskbar = false,
+            Top = -20000,
+            Width = 1800,
+            WindowStyle = WindowStyle.None
+        };
+    }
+
+    private static TextBlock FindTextBlock(DependencyObject root, string text)
+    {
+        return FindDescendants<TextBlock>(root).First(textBlock => textBlock.Text == text);
+    }
+
+    private static Rect GetBounds(FrameworkElement element, Visual ancestor)
+    {
+        var transform = element.TransformToAncestor(ancestor);
+        return transform.TransformBounds(new Rect(element.RenderSize));
     }
 
     private static IReadOnlyList<T> FindDescendants<T>(DependencyObject root)
