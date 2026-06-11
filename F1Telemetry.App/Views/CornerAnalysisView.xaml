@@ -161,6 +161,33 @@
                             </DiscreteObjectKeyFrame.Value>
                         </DiscreteObjectKeyFrame>
                     </ObjectAnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="2" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="0" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="3" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="4" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="0" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="3" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="6" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="0" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="3" />
+                    </Int32AnimationUsingKeyFrames>
                 </Storyboard>
             </VisualState>
             <VisualState x:Name="Wide">
@@ -207,6 +234,33 @@
                             </DiscreteObjectKeyFrame.Value>
                         </DiscreteObjectKeyFrame>
                     </ObjectAnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="0" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="2" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisTrackMapPanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="1" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="2" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="0" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisVisualEvidencePanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="1" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.Row)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="2" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.Column)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="2" />
+                    </Int32AnimationUsingKeyFrames>
+                    <Int32AnimationUsingKeyFrames Storyboard.TargetName="CornerAnalysisEngineerAdvicePanel" Storyboard.TargetProperty="(Grid.ColumnSpan)">
+                        <DiscreteInt32KeyFrame KeyTime="0" Value="1" />
+                    </Int32AnimationUsingKeyFrames>
                 </Storyboard>
             </VisualState>
         </VisualStateGroup>

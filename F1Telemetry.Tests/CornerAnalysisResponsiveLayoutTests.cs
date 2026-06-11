@@ -99,6 +99,29 @@ public sealed class CornerAnalysisResponsiveLayoutTests
     }
 
     /// <summary>
+    /// Verifies that medium widths stack right-side detail sections before collapsing the track column.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_MediumStateStacksCollapsedTrackColumnPanels()
+    {
+        var mediumState = ExtractVisualState(ReadCornerAnalysisViewXaml(), "Medium");
+        var wideState = ExtractVisualState(ReadCornerAnalysisViewXaml(), "Wide");
+
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackColumn\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<GridLength>0</GridLength>", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"2\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisVisualEvidencePanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"4\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"6\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", wideState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", wideState, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies that the wide view uses denser card heights so maximized windows show the full analysis area.
     /// </summary>
     [Fact]
@@ -164,6 +187,20 @@ public sealed class CornerAnalysisResponsiveLayoutTests
     private static string ReadCornerAnalysisViewCodeBehind()
     {
         return File.ReadAllText(Path.Combine(FindRepositoryRoot(), "F1Telemetry.App", "Views", "CornerAnalysisView.xaml.cs"));
+    }
+
+    private static string ExtractVisualState(string xaml, string stateName)
+    {
+        var start = xaml.IndexOf($"<VisualState x:Name=\"{stateName}\">", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+
+        var nextState = xaml.IndexOf("<VisualState x:Name=", start + 1, StringComparison.Ordinal);
+        var end = nextState >= 0
+            ? nextState
+            : xaml.IndexOf("</VisualStateGroup>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+
+        return xaml[start..end];
     }
 
     private static string FindRepositoryRoot()
