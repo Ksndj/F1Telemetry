@@ -23,9 +23,9 @@ public sealed class UdpRawLogSettingsUiTests
     /// Verifies the shell UDP port controls stay together as one non-wrapping top-status item.
     /// </summary>
     [Fact]
-    public void MainWindow_UdpPortStatusChip_UsesNonWrappingGrid()
+    public void TopStatusBar_UdpPortStatusChip_UsesNonWrappingGrid()
     {
-        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "MainWindow.xaml"));
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "Shell", "TopStatusBar.xaml"));
         var topStatusWrapPanel = FindElementByName(document, "TopStatusWrapPanel");
         var udpPortChip = Assert.Single(topStatusWrapPanel.Elements(), element => HasName(element, "UdpPortStatusChip"));
         var udpPortChipXaml = udpPortChip.ToString(SaveOptions.DisableFormatting);
