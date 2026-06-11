@@ -8,7 +8,7 @@
              d:DesignWidth="420">
     <Border Padding="18"
             CornerRadius="18"
-            Background="#132743">
+            Background="{StaticResource BgCardBrush}">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -18,10 +18,10 @@
             <StackPanel>
                 <TextBlock FontSize="18"
                            FontWeight="SemiBold"
-                           Foreground="White"
+                           Foreground="{StaticResource FgPrimaryBrush}"
                            Text="{Binding Title}" />
                 <TextBlock Margin="0,6,0,0"
-                           Foreground="#9AB0C9"
+                           Foreground="{StaticResource FgSectionBrush}"
                            Text="{Binding XAxisLabel}" />
             </StackPanel>
 
@@ -30,11 +30,11 @@
                   Margin="0,16,0,0">
                 <Border x:Name="EmptyStateBorder"
                         CornerRadius="14"
-                        Background="#0C1830">
+                        Background="{StaticResource BgMetricTileBrush}">
                     <TextBlock x:Name="EmptyStateTextBlock"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"
-                               Foreground="#7FA5D8"
+                               Foreground="{StaticResource FgLabelBrush}"
                                TextWrapping="Wrap"
                                TextAlignment="Center" />
                 </Border>
@@ -42,7 +42,7 @@
                 <Border x:Name="PlotBorder"
                         Padding="6"
                         CornerRadius="14"
-                        Background="#0C1830" />
+                        Background="{StaticResource BgMetricTileBrush}" />
             </Grid>
         </Grid>
     </Border>

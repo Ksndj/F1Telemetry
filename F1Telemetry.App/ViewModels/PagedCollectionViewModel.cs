@@ -9,7 +9,7 @@ namespace F1Telemetry.App.ViewModels;
 /// Exposes a bindable paged projection over an in-memory item list.
 /// </summary>
 /// <typeparam name="T">The item type.</typeparam>
-public sealed class PagedCollectionViewModel<T> : ViewModelBase
+public sealed class PagedCollectionViewModel<T> : ViewModelBase, IViewportPageSizer
 {
     private const int DefaultPageSize = 6;
     private const int DefaultMinPageSize = 1;

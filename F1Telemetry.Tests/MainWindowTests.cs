@@ -85,15 +85,15 @@ public sealed class MainWindowTests
 
             try
             {
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                window.UpdateLayout();
+                window.Show();
+                ApplyContentHostLayout(window);
 
                 Assert.NotNull(window.FindName("Sidebar"));
                 Assert.NotNull(window.FindName("TopStatusBar"));
                 Assert.NotNull(window.FindName("ContentHost"));
                 Assert.NotNull(window.FindName("ContentHostScrollViewer"));
 
-                var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
+                var navigationList = FindDescendantByName<ListBox>(window, "ShellNavigationList");
                 Assert.Equal(ExpectedShellNavigationItemCount, navigationList.Items.Count);
                 Assert.Same(navigationItems[0], navigationList.SelectedItem);
                 Assert.Equal("实时概览", navigationItems[0].Name);
@@ -139,8 +139,8 @@ public sealed class MainWindowTests
                 ApplyContentHostLayout(window);
 
                 var sidebarColumn = Assert.IsType<ColumnDefinition>(window.FindName("SidebarColumnDefinition"));
-                var navigationList = Assert.IsType<ListBox>(window.FindName("ShellNavigationList"));
-                var productName = Assert.IsType<TextBlock>(window.FindName("SidebarProductName"));
+                var navigationList = FindDescendantByName<ListBox>(window, "ShellNavigationList");
+                var productName = FindDescendantByName<TextBlock>(window, "SidebarProductName");
 
                 Assert.True(viewModel.IsSidebarExpanded);
                 Assert.Equal(220d, sidebarColumn.Width.Value);
@@ -233,18 +233,28 @@ public sealed class MainWindowTests
 
         AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistorySessionPages");
         AssertPagingBindings(lapHistoryXaml, "HistoryBrowser.HistoryLapPages");
+        AssertAdaptivePageSizing(lapHistoryXaml, "HistoryBrowser.HistorySessionPages", "150", "2", "8");
+        AssertAdaptivePageSizing(lapHistoryXaml, "HistoryBrowser.HistoryLapPages", "58", "4", "20", chromeHeight: "78");
         Assert.Contains("HistoryBrowser.DeleteSessionCommand", lapHistoryXaml, StringComparison.Ordinal);
         AssertHistoryLapHeader(lapHistoryXaml);
 
         AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.HistoryBrowser.HistorySessionPages");
         AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.EventTimelinePages");
         AssertPagingBindings(postRaceReviewXaml, "PostRaceReview.AiReportPages");
+        AssertAdaptivePageSizing(postRaceReviewXaml, "PostRaceReview.HistoryBrowser.HistorySessionPages", "118", "2", "8");
+        AssertAdaptivePageSizing(postRaceReviewXaml, "PostRaceReview.EventTimelinePages", "64", "3", "12", chromeHeight: "70");
+        AssertAdaptivePageSizing(postRaceReviewXaml, "PostRaceReview.AiReportPages", "92", "2", "8", chromeHeight: "76");
         Assert.Contains("PostRaceReview.HistoryBrowser.DeleteSessionCommand", postRaceReviewXaml, StringComparison.Ordinal);
         AssertHorizontalScrollBarVisibilityDisabled(postRaceReviewXaml);
 
         AssertPagingBindings(sessionComparisonXaml, "SessionComparison.CandidateSessionPages");
+        AssertAdaptivePageSizing(sessionComparisonXaml, "SessionComparison.CandidateSessionPages", "128", "2", "8");
         Assert.Contains("SessionComparison.DeleteSessionCommand", sessionComparisonXaml, StringComparison.Ordinal);
         AssertHorizontalScrollBarVisibilityDisabled(sessionComparisonXaml);
+
+        Assert.DoesNotContain("UpdateAdaptivePageSizes", File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "LapHistoryView.xaml.cs")), StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateAdaptivePageSizes", File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "PostRaceReviewView.xaml.cs")), StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateAdaptivePageSizes", File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "SessionComparisonView.xaml.cs")), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -308,7 +318,7 @@ public sealed class MainWindowTests
                 viewModel.SelectedShellNavigationItem = new ShellNavigationItemViewModel("future-page", "Future page");
                 AssertContentHostUsesPlaceholder(window);
 
-                Assert.Equal(ExpectedShellNavigationItemCount, ((ListBox)window.FindName("ShellNavigationList")).Items.Count);
+                Assert.Equal(ExpectedShellNavigationItemCount, FindDescendantByName<ListBox>(window, "ShellNavigationList").Items.Count);
             }
             finally
             {
@@ -333,10 +343,10 @@ public sealed class MainWindowTests
 
             try
             {
-                window.Dispatcher.Invoke(() => { }, DispatcherPriority.DataBind);
-                window.UpdateLayout();
+                window.Show();
+                ApplyContentHostLayout(window);
 
-                var titleText = Assert.IsType<TextBlock>(window.FindName("ShellTitleText"));
+                var titleText = FindDescendantByName<TextBlock>(window, "ShellTitleText");
                 Assert.Equal(viewModel.AppTitleText, window.Title);
                 Assert.Equal(viewModel.AppTitleText, titleText.Text);
                 Assert.Contains(VersionInfo.CurrentVersion, titleText.Text, StringComparison.Ordinal);
@@ -356,20 +366,27 @@ public sealed class MainWindowTests
     public void MainWindow_UsesCompactTelemetryStatusBarLayout()
     {
         var root = FindRepositoryRoot();
-        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
-        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "Shell", "TopStatusBar.xaml"));
+        var sharedStylesXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Styles", "SharedStyles.xaml"));
+        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "Views", "Shell", "TopStatusBar.xaml"));
         var topStatusWrapPanel = FindElementByName(document, "TopStatusWrapPanel");
 
         Assert.Contains("ShellTelemetryCardStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryIconStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("StatusChipStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("IconBadgeStyle", xaml, StringComparison.Ordinal);
+        Assert.Contains("IconBadgeLargeStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryLabelStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellTelemetryValueStyle", xaml, StringComparison.Ordinal);
         Assert.Contains("ShellPortTextBoxStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("ShellPrimaryButtonStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("ShellSecondaryButtonStyle", xaml, StringComparison.Ordinal);
-        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"58\" />", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource PrimaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource SecondaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource ShellPrimaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource ShellSecondaryButtonStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataContext.IsSidebarExpanded", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter TargetName=\"ItemBorder\" Property=\"Width\" Value=\"44\" />", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter TargetName=\"ItemBorder\" Property=\"Height\" Value=\"44\" />", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter TargetName=\"ItemBorder\" Property=\"Padding\" Value=\"0\" />", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("<Setter TargetName=\"ItemBorder\" Property=\"HorizontalAlignment\" Value=\"Center\" />", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TopStatusWrapPanel\"", xaml, StringComparison.Ordinal);
         Assert.Equal("WrapPanel", topStatusWrapPanel.Name.LocalName);
         Assert.Contains("x:Name=\"TopPortControlCard\"", xaml, StringComparison.Ordinal);
@@ -468,7 +485,9 @@ public sealed class MainWindowTests
     {
         var root = FindRepositoryRoot();
         var xaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
-        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml"));
+        var sidebarXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Views", "Shell", "Sidebar.xaml"));
+        var sharedStylesXaml = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "Styles", "SharedStyles.xaml"));
+        var document = XDocument.Load(Path.Combine(root, "F1Telemetry.App", "Views", "Shell", "Sidebar.xaml"));
         var codeBehind = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "MainWindow.xaml.cs"));
         var viewModel = File.ReadAllText(Path.Combine(root, "F1Telemetry.App", "ViewModels", "DashboardViewModel.cs"));
         var navigationList = FindElementByName(document, "ShellNavigationList").ToString(SaveOptions.DisableFormatting);
@@ -484,10 +503,10 @@ public sealed class MainWindowTests
         Assert.Contains("IsSidebarExpanded = false", viewModel, StringComparison.Ordinal);
         Assert.Contains("IsSidebarExpanded = true", viewModel, StringComparison.Ordinal);
         Assert.DoesNotContain("CollapsedSidebarWidth = 90d", viewModel, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"SidebarCompactStatusRow\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CompactSidebarStatusDot\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"CompactSidebarUdpLabel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("x:Key=\"ShellIconButtonStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"SidebarCompactStatusRow\"", sidebarXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CompactSidebarStatusDot\"", sidebarXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"CompactSidebarUdpLabel\"", sidebarXaml, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"ShellIconButtonStyle\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"UDP\"", sidebarStatusCard, StringComparison.Ordinal);
         Assert.DoesNotContain("Padding=\"0,0,6,0\"", navigationList, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.VerticalScrollBarVisibility=\"Hidden\"", navigationList, StringComparison.Ordinal);
@@ -524,9 +543,10 @@ public sealed class MainWindowTests
         Assert.Contains("AppScrollBarThumbBrush", scrollbarXaml, StringComparison.Ordinal);
         Assert.Contains("AppScrollBarThumbHoverBrush", scrollbarXaml, StringComparison.Ordinal);
         Assert.Contains("AppScrollBarThumbPressedBrush", scrollbarXaml, StringComparison.Ordinal);
-        Assert.Contains("#4F7FA6", scrollbarXaml, StringComparison.Ordinal);
-        Assert.Contains("#66A7D8", scrollbarXaml, StringComparison.Ordinal);
-        Assert.Contains("#7EC7F2", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Source={StaticResource ScrollBarTrackBrush}", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Source={StaticResource ScrollBarThumbBrush}", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Source={StaticResource ScrollBarThumbHoverBrush}", scrollbarXaml, StringComparison.Ordinal);
+        Assert.Contains("Source={StaticResource ScrollBarThumbPressedBrush}", scrollbarXaml, StringComparison.Ordinal);
         Assert.Contains("MinHeight\" Value=\"36\"", scrollbarXaml, StringComparison.Ordinal);
         Assert.Contains("MinWidth\" Value=\"36\"", scrollbarXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("#FFFFFF", scrollbarXaml, StringComparison.OrdinalIgnoreCase);
@@ -563,6 +583,24 @@ public sealed class MainWindowTests
         Assert.Contains($"{bindingPath}.NextPageCommand", xaml, StringComparison.Ordinal);
     }
 
+    private static void AssertAdaptivePageSizing(
+        string xaml,
+        string bindingPath,
+        string estimatedItemHeight,
+        string minPageSize,
+        string maxPageSize,
+        string? chromeHeight = null)
+    {
+        Assert.Contains($"attached:AdaptivePageSizeBehavior.PagedCollection=\"{{Binding {bindingPath}}}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains($"attached:AdaptivePageSizeBehavior.EstimatedItemHeight=\"{estimatedItemHeight}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains($"attached:AdaptivePageSizeBehavior.MinPageSize=\"{minPageSize}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains($"attached:AdaptivePageSizeBehavior.MaxPageSize=\"{maxPageSize}\"", xaml, StringComparison.Ordinal);
+        if (chromeHeight is not null)
+        {
+            Assert.Contains($"attached:AdaptivePageSizeBehavior.ChromeHeight=\"{chromeHeight}\"", xaml, StringComparison.Ordinal);
+        }
+    }
+
     private static void AssertHistoryLapHeader(string xaml)
     {
         foreach (var header in new[] { "圈号", "圈速", "分段", "均速", "燃油", "ERS", "磨损", "状态", "轮胎", "进站" })
@@ -585,27 +623,7 @@ public sealed class MainWindowTests
 
     private static void RunOnStaThread(Action action)
     {
-        Exception? capturedException = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (capturedException is not null)
-        {
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-        }
+        WpfApplicationHelper.RunOnStaThread(action);
     }
 
     public sealed class ShellNavigationTestViewModel : INotifyPropertyChanged
@@ -736,7 +754,8 @@ public sealed class MainWindowTests
     {
         var host = ApplyContentHostLayout(window);
 
-        Assert.Same(window.FindResource(templateKey), host.ContentTemplate);
+        Assert.NotNull(host.ContentTemplateSelector);
+        Assert.Same(window.FindResource(templateKey), host.ContentTemplateSelector.SelectTemplate(host.Content, host));
         Assert.NotNull(FindDescendant<TPage>(host));
         Assert.Equal(1, CountActiveShellPages(host));
     }
@@ -745,7 +764,8 @@ public sealed class MainWindowTests
     {
         var host = ApplyContentHostLayout(window);
 
-        Assert.Same(window.FindResource("PlaceholderContentTemplate"), host.ContentTemplate);
+        Assert.NotNull(host.ContentTemplateSelector);
+        Assert.Same(window.FindResource("PlaceholderContentTemplate"), host.ContentTemplateSelector.SelectTemplate(host.Content, host));
         Assert.Equal(0, CountActiveShellPages(host));
     }
 
@@ -761,6 +781,14 @@ public sealed class MainWindowTests
         host.UpdateLayout();
 
         return host;
+    }
+
+    private static T FindDescendantByName<T>(DependencyObject root, string name)
+        where T : FrameworkElement
+    {
+        var element = FindDescendant<T>(root, candidate => string.Equals(candidate.Name, name, StringComparison.Ordinal));
+        Assert.NotNull(element);
+        return element;
     }
 
     private static void AssertNavigationTextVisibility(ListBox navigationList, string text, Visibility expectedVisibility)

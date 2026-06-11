@@ -108,7 +108,6 @@ public sealed class SessionAwareRaceAssistantTests
 
         Assert.Contains("OverviewSessionFocusText", xaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding OverviewSessionFocusText}\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -478,26 +478,6 @@ public sealed class ChartPanelViewModelTests
 
     private static void RunOnStaThread(Action action)
     {
-        Exception? capturedException = null;
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                capturedException = ex;
-            }
-        });
-
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        thread.Join();
-
-        if (capturedException is not null)
-        {
-            ExceptionDispatchInfo.Capture(capturedException).Throw();
-        }
+        WpfApplicationHelper.RunOnStaThread(action);
     }
 }

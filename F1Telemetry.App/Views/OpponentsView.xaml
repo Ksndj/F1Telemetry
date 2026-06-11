@@ -12,25 +12,25 @@
         <Border MinWidth="760"
                 Padding="20"
                 CornerRadius="20"
-                Background="#0F1B2E">
+                Background="{StaticResource BgPanelBrush}">
             <StackPanel>
                 <TextBlock FontSize="20"
                            FontWeight="SemiBold"
-                           Foreground="White"
+                           Foreground="{StaticResource FgPrimaryBrush}"
                            Text="对手列表" />
                 <TextBlock Margin="0,6,0,0"
-                           Foreground="#9AB0C9"
+                           Foreground="{StaticResource FgSectionBrush}"
                            Text="车手、位置、轮胎、胎龄、Pit 状态、与我差距、上一圈对比。"
                            TextWrapping="Wrap" />
 
                 <Border Margin="0,18,0,0"
                         Padding="16"
                         CornerRadius="16"
-                        Background="#132743">
+                        Background="{StaticResource BgCardBrush}">
                     <StackPanel>
-                        <TextBlock Foreground="#7FA5D8" Text="前后车差距" />
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="前后车差距" />
                         <TextBlock Margin="0,6,0,0"
-                                   Foreground="White"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
                                    Text="{Binding PlayerGapText}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
@@ -38,11 +38,11 @@
                 <Border Margin="0,12,0,0"
                         Padding="16"
                         CornerRadius="16"
-                        Background="#132743">
+                        Background="{StaticResource BgCardBrush}">
                     <StackPanel>
-                        <TextBlock Foreground="#7FA5D8" Text="上一圈对比" />
+                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="上一圈对比" />
                         <TextBlock Margin="0,6,0,0"
-                                   Foreground="White"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
                                    Text="{Binding OverviewLapComparisonText}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
@@ -55,7 +55,7 @@
                             <Border Margin="0,0,0,10"
                                     Padding="14"
                                     CornerRadius="14"
-                                    Background="#132743">
+                                    Background="{StaticResource BgCardBrush}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -68,14 +68,14 @@
                                         <ColumnDefinition Width="132" />
                                     </Grid.ColumnDefinitions>
 
-                                    <TextBlock Foreground="White" Text="{Binding DisplayName}" />
-                                    <TextBlock Grid.Column="1" Foreground="#D7E4F3" Text="{Binding PositionText}" />
-                                    <TextBlock Grid.Column="2" Foreground="#D7E4F3" Text="{Binding TyreText}" />
-                                    <TextBlock Grid.Column="3" Foreground="#D7E4F3" Text="{Binding TyreAgeText}" />
-                                    <TextBlock Grid.Column="4" Foreground="#D7E4F3" Text="{Binding PitStatusText}" />
-                                    <TextBlock Grid.Column="5" Foreground="#7FA5D8" Text="{Binding GapToPlayerText}" />
-                                    <TextBlock Grid.Column="6" Foreground="#7FA5D8" Text="{Binding LastLapText}" />
-                                    <TextBlock Grid.Column="7" Foreground="#7FA5D8" Text="{Binding LapComparisonText}" />
+                                    <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding DisplayName}" />
+                                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PositionText}" />
+                                    <TextBlock Grid.Column="2" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreText}" />
+                                    <TextBlock Grid.Column="3" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreAgeText}" />
+                                    <TextBlock Grid.Column="4" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PitStatusText}" />
+                                    <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="{Binding GapToPlayerText}" />
+                                    <TextBlock Grid.Column="6" Foreground="{StaticResource FgLabelBrush}" Text="{Binding LastLapText}" />
+                                    <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="{Binding LapComparisonText}" />
                                 </Grid>
                             </Border>
                         </DataTemplate>

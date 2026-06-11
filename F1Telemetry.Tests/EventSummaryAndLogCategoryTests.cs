@@ -271,6 +271,7 @@ public sealed class EventSummaryAndLogCategoryTests
         var document = XDocument.Load(filePath);
         var text = document.ToString(SaveOptions.DisableFormatting);
         var source = File.ReadAllText(filePath);
+        var sharedStylesSource = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Styles", "SharedStyles.xaml"));
         var viewModelSource = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "ViewModels", "DashboardViewModel.cs"));
 
         Assert.Contains("x:Name=\"OverviewScrollViewer\"", text, StringComparison.Ordinal);
@@ -283,7 +284,6 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("IconBadgeStyle", text, StringComparison.Ordinal);
         Assert.Contains("PillTagStyle", text, StringComparison.Ordinal);
         Assert.Contains("PrimaryButtonStyle", text, StringComparison.Ordinal);
-        Assert.Contains("SecondaryButtonStyle", text, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"OverviewTopCardsGrid\"", source, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"OverviewMiddleCardsGrid\"", source, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"OverviewBottomCardsGrid\"", source, StringComparison.Ordinal);
@@ -317,8 +317,10 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("x:Name=\"TyreTemperatureLabel\"", source, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TyrePressureLabel\"", source, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"TyreDamageLabel\"", source, StringComparison.Ordinal);
-        Assert.Contains("Property=\"ToolTip\" Value=\"{Binding Text, RelativeSource={RelativeSource Self}}\"", source, StringComparison.Ordinal);
         Assert.Contains("DamageValueContentStyle", source, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"NarrativeTextStyle\"", sharedStylesSource, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"MetricValueContentStyle\"", sharedStylesSource, StringComparison.Ordinal);
+        Assert.Contains("x:Key=\"DamageValueContentStyle\"", sharedStylesSource, StringComparison.Ordinal);
         Assert.Contains("等待数据", text, StringComparison.Ordinal);
         Assert.Contains("连接后显示", text, StringComparison.Ordinal);
         Assert.Contains("等待玩家车辆状态", text, StringComparison.Ordinal);
@@ -336,7 +338,6 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("轮胎", text, StringComparison.Ordinal);
         Assert.Contains("燃油", text, StringComparison.Ordinal);
         Assert.Contains("策略", text, StringComparison.Ordinal);
-        Assert.Contains("TextTrimming=\"CharacterEllipsis\"", text, StringComparison.Ordinal);
         Assert.Contains("ToolTip=", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Mode=TwoWay", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Width=\"1120\"", text, StringComparison.Ordinal);

@@ -7,180 +7,10 @@
              d:DesignHeight="680"
              d:DesignWidth="980">
     <UserControl.Resources>
-        <Style x:Key="GlassCardStyle" TargetType="{x:Type Border}">
-            <Setter Property="MinWidth" Value="0" />
-            <Setter Property="Margin" Value="0" />
-            <Setter Property="Padding" Value="16" />
-            <Setter Property="HorizontalAlignment" Value="Stretch" />
-            <Setter Property="CornerRadius" Value="9" />
-            <Setter Property="Background">
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#132844" Offset="0" />
-                        <GradientStop Color="#0E1D31" Offset="0.58" />
-                        <GradientStop Color="#0A1728" Offset="1" />
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="BorderBrush" Value="#244263" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="OverviewCardStyle"
-               BasedOn="{StaticResource GlassCardStyle}"
-               TargetType="{x:Type Border}" />
-
-        <Style x:Key="MetricTileStyle" TargetType="{x:Type Border}">
-            <Setter Property="MinHeight" Value="64" />
-            <Setter Property="Padding" Value="12" />
-            <Setter Property="Margin" Value="0,0,8,8" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Background" Value="#132844" />
-            <Setter Property="BorderBrush" Value="#223D5D" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="OverviewMetricCardStyle"
-               BasedOn="{StaticResource MetricTileStyle}"
-               TargetType="{x:Type Border}" />
-
         <Style x:Key="HeroMetricTileStyle"
                BasedOn="{StaticResource MetricTileStyle}"
                TargetType="{x:Type Border}">
             <Setter Property="MinHeight" Value="88" />
-        </Style>
-
-        <Style x:Key="IconBadgeStyle" TargetType="{x:Type Border}">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Background" Value="#102A4B" />
-            <Setter Property="BorderBrush" Value="#1C6EDC" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="SectionHeaderStyle" TargetType="{x:Type Grid}">
-            <Setter Property="Margin" Value="0,0,0,14" />
-        </Style>
-
-        <Style x:Key="SectionIconTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="14" />
-            <Setter Property="Foreground" Value="#36A3FF" />
-            <Setter Property="TextAlignment" Value="Center" />
-        </Style>
-
-        <Style x:Key="SectionTitleTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="FontSize" Value="18" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
-
-        <Style x:Key="MetricLabelTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="#8CB5E5" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
-        </Style>
-
-        <Style x:Key="MetricUnitTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Margin" Value="0,2,0,0" />
-            <Setter Property="Foreground" Value="#8EA6C3" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
-
-        <Style x:Key="MetricValueContentStyle" TargetType="{x:Type ContentControl}">
-            <Setter Property="Margin" Value="0,6,0,0" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Tag" Value="等待数据" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type ContentControl}">
-                        <Grid>
-                            <TextBlock x:Name="ValueText"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       FontWeight="{TemplateBinding FontWeight}"
-                                       Foreground="#F8FAFC"
-                                       Text="{TemplateBinding Content}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding Content}" />
-                            <TextBlock x:Name="EmptyText"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       FontWeight="{TemplateBinding FontWeight}"
-                                       Foreground="#B7C9E2"
-                                       Text="{TemplateBinding Tag}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding Tag}"
-                                       Visibility="Collapsed" />
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="Content" Value="-">
-                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="Content" Value="">
-                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="OverviewValueContentStyle"
-               BasedOn="{StaticResource MetricValueContentStyle}"
-               TargetType="{x:Type ContentControl}" />
-
-        <Style x:Key="DamageValueContentStyle"
-               BasedOn="{StaticResource MetricValueContentStyle}"
-               TargetType="{x:Type ContentControl}">
-            <Setter Property="Margin" Value="0,6,0,0" />
-            <Setter Property="FontSize" Value="16" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Tag" Value="等待数据" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type ContentControl}">
-                        <Grid>
-                            <TextBlock x:Name="ValueText"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       FontWeight="{TemplateBinding FontWeight}"
-                                       Foreground="#F8FAFC"
-                                       Text="{TemplateBinding Content}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding ToolTip}" />
-                            <TextBlock x:Name="MissingPacketText"
-                                       FontSize="{TemplateBinding FontSize}"
-                                       FontWeight="{TemplateBinding FontWeight}"
-                                       Foreground="#B7C9E2"
-                                       Text="{TemplateBinding Tag}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip="{TemplateBinding ToolTip}"
-                                       Visibility="Collapsed" />
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="Content" Value="-">
-                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                            <Trigger Property="Content" Value="">
-                                <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
         </Style>
 
         <Style x:Key="TyreMetricTileStyle"
@@ -188,135 +18,6 @@
                TargetType="{x:Type Border}">
             <Setter Property="MinWidth" Value="116" />
         </Style>
-
-        <Style x:Key="HeroValueContentStyle"
-               BasedOn="{StaticResource MetricValueContentStyle}"
-               TargetType="{x:Type ContentControl}">
-            <Setter Property="FontSize" Value="20" />
-        </Style>
-
-        <Style x:Key="TableCellTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="#D7E4F3" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
-
-        <Style x:Key="OverviewTableCellStyle"
-               BasedOn="{StaticResource TableCellTextStyle}"
-               TargetType="{x:Type TextBlock}" />
-
-        <Style x:Key="NarrativeTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="#D7E4F3" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-        </Style>
-
-        <Style x:Key="EmptyStateStyle" TargetType="{x:Type Border}">
-            <Setter Property="MinHeight" Value="94" />
-            <Setter Property="Padding" Value="18" />
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Background" Value="#10233A" />
-            <Setter Property="BorderBrush" Value="#213B5C" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="EmptyIconBadgeStyle" TargetType="{x:Type Border}">
-            <Setter Property="Width" Value="46" />
-            <Setter Property="Height" Value="46" />
-            <Setter Property="CornerRadius" Value="23" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="Background" Value="#13263E" />
-            <Setter Property="BorderBrush" Value="#375373" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="EmptyIconTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="24" />
-            <Setter Property="Foreground" Value="#6F86A4" />
-            <Setter Property="TextAlignment" Value="Center" />
-        </Style>
-
-        <Style x:Key="EmptyStateTitleTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Margin" Value="0,10,0,0" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="FontSize" Value="17" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="#F8FAFC" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
-        </Style>
-
-        <Style x:Key="EmptyStateBodyTextStyle" TargetType="{x:Type TextBlock}">
-            <Setter Property="Margin" Value="0,4,0,0" />
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#93A8C3" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
-        </Style>
-
-        <Style x:Key="PillTagStyle" TargetType="{x:Type Border}">
-            <Setter Property="Padding" Value="12,7" />
-            <Setter Property="Margin" Value="0,0,8,8" />
-            <Setter Property="CornerRadius" Value="7" />
-            <Setter Property="Background" Value="#172B47" />
-            <Setter Property="BorderBrush" Value="#2A4668" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-
-        <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}">
-            <Setter Property="Padding" Value="13,7" />
-            <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#1D73F8" />
-            <Setter Property="BorderBrush" Value="#3B8CFF" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Button}">
-                        <Border x:Name="ButtonRoot"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="7">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonRoot" Property="Background" Value="#2B84FF" />
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonRoot" Property="Background" Value="#1557C8" />
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="ButtonRoot" Property="Opacity" Value="0.55" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="SecondaryButtonStyle"
-               BasedOn="{StaticResource PrimaryButtonStyle}"
-               TargetType="{x:Type Button}">
-            <Setter Property="Background" Value="#14243A" />
-            <Setter Property="BorderBrush" Value="#294766" />
-        </Style>
-
-        <Style x:Key="OverviewActionButtonStyle"
-               BasedOn="{StaticResource PrimaryButtonStyle}"
-               TargetType="{x:Type Button}" />
-
-        <Style x:Key="OverviewEmptyStateStyle"
-               BasedOn="{StaticResource EmptyStateBodyTextStyle}"
-               TargetType="{x:Type TextBlock}" />
     </UserControl.Resources>
 
     <ScrollViewer x:Name="OverviewScrollViewer"
@@ -324,7 +25,7 @@
                   HorizontalScrollBarVisibility="Disabled">
         <StackPanel x:Name="OverviewResponsiveLayout"
                     HorizontalAlignment="Stretch"
-                    Background="#08111F">
+                    Background="{StaticResource BgDeepBrush}">
             <Grid x:Name="OverviewTopCardsGrid"
                   Margin="0,0,0,12"
                   HorizontalAlignment="Stretch">
@@ -345,7 +46,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE77B;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE77B;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -413,7 +114,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE804;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE804;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -497,7 +198,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C1;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE7C1;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -605,7 +306,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE716;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE716;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -664,7 +365,7 @@
                             <TextBlock x:Name="OpponentCarsEmptyStateText"
                                        Text="等待数据">
                                 <TextBlock.Style>
-                                    <Style BasedOn="{StaticResource OverviewEmptyStateStyle}"
+                                    <Style BasedOn="{StaticResource EmptyStateBodyTextStyle}"
                                            TargetType="{x:Type TextBlock}">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding ElementName=OpponentCarsItems, Path=HasItems}" Value="True">
@@ -701,7 +402,7 @@
                                                         <ColumnDefinition Width="100" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Style="{StaticResource TableCellTextStyle}"
-                                                               Foreground="#F8FAFC"
+                                                               Foreground="{StaticResource FgPrimaryBrush}"
                                                                Text="{Binding DisplayName}"
                                                                ToolTip="{Binding DisplayName}" />
                                                     <TextBlock Grid.Column="1"
@@ -714,12 +415,12 @@
                                                                ToolTip="{Binding PitStatusText}" />
                                                     <TextBlock Grid.Column="3"
                                                                Style="{StaticResource TableCellTextStyle}"
-                                                               Foreground="#8CB5E5"
+                                                               Foreground="{StaticResource FgMetricLabelBrush}"
                                                                Text="{Binding GapToPlayerText}"
                                                                ToolTip="{Binding GapToPlayerText}" />
                                                     <TextBlock Grid.Column="4"
                                                                Style="{StaticResource TableCellTextStyle}"
-                                                               Foreground="#8CB5E5"
+                                                               Foreground="{StaticResource FgMetricLabelBrush}"
                                                                Text="{Binding LapComparisonText}"
                                                                ToolTip="{Binding LapComparisonText}" />
                                                 </Grid>
@@ -743,7 +444,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C5;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE7C5;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -798,7 +499,7 @@
                                                         <ColumnDefinition Width="*" />
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock Style="{StaticResource TableCellTextStyle}"
-                                                               Foreground="#8CB5E5"
+                                                               Foreground="{StaticResource FgMetricLabelBrush}"
                                                                Text="{Binding Timestamp}"
                                                                ToolTip="{Binding Timestamp}" />
                                                     <TextBlock Grid.Column="1"
@@ -807,7 +508,7 @@
                                                                ToolTip="{Binding Category}" />
                                                     <TextBlock Grid.Column="2"
                                                                Style="{StaticResource TableCellTextStyle}"
-                                                               Foreground="#F8FAFC"
+                                                               Foreground="{StaticResource FgPrimaryBrush}"
                                                                Text="{Binding Message}"
                                                                ToolTip="{Binding Message}" />
                                                 </Grid>
@@ -840,7 +541,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE7C1;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE7C1;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -853,16 +554,16 @@
                                            Text="关注重点状态" />
                                 <WrapPanel Margin="0,12,0,2">
                                     <Border Style="{StaticResource PillTagStyle}">
-                                        <TextBlock Foreground="#F8FAFC" Text="圈速" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="圈速" />
                                     </Border>
                                     <Border Style="{StaticResource PillTagStyle}">
-                                        <TextBlock Foreground="#F8FAFC" Text="轮胎" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="轮胎" />
                                     </Border>
                                     <Border Style="{StaticResource PillTagStyle}">
-                                        <TextBlock Foreground="#F8FAFC" Text="燃油" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="燃油" />
                                     </Border>
                                     <Border Style="{StaticResource PillTagStyle}">
-                                        <TextBlock Foreground="#F8FAFC" Text="策略" />
+                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="策略" />
                                     </Border>
                                 </WrapPanel>
                                 <TextBlock Style="{StaticResource NarrativeTextStyle}"
@@ -887,7 +588,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE950;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE950;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"
@@ -927,7 +628,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconBadgeStyle}">
-                                <TextBlock Style="{StaticResource SectionIconTextStyle}" Text="&#xE767;" />
+                                <TextBlock Style="{StaticResource IconTextStyle}" Text="&#xE767;" />
                             </Border>
                             <TextBlock Grid.Column="1"
                                        Style="{StaticResource SectionTitleTextStyle}"

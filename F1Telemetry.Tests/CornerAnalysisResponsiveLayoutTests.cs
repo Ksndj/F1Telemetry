@@ -30,15 +30,18 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         var xaml = ReadCornerAnalysisViewXaml();
         var codeBehind = ReadCornerAnalysisViewCodeBehind();
 
-        Assert.Contains("SizeChanged=\"CornerAnalysisView_SizeChanged\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("attached:ResponsiveLayoutBehavior.Breakpoints=\"1000,1300\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Narrow\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Medium\">", xaml, StringComparison.Ordinal);
+        Assert.Contains("<VisualState x:Name=\"Wide\">", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisListColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisDetailsColumn", xaml, StringComparison.Ordinal);
         Assert.Contains("CornerAnalysisMainGapRow", xaml, StringComparison.Ordinal);
-        Assert.Contains("WideLayoutBreakpoint = 1300d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("NarrowLayoutBreakpoint = 1000d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisListColumn.Width = new GridLength(isWide ? 2d : 1d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("CornerAnalysisDetailsColumn.Width = new GridLength(isWide ? 3d : 1d", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("Grid.SetRow(CornerAnalysisRightDetails, 2)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisRightDetails\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SizeChanged=\"CornerAnalysisView_SizeChanged\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("WideLayoutBreakpoint", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("NarrowLayoutBreakpoint", codeBehind, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplyResponsiveLayout", codeBehind, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -88,11 +91,34 @@ public sealed class CornerAnalysisResponsiveLayoutTests
         Assert.Contains("x:Name=\"CornerAnalysisTrackMapPanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisVisualEvidencePanel\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"CornerAnalysisEngineerAdvicePanel\"", xaml, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisTrackMapPanel, row: 2", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 4", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisVisualEvidencePanel, row: 2, column: 0, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("PlaceRightPanel(CornerAnalysisEngineerAdvicePanel, row: 2, column: 2, columnSpan: 1)", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisVisualEvidencePanel\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PlaceRightPanel", codeBehind, StringComparison.Ordinal);
         Assert.DoesNotContain("CornerAnalysisRightScrollViewer", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that medium widths stack right-side detail sections before collapsing the track column.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_MediumStateStacksCollapsedTrackColumnPanels()
+    {
+        var mediumState = ExtractVisualState(ReadCornerAnalysisViewXaml(), "Medium");
+        var wideState = ExtractVisualState(ReadCornerAnalysisViewXaml(), "Wide");
+
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackColumn\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<GridLength>0</GridLength>", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"2\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisVisualEvidencePanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"4\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Row)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("<DiscreteInt32KeyFrame KeyTime=\"0\" Value=\"6\" />", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", mediumState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisTrackMapPanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", wideState, StringComparison.Ordinal);
+        Assert.Contains("Storyboard.TargetName=\"CornerAnalysisEngineerAdvicePanel\" Storyboard.TargetProperty=\"(Grid.Column)\"", wideState, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -161,6 +187,20 @@ public sealed class CornerAnalysisResponsiveLayoutTests
     private static string ReadCornerAnalysisViewCodeBehind()
     {
         return File.ReadAllText(Path.Combine(FindRepositoryRoot(), "F1Telemetry.App", "Views", "CornerAnalysisView.xaml.cs"));
+    }
+
+    private static string ExtractVisualState(string xaml, string stateName)
+    {
+        var start = xaml.IndexOf($"<VisualState x:Name=\"{stateName}\">", StringComparison.Ordinal);
+        Assert.True(start >= 0);
+
+        var nextState = xaml.IndexOf("<VisualState x:Name=", start + 1, StringComparison.Ordinal);
+        var end = nextState >= 0
+            ? nextState
+            : xaml.IndexOf("</VisualStateGroup>", start, StringComparison.Ordinal);
+        Assert.True(end > start);
+
+        return xaml[start..end];
     }
 
     private static string FindRepositoryRoot()

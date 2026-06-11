@@ -1,0 +1,675 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ============================================================ -->
+    <!--  Card / Panel Styles                                         -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="GlassCardStyle" TargetType="{x:Type Border}">
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusCard}" />
+        <Setter Property="Background" Value="{StaticResource GlassCardGradientBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderCardBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="SectionCardStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="{StaticResource CardPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusXLarge}" />
+        <Setter Property="Background" Value="{StaticResource BgCardInnerBrush}" />
+    </Style>
+
+    <Style x:Key="InnerCardStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="{StaticResource InnerCardPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusLarge}" />
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}" />
+    </Style>
+
+    <Style x:Key="MetricTileStyle" TargetType="{x:Type Border}">
+        <Setter Property="MinHeight" Value="64" />
+        <Setter Property="Padding" Value="{StaticResource MetricTilePadding}" />
+        <Setter Property="Margin" Value="{StaticResource MetricTileMargin}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusMedium}" />
+        <Setter Property="Background" Value="{StaticResource BgCardBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderMetricTileBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="PanelStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="{StaticResource InnerCardPadding}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusXLarge}" />
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderPanelBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="CardStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="{StaticResource MetricTilePadding}" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Background" Value="{StaticResource BgMetricTileBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderMetricTileFocusBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="EmptyStateStyle" TargetType="{x:Type Border}">
+        <Setter Property="MinHeight" Value="94" />
+        <Setter Property="Padding" Value="18" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusMedium}" />
+        <Setter Property="Background" Value="{StaticResource BgMetricTileBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderCardBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="PillTagStyle" TargetType="{x:Type Border}">
+        <Setter Property="Padding" Value="12,7" />
+        <Setter Property="Margin" Value="{StaticResource MetricTileMargin}" />
+        <Setter Property="CornerRadius" Value="7" />
+        <Setter Property="Background" Value="{StaticResource BgPillBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderPillBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Status Chip (Shell Top Bar)                                  -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="StatusChipStyle" TargetType="{x:Type Border}">
+        <Setter Property="MinHeight" Value="58" />
+        <Setter Property="Padding" Value="{StaticResource ChipPadding}" />
+        <Setter Property="Margin" Value="{StaticResource ChipMargin}" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusCard}" />
+        <Setter Property="Background" Value="{StaticResource StatusChipGradientBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderGroupBoxBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="ShellTelemetryCardStyle"
+           BasedOn="{StaticResource StatusChipStyle}"
+           TargetType="{x:Type Border}" />
+
+    <!-- ============================================================ -->
+    <!--  Icon Badge Styles                                            -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="IconBadgeStyle" TargetType="{x:Type Border}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusLarge}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{StaticResource BgInputFocusBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderIconBadgeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="IconBadgeLargeStyle" TargetType="{x:Type Border}">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="CornerRadius" Value="{StaticResource CornerRadiusXLarge}" />
+        <Setter Property="Background" Value="{StaticResource BgInputFocusBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderIconBadgeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <Style x:Key="EmptyIconBadgeStyle" TargetType="{x:Type Border}">
+        <Setter Property="Width" Value="46" />
+        <Setter Property="Height" Value="46" />
+        <Setter Property="CornerRadius" Value="23" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Background" Value="{StaticResource BgPillBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderIconBadgeAltBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Icon Text Styles (Segoe MDL2 Assets)                         -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="IconTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="28" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource FgAccentBrush}" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellTelemetryIconStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="Foreground" Value="{StaticResource FgAccentBrush}" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="EmptyIconTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="Segoe MDL2 Assets" />
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="Foreground" Value="{StaticResource FgMutedBrush}" />
+        <Setter Property="TextAlignment" Value="Center" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Text Styles                                                  -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="SectionTitleTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="SectionTitleStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="MutedTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgSectionBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="LabelTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgLabelBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="ValueTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,6,0,0" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="MetricLabelTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgMetricLabelBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="MetricValueStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="CardValueTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,5,0,0" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="BodyTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgBodyBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="NarrativeTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgSecondaryBrush}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <Style x:Key="HeaderLabelStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgSectionBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="EmptyStateTitleTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,10,0,0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="EmptyStateBodyTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Foreground" Value="{StaticResource FgSectionBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <!-- Shell chip text styles -->
+    <Style x:Key="ShellTelemetryLabelStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgDisabledBrush}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ShellTelemetryValueStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Button Styles                                                -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="PrimaryButtonStyle" TargetType="{x:Type Button}">
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="{StaticResource ButtonPadding}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Border x:Name="ButtonRoot"
+                            Padding="{TemplateBinding Padding}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{StaticResource CornerRadiusMedium}">
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ButtonRoot" Property="Background" Value="{StaticResource AccentPrimaryHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="ButtonRoot" Property="Background" Value="{StaticResource AccentPrimaryPressedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="ButtonRoot" Property="Opacity" Value="0.55" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SecondaryButtonStyle"
+           BasedOn="{StaticResource PrimaryButtonStyle}"
+           TargetType="{x:Type Button}">
+        <Setter Property="Background" Value="{StaticResource BgButtonDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderDisabledBrush}" />
+    </Style>
+
+    <Style x:Key="IconButtonStyle"
+           BasedOn="{StaticResource SecondaryButtonStyle}"
+           TargetType="{x:Type Button}">
+        <Setter Property="Width" Value="42" />
+        <Setter Property="Height" Value="42" />
+        <Setter Property="Foreground" Value="{StaticResource FgSecondaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource BgComboBoxBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderGroupBoxBrush}" />
+    </Style>
+
+    <!-- Legacy aliases for MainWindow backward compatibility -->
+    <Style x:Key="ShellPrimaryButtonStyle"
+           BasedOn="{StaticResource PrimaryButtonStyle}"
+           TargetType="{x:Type Button}" />
+
+    <Style x:Key="ShellSecondaryButtonStyle"
+           BasedOn="{StaticResource SecondaryButtonStyle}"
+           TargetType="{x:Type Button}" />
+
+    <Style x:Key="ShellIconButtonStyle"
+           BasedOn="{StaticResource IconButtonStyle}"
+           TargetType="{x:Type Button}" />
+
+    <!-- ============================================================ -->
+    <!--  Input Styles                                                 -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="DarkTextBoxStyle" TargetType="{x:Type TextBox}">
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderInputBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource CaretBrush}" />
+        <Setter Property="Padding" Value="{StaticResource InputPadding}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- Alias for backward compatibility -->
+    <Style x:Key="ShellPortTextBoxStyle"
+           BasedOn="{StaticResource DarkTextBoxStyle}"
+           TargetType="{x:Type TextBox}" />
+
+    <!-- ============================================================ -->
+    <!--  Navigation List Item Style                                   -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="NavListItemStyle" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Foreground" Value="{StaticResource FgSecondaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                    <Border x:Name="ItemBorder"
+                            Padding="{StaticResource NavListItemPadding}"
+                            Background="{StaticResource TransparentBrush}"
+                            BorderBrush="{StaticResource TransparentBrush}"
+                            BorderThickness="1"
+                            CornerRadius="{StaticResource CornerRadiusXLarge}">
+                        <ContentPresenter />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource BgCardBrush}" />
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource BorderCardHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource BorderNavSelectedBrush}" />
+                        </Trigger>
+                        <DataTrigger Binding="{Binding DataContext.IsSidebarExpanded, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Value="False">
+                            <Setter TargetName="ItemBorder" Property="Width" Value="44" />
+                            <Setter TargetName="ItemBorder" Property="Height" Value="44" />
+                            <Setter TargetName="ItemBorder" Property="Padding" Value="0" />
+                            <Setter TargetName="ItemBorder" Property="HorizontalAlignment" Value="Center" />
+                        </DataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Alias for backward compatibility -->
+    <Style x:Key="ShellNavigationItemStyle"
+           BasedOn="{StaticResource NavListItemStyle}"
+           TargetType="{x:Type ListBoxItem}" />
+
+    <!-- ============================================================ -->
+    <!--  ContentControl Styles (Metric Values)                        -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="MetricValueContentStyle" TargetType="{x:Type ContentControl}">
+        <Setter Property="Margin" Value="0,6,0,0" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Tag" Value="等待数据" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContentControl}">
+                    <Grid>
+                        <TextBlock x:Name="ValueText"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
+                                   Text="{TemplateBinding Content}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{TemplateBinding Content}" />
+                        <TextBlock x:Name="EmptyText"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"
+                                   Foreground="{StaticResource FgDisabledBrush}"
+                                   Text="{TemplateBinding Tag}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{TemplateBinding Tag}"
+                                   Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Content" Value="-">
+                            <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="Content" Value="">
+                            <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="EmptyText" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DamageValueContentStyle"
+           BasedOn="{StaticResource MetricValueContentStyle}"
+           TargetType="{x:Type ContentControl}">
+        <Setter Property="Margin" Value="0,6,0,0" />
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Tag" Value="等待数据" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContentControl}">
+                    <Grid>
+                        <TextBlock x:Name="ValueText"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"
+                                   Foreground="{StaticResource FgPrimaryBrush}"
+                                   Text="{TemplateBinding Content}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{TemplateBinding ToolTip}" />
+                        <TextBlock x:Name="MissingPacketText"
+                                   FontSize="{TemplateBinding FontSize}"
+                                   FontWeight="{TemplateBinding FontWeight}"
+                                   Foreground="{StaticResource FgDisabledBrush}"
+                                   Text="{TemplateBinding Tag}"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{TemplateBinding ToolTip}"
+                                   Visibility="Collapsed" />
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Content" Value="-">
+                            <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="Content" Value="">
+                            <Setter TargetName="ValueText" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="MissingPacketText" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="HeroValueContentStyle"
+           BasedOn="{StaticResource MetricValueContentStyle}"
+           TargetType="{x:Type ContentControl}">
+        <Setter Property="FontSize" Value="20" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Dark ComboBox Style                                          -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="DarkComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
+        <Setter Property="MinHeight" Value="30" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBoxItem}">
+                    <Border x:Name="ItemChrome"
+                            Padding="{TemplateBinding Padding}"
+                            CornerRadius="{StaticResource CornerRadiusSmall}"
+                            Background="{TemplateBinding Background}">
+                        <ContentPresenter VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource BgComboItemHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource BgComboItemSelectedBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource FgDisabledAltBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="DarkComboBoxStyle" TargetType="{x:Type ComboBox}">
+        <Setter Property="Width" Value="224" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="Margin" Value="0,0,10,10" />
+        <Setter Property="Padding" Value="10,0" />
+        <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderComboBoxBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="MaxDropDownHeight" Value="240" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ComboBox}">
+                    <Grid x:Name="ComboRoot"
+                          SnapsToDevicePixels="True"
+                          TextElement.Foreground="{TemplateBinding Foreground}">
+                        <ToggleButton x:Name="ComboToggle"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      ClickMode="Press"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                    <Border x:Name="ComboChrome"
+                                            CornerRadius="{StaticResource CornerRadiusMedium}"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="30" />
+                                            </Grid.ColumnDefinitions>
+                                            <Path x:Name="ComboArrow"
+                                                  Grid.Column="1"
+                                                  Width="8"
+                                                  Height="5"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  Data="M 0 0 L 4 5 L 8 0 Z"
+                                                  Fill="{StaticResource FgMetricLabelBrush}" />
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="ComboChrome" Property="Background" Value="{StaticResource BgMetricTileBrush}" />
+                                            <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{StaticResource BorderComboBoxHoverBrush}" />
+                                            <Setter TargetName="ComboArrow" Property="Fill" Value="{StaticResource CaretBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="ComboChrome" Property="Background" Value="{StaticResource BgInputFocusBrush}" />
+                                            <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{StaticResource BorderComboBoxActiveBrush}" />
+                                            <Setter TargetName="ComboArrow" Property="Fill" Value="{StaticResource AccentPrimaryFocusBrush}" />
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="ComboChrome" Property="Background" Value="{StaticResource BgButtonDisabledBrush}" />
+                                            <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{StaticResource BorderComboBoxDisabledBrush}" />
+                                            <Setter TargetName="ComboArrow" Property="Fill" Value="{StaticResource FgMutedBrush}" />
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <TextBlock x:Name="ContentSite"
+                                   Margin="10,0,34,0"
+                                   HorizontalAlignment="Left"
+                                   VerticalAlignment="Center"
+                                   Foreground="{TemplateBinding Foreground}"
+                                   IsHitTestVisible="False"
+                                   Text="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <Popup x:Name="PART_Popup"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsOpen="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                               Placement="Bottom"
+                               PopupAnimation="Slide">
+                            <Border MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                    Padding="4"
+                                    Background="{StaticResource ComboBoxDropdownGradientBrush}"
+                                    BorderBrush="{StaticResource BorderCardBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="{StaticResource CornerRadiusMedium}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel IsItemsHost="True" />
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource FgDisabledAltBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Section Header Grid Style                                   -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="SectionHeaderStyle" TargetType="{x:Type Grid}">
+        <Setter Property="Margin" Value="0,0,0,14" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  MetricUnit Text Style                                       -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="MetricUnitTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="Margin" Value="0,2,0,0" />
+        <Setter Property="Foreground" Value="{StaticResource FgSectionBrush}" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- ============================================================ -->
+    <!--  Table Cell Text Style                                        -->
+    <!-- ============================================================ -->
+
+    <Style x:Key="TableCellTextStyle" TargetType="{x:Type TextBlock}">
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{StaticResource FgSecondaryBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+</ResourceDictionary>

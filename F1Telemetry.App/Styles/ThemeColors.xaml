@@ -1,0 +1,142 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- === Background Layers === -->
+    <SolidColorBrush x:Key="BgDeepBrush" Color="#08111F" />
+    <SolidColorBrush x:Key="BgPanelBrush" Color="#0F1B2E" />
+    <SolidColorBrush x:Key="BgCardBrush" Color="#132743" />
+    <SolidColorBrush x:Key="BgCardInnerBrush" Color="#111F35" />
+    <SolidColorBrush x:Key="BgMetricTileBrush" Color="#10233A" />
+    <SolidColorBrush x:Key="BgInputBrush" Color="#0B1728" />
+    <SolidColorBrush x:Key="BgInputFocusBrush" Color="#102A4B" />
+    <SolidColorBrush x:Key="BgListItemBrush" Color="#0F2036" />
+    <SolidColorBrush x:Key="BgListItemHoverBrush" Color="#123050" />
+    <SolidColorBrush x:Key="BgListItemSelectedBrush" Color="#0F3A68" />
+    <SolidColorBrush x:Key="BgButtonDisabledBrush" Color="#14243A" />
+    <SolidColorBrush x:Key="BgPillBrush" Color="#172B47" />
+    <SolidColorBrush x:Key="BgActionDisabledBrush" Color="#21405F" />
+    <SolidColorBrush x:Key="BgComboBoxBrush" Color="#10243C" />
+    <SolidColorBrush x:Key="BgComboItemHoverBrush" Color="#17365C" />
+    <SolidColorBrush x:Key="BgComboItemSelectedBrush" Color="#1C4D82" />
+    <SolidColorBrush x:Key="BgTableHeaderBrush" Color="#13243B" />
+    <SolidColorBrush x:Key="BgInlineBadgeBrush" Color="#103760" />
+    <SolidColorBrush x:Key="BgProgressTrackBrush" Color="#0A1626" />
+    <SolidColorBrush x:Key="BgInfoCardBrush" Color="#0B2431" />
+    <SolidColorBrush x:Key="BgLoadingBadgeBrush" Color="#19365A" />
+    <SolidColorBrush x:Key="TransparentBrush" Color="Transparent" />
+
+    <!-- === Foreground / Text Layers === -->
+    <SolidColorBrush x:Key="FgPrimaryBrush" Color="#F8FAFC" />
+    <SolidColorBrush x:Key="FgSecondaryBrush" Color="#D7E4F3" />
+    <SolidColorBrush x:Key="FgLabelBrush" Color="#7FA5D8" />
+    <SolidColorBrush x:Key="FgSectionBrush" Color="#9AB0C9" />
+    <SolidColorBrush x:Key="FgMutedBrush" Color="#6F86A3" />
+    <SolidColorBrush x:Key="FgDisabledBrush" Color="#B7C9E2" />
+    <SolidColorBrush x:Key="FgAccentBrush" Color="#36A3FF" />
+    <SolidColorBrush x:Key="FgOnAccentBrush" Color="#0F172A" />
+    <SolidColorBrush x:Key="FgMetricLabelBrush" Color="#8CB5E5" />
+    <SolidColorBrush x:Key="FgBodyBrush" Color="#C9D8EA" />
+    <SolidColorBrush x:Key="FgTableIndexBrush" Color="#C7D9F0" />
+    <SolidColorBrush x:Key="FgDisabledAltBrush" Color="#7F95AE" />
+    <SolidColorBrush x:Key="FgInfoBrush" Color="#7DD3FC" />
+
+    <!-- === Accent / Action Colors === -->
+    <SolidColorBrush x:Key="AccentPrimaryBrush" Color="#1D73F8" />
+    <SolidColorBrush x:Key="AccentPrimaryHoverBrush" Color="#2B84FF" />
+    <SolidColorBrush x:Key="AccentPrimaryPressedBrush" Color="#1557C8" />
+    <SolidColorBrush x:Key="AccentPrimaryBorderBrush" Color="#3B8CFF" />
+    <SolidColorBrush x:Key="AccentPrimaryHoverBorderBrush" Color="#6BB6FF" />
+    <SolidColorBrush x:Key="AccentPrimaryFocusBrush" Color="#9BD3FF" />
+
+    <!-- === Border Layers === -->
+    <SolidColorBrush x:Key="BorderCardBrush" Color="#213B5C" />
+    <SolidColorBrush x:Key="BorderInputBrush" Color="#1D3A5C" />
+    <SolidColorBrush x:Key="BorderInputFocusBrush" Color="#1C6EDC" />
+    <SolidColorBrush x:Key="BorderDisabledBrush" Color="#294766" />
+    <SolidColorBrush x:Key="BorderGroupBoxBrush" Color="#203E61" />
+    <SolidColorBrush x:Key="BorderPanelBrush" Color="#1A3554" />
+    <SolidColorBrush x:Key="BorderCardHoverBrush" Color="#1D3558" />
+    <SolidColorBrush x:Key="BorderListItemHoverBrush" Color="#2B5C91" />
+    <SolidColorBrush x:Key="BorderListItemSelectedBrush" Color="#3B82F6" />
+    <SolidColorBrush x:Key="BorderNavSelectedBrush" Color="#60A5FA" />
+    <SolidColorBrush x:Key="BorderMetricTileBrush" Color="#223D5D" />
+    <SolidColorBrush x:Key="BorderMetricTileFocusBrush" Color="#24476E" />
+    <SolidColorBrush x:Key="BorderIconBadgeBrush" Color="#1C6EDC" />
+    <SolidColorBrush x:Key="BorderIconBadgeAltBrush" Color="#375373" />
+    <SolidColorBrush x:Key="BorderPillBrush" Color="#2A4668" />
+    <SolidColorBrush x:Key="BorderSelectionBrush" Color="#254568" />
+    <SolidColorBrush x:Key="BorderTableHeaderBrush" Color="#213A5F" />
+    <SolidColorBrush x:Key="BorderActionDisabledBrush" Color="#2B4B6B" />
+    <SolidColorBrush x:Key="BorderSecondaryActionBrush" Color="#315C86" />
+    <SolidColorBrush x:Key="BorderEmptyIconBrush" Color="#2A4F77" />
+    <SolidColorBrush x:Key="BorderComboBoxBrush" Color="#244263" />
+    <SolidColorBrush x:Key="BorderComboBoxHoverBrush" Color="#3A79B8" />
+    <SolidColorBrush x:Key="BorderComboBoxActiveBrush" Color="#4AA3FF" />
+    <SolidColorBrush x:Key="BorderComboBoxDisabledBrush" Color="#243B56" />
+
+    <!-- === Semantic Status: Success / Warning / Danger === -->
+    <SolidColorBrush x:Key="StatusSuccessBrush" Color="#2DE274" />
+    <SolidColorBrush x:Key="StatusWarningBrush" Color="#F4C430" />
+    <SolidColorBrush x:Key="StatusDangerBrush" Color="#F87171" />
+
+    <!-- === Semantic Status: Problem Card (Purple) === -->
+    <SolidColorBrush x:Key="StatusProblemBgBrush" Color="#171532" />
+    <SolidColorBrush x:Key="StatusProblemBorderBrush" Color="#4C3B7C" />
+
+    <!-- === Semantic Status: Positive / Confidence Card (Green) === -->
+    <SolidColorBrush x:Key="StatusPositiveBgBrush" Color="#0D2A24" />
+    <SolidColorBrush x:Key="StatusPositiveBorderBrush" Color="#2E7D5B" />
+    <SolidColorBrush x:Key="StatusPositiveFgBrush" Color="#7DDFA4" />
+
+    <!-- === Semantic Status: Warning / Data Quality Card (Amber) === -->
+    <SolidColorBrush x:Key="StatusWarningBgBrush" Color="#2A2410" />
+    <SolidColorBrush x:Key="StatusWarningBorderBrush" Color="#826B25" />
+    <SolidColorBrush x:Key="StatusWarningFgBrush" Color="#F6C453" />
+
+    <!-- === Semantic Status: Info / Driving Action Card (Cyan) === -->
+    <SolidColorBrush x:Key="StatusInfoBorderBrush" Color="#1D5C78" />
+
+    <!-- === Chart / Track Map Colors === -->
+    <SolidColorBrush x:Key="ChartReferenceBrush" Color="#64748B" />
+    <SolidColorBrush x:Key="ChartSpeedBrush" Color="#38BDF8" />
+    <SolidColorBrush x:Key="ChartBrakeBrush" Color="#F87171" />
+    <SolidColorBrush x:Key="ChartThrottleBrush" Color="#34D399" />
+    <SolidColorBrush x:Key="TrackMapOutlineBrush" Color="#6B7F99" />
+    <SolidColorBrush x:Key="TrackMapBackgroundBrush" Color="#0B1628" />
+    <SolidColorBrush x:Key="TrackMapMarkerBrush" Color="#FBBF24" />
+
+    <!-- === ScrollBar Colors (replacing ScrollBarStyles.xaml local definitions) === -->
+    <SolidColorBrush x:Key="ScrollBarTrackBrush" Color="#10233A" />
+    <SolidColorBrush x:Key="ScrollBarTrackBorderBrush" Color="#1D3A5C" />
+    <SolidColorBrush x:Key="ScrollBarThumbBrush" Color="#4F7FA6" />
+    <SolidColorBrush x:Key="ScrollBarThumbHoverBrush" Color="#66A7D8" />
+    <SolidColorBrush x:Key="ScrollBarThumbPressedBrush" Color="#7EC7F2" />
+    <SolidColorBrush x:Key="ScrollBarThumbBorderBrush" Color="#8FD3F7" />
+
+    <!-- === Caret / Input Indicator === -->
+    <SolidColorBrush x:Key="CaretBrush" Color="#60A5FA" />
+
+    <!-- === Toast / Overlay (Light Theme Elements) === -->
+    <SolidColorBrush x:Key="ToastBackgroundBrush" Color="#E6EEF9" />
+    <SolidColorBrush x:Key="ToastBorderBrush" Color="#BDD0EA" />
+    <SolidColorBrush x:Key="ToastForegroundBrush" Color="#132743" />
+
+    <!-- === Gradients (reusable brush objects) === -->
+    <LinearGradientBrush x:Key="GlassCardGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#132743" Offset="0" />
+        <GradientStop Color="#0E1D31" Offset="0.58" />
+        <GradientStop Color="#0A1728" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="StatusChipGradientBrush" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#152A45" Offset="0" />
+        <GradientStop Color="#0F1E33" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="ComboBoxDropdownGradientBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#132743" Offset="0" />
+        <GradientStop Color="#0E1D31" Offset="0.5" />
+        <GradientStop Color="#0A1728" Offset="1" />
+    </LinearGradientBrush>
+
+</ResourceDictionary>

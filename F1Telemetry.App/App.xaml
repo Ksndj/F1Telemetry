@@ -5,6 +5,10 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/ThemeColors.xaml" />
+                <ResourceDictionary Source="Styles/Spacing.xaml" />
+                <ResourceDictionary Source="Styles/SharedStyles.xaml" />
+                <ResourceDictionary Source="Styles/ShellStyles.xaml" />
                 <ResourceDictionary Source="Styles/ScrollBarStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

@@ -1,0 +1,201 @@
+<UserControl x:Class="F1Telemetry.App.Views.Shell.TopStatusBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border x:Name="TopStatusBarRoot"
+            Margin="16,16,20,16"
+            Padding="10"
+            CornerRadius="12"
+            Background="{StaticResource BgDeepBrush}"
+            BorderBrush="{StaticResource BorderInputBrush}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="6" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <WrapPanel x:Name="TopStatusWrapPanel">
+                <Border x:Name="ConnectionStatusChip"
+                        MinWidth="168"
+                        MaxWidth="220"
+                        Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE71B;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="连接状态" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding ConnectionStateText}"
+                                       ToolTip="{Binding ConnectionStateText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="TrackStatusChip"
+                        MinWidth="168"
+                        MaxWidth="220"
+                        Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE707;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛道" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding TrackText}"
+                                       ToolTip="{Binding TrackText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="SessionTypeStatusChip"
+                        MinWidth="168"
+                        MaxWidth="220"
+                        Style="{StaticResource ShellTelemetryCardStyle}"
+                        ToolTip="{Binding SessionTypeTooltipText}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xECA7;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="赛制" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding SessionTypeText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="LapStatusChip"
+                        MinWidth="168"
+                        MaxWidth="220"
+                        Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE7C1;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="比赛进度" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding LapText}"
+                                       ToolTip="{Binding LapText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="WeatherStatusChip"
+                        MinWidth="150"
+                        MaxWidth="230"
+                        Style="{StaticResource ShellTelemetryCardStyle}"
+                        ToolTip="{Binding WeatherTooltipText}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE753;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="天气" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       TextTrimming="CharacterEllipsis"
+                                       Text="{Binding WeatherText}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="UdpPpsStatusChip"
+                        MinWidth="128"
+                        MaxWidth="170"
+                        Style="{StaticResource ShellTelemetryCardStyle}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="10" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock Style="{StaticResource ShellTelemetryIconStyle}" Text="&#xE9D9;" />
+                        </Border>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Style="{StaticResource ShellTelemetryLabelStyle}" Text="UDP PPS" />
+                            <TextBlock Style="{StaticResource ShellTelemetryValueStyle}"
+                                       Text="{Binding PacketsPerSecond}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Border x:Name="UdpPortStatusChip"
+                        MinWidth="356"
+                        Style="{StaticResource StatusChipStyle}">
+                    <Grid x:Name="TopPortControlCard"
+                          VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="104" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="96" />
+                            <ColumnDefinition Width="8" />
+                            <ColumnDefinition Width="96" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock VerticalAlignment="Center"
+                                   Style="{StaticResource ShellTelemetryLabelStyle}"
+                                   Text="当前端口" />
+                        <TextBox Grid.Column="2"
+                                 Width="104"
+                                 Height="30"
+                                 VerticalAlignment="Center"
+                                 Style="{StaticResource ShellPortTextBoxStyle}"
+                                 Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button Grid.Column="4"
+                                Width="96"
+                                Height="30"
+                                VerticalAlignment="Center"
+                                Command="{Binding StartListeningCommand}"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Content="开始监听" />
+                        <Button Grid.Column="6"
+                                Width="96"
+                                Height="30"
+                                VerticalAlignment="Center"
+                                Command="{Binding StopListeningCommand}"
+                                Style="{StaticResource SecondaryButtonStyle}"
+                                Content="停止监听" />
+                    </Grid>
+                </Border>
+            </WrapPanel>
+
+            <TextBlock Grid.Row="2"
+                       Margin="8,0,0,0"
+                       Foreground="{StaticResource FgMutedBrush}"
+                       Text="{Binding StatusMessage}"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding StatusMessage}"
+                       TextWrapping="Wrap" />
+
+            <TextBlock x:Name="ShellTitleText"
+                       Width="0"
+                       Height="0"
+                       Opacity="0"
+                       Text="{Binding AppTitleText}" />
+        </Grid>
+    </Border>
+</UserControl>
