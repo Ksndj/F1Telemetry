@@ -520,7 +520,14 @@
                             Padding="{TemplateBinding Padding}"
                             CornerRadius="{StaticResource CornerRadiusSmall}"
                             Background="{TemplateBinding Background}">
-                        <ContentPresenter VerticalAlignment="Center" />
+                        <ContentPresenter VerticalAlignment="Center">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
@@ -605,14 +612,22 @@
                             </ToggleButton.Template>
                         </ToggleButton>
 
-                        <TextBlock x:Name="ContentSite"
-                                   Margin="10,0,34,0"
-                                   HorizontalAlignment="Left"
-                                   VerticalAlignment="Center"
-                                   Foreground="{TemplateBinding Foreground}"
-                                   IsHitTestVisible="False"
-                                   Text="{Binding SelectedItem.DisplayName, RelativeSource={RelativeSource TemplatedParent}}"
-                                   TextTrimming="CharacterEllipsis" />
+                        <ContentPresenter x:Name="ContentSite"
+                                          Margin="10,0,34,0"
+                                          HorizontalAlignment="Left"
+                                          VerticalAlignment="Center"
+                                          Content="{TemplateBinding SelectionBoxItem}"
+                                          ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
+                                          ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          IsHitTestVisible="False"
+                                          TextElement.Foreground="{TemplateBinding Foreground}">
+                            <ContentPresenter.Resources>
+                                <Style TargetType="{x:Type TextBlock}">
+                                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                                    <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+                                </Style>
+                            </ContentPresenter.Resources>
+                        </ContentPresenter>
 
                         <Popup x:Name="PART_Popup"
                                AllowsTransparency="True"
@@ -621,6 +636,7 @@
                                Placement="Bottom"
                                PopupAnimation="Slide">
                             <Border MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxWidth="{TemplateBinding ActualWidth}"
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                     Padding="4"
                                     Background="{StaticResource ComboBoxDropdownGradientBrush}"

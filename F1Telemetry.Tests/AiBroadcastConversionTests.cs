@@ -140,7 +140,8 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("x:Key=\"DarkComboBoxStyle\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("ItemContainerStyle\" Value=\"{StaticResource DarkComboBoxItemStyle}\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("PART_Popup", sharedStylesXaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedItem.DisplayName", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionBoxItem", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem.DisplayName", sharedStylesXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Value=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Foreground=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding SelectedPostRaceAiCompletionMode.Description}\"", xaml, StringComparison.Ordinal);
