@@ -8,4 +8,4 @@ script = ""
 [[actions]]
 name = "运行"
 icon = "run"
-command = "dotnet run --project .\\F1Telemetry.App\\F1Telemetry.App.csproj --no-restore -p:UseSharedCompilation=false"
+command = "dotnet run --project .\\F1Telemetry.App\\F1Telemetry.App.csproj -p:UseSharedCompilation=false"
