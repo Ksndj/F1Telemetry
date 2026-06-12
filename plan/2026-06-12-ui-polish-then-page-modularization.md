@@ -1,67 +1,67 @@
-# F1Telemetry UI Polish Then Page Modularization Implementation Plan
+# F1Telemetry 逐页 UI 美化与页面模块化计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` for parallel page audits when the implementation scope is split across multiple pages, or `superpowers:executing-plans` for a single-page milestone. Track progress with the checkbox items below and keep each milestone independently buildable.
+> **给后续执行代理：** 执行本计划时，跨多个页面的并行审计建议使用 `superpowers:subagent-driven-development`；单页面里程碑执行建议使用 `superpowers:executing-plans`。所有步骤使用复选框跟踪，每个里程碑必须保持可构建、可回退、可独立验证。
 
-**Goal:** First stabilize and polish every page UI in small page-level milestones, then start the page-independent module plan only after UI behavior is stable and tested.
+**目标：** 先在稳定化边界内逐页完成 UI 美化，等所有页面交互稳定并通过验证后，再开始页面独立模块化计划。
 
-**Architecture:** Keep the current WPF + MVVM structure. Page polish stays in `F1Telemetry.App/Views`, shared keyed resources stay in `F1Telemetry.App/Styles`, and UI behavior helpers stay in `F1Telemetry.App/Behaviors` only when XAML alone cannot express the behavior safely. Page modularization later extracts page ViewModels and local resources gradually without moving business logic across layers.
+**架构原则：** 保持当前 WPF + MVVM 结构。UI 美化优先限制在 `F1Telemetry.App/Views`；共享的显式样式放在 `F1Telemetry.App/Styles`；只有 XAML 无法安全表达时，才在 `F1Telemetry.App/Behaviors` 增加 UI 行为。页面模块化阶段再逐步抽离页面 ViewModel 和页面局部资源，不跨层移动业务逻辑。
 
-**Tech Stack:** WPF/XAML, MVVM, .NET, xUnit UI/XAML static tests, existing `F1Telemetry.App`, `F1Telemetry.Core`, `F1Telemetry.Analytics`, `F1Telemetry.Storage`, `F1Telemetry.AI`, `F1Telemetry.TTS`, and `F1Telemetry.Udp` projects.
+**技术栈：** WPF/XAML、MVVM、.NET、xUnit UI/XAML 静态测试，以及现有 `F1Telemetry.App`、`F1Telemetry.Core`、`F1Telemetry.Analytics`、`F1Telemetry.Storage`、`F1Telemetry.AI`、`F1Telemetry.TTS`、`F1Telemetry.Udp` 项目。
 
-## Scope Boundaries
+## 范围边界
 
-- [ ] Do not continue the previous global UI rewrite.
-- [ ] Do not add broad implicit styles for all `Button`, `ComboBox`, `TextBox`, `CheckBox`, `Slider`, or `DataGrid`.
-- [ ] Do not change UDP parser, database schema, AI/TTS/RaceAssistant business logic, or ViewModel data flow during UI polish.
-- [ ] Do not use `Viewbox` around whole pages.
-- [ ] Do not increase window `MinWidth` as a workaround for layout problems.
-- [ ] Keep the top UDP port group as one non-wrapping unit.
-- [ ] Keep read-only fields `OneWay` or rendered as `TextBlock`.
-- [ ] Use one page-level milestone per commit so regressions can be reverted narrowly.
+- [ ] 不继续之前的大范围全局 UI 重构。
+- [ ] 不为全部 `Button`、`ComboBox`、`TextBox`、`CheckBox`、`Slider`、`DataGrid` 增加粗暴隐式样式。
+- [ ] UI 美化阶段不改 UDP parser、数据库 schema、AI/TTS/RaceAssistant 业务逻辑或 ViewModel 数据流。
+- [ ] 不使用 `Viewbox` 包住整页。
+- [ ] 不通过拉大窗口 `MinWidth` 来规避布局问题。
+- [ ] 顶部 UDP 端口组保持整体不换行。
+- [ ] 只读字段保持 `OneWay` 或改用 `TextBlock`。
+- [ ] 每个页面一个小里程碑、一个提交，方便窄范围回退。
 
-## Current Page Map
+## 当前页面地图
 
-- `F1Telemetry.App/Views/OverviewView.xaml` - real-time overview.
-- `F1Telemetry.App/Views/ChartsView.xaml` - analysis broadcast.
-- `F1Telemetry.App/Views/LapHistoryView.xaml` - lap history.
-- `F1Telemetry.App/Views/PostRaceReviewView.xaml` - post-race review.
-- `F1Telemetry.App/Views/SessionComparisonView.xaml` - session comparison.
-- `F1Telemetry.App/Views/CornerAnalysisView.xaml` - corner analysis.
-- `F1Telemetry.App/Views/OpponentsView.xaml` - opponents.
-- `F1Telemetry.App/Views/LogsView.xaml` - event logs.
-- `F1Telemetry.App/Views/AiTtsView.xaml` - AI/TTS.
-- `F1Telemetry.App/Views/SettingsView.xaml` - settings.
-- `F1Telemetry.App/Views/Shell/NavigationTemplateSelector.cs` - page routing.
-- `F1Telemetry.App/Styles/SharedStyles.xaml`, `ThemeColors.xaml`, `ScrollBarStyles.xaml`, `ShellStyles.xaml` - shared UI resources.
+- `F1Telemetry.App/Views/OverviewView.xaml` - 实时概览。
+- `F1Telemetry.App/Views/ChartsView.xaml` - 分析播报。
+- `F1Telemetry.App/Views/LapHistoryView.xaml` - 单圈历史。
+- `F1Telemetry.App/Views/PostRaceReviewView.xaml` - 赛后复盘。
+- `F1Telemetry.App/Views/SessionComparisonView.xaml` - 多会话对比。
+- `F1Telemetry.App/Views/CornerAnalysisView.xaml` - 弯角分析。
+- `F1Telemetry.App/Views/OpponentsView.xaml` - 对手。
+- `F1Telemetry.App/Views/LogsView.xaml` - 事件日志。
+- `F1Telemetry.App/Views/AiTtsView.xaml` - AI / TTS。
+- `F1Telemetry.App/Views/SettingsView.xaml` - 设置。
+- `F1Telemetry.App/Views/Shell/NavigationTemplateSelector.cs` - 页面路由。
+- `F1Telemetry.App/Styles/SharedStyles.xaml`、`ThemeColors.xaml`、`ScrollBarStyles.xaml`、`ShellStyles.xaml` - 共享 UI 资源。
 
-## Phase 0 - Baseline Audit
+## 阶段 0 - 基线审计
 
-- [ ] Capture current branch, HEAD, and dirty files.
-- [ ] List all page XAML files that still show raw object names, default white controls, long untrimmed paths, or fragile scroll/dropdown behavior.
-- [ ] Identify existing tests that guard each page before editing.
-- [ ] Add missing static UI/XAML tests before changing a page when the bug can be expressed as a text/template contract.
-- [ ] Save noisy command output under `.logs/` and report only summaries.
+- [ ] 记录当前分支、HEAD 和工作区未提交文件。
+- [ ] 列出所有仍存在 raw 对象名、默认白色控件、长路径不截断、滚动/下拉交互脆弱的页面 XAML。
+- [ ] 开始修改前先确认每个页面已有的测试覆盖。
+- [ ] 如果问题能用静态 XAML/UI contract 表达，先补窄范围测试，再改页面。
+- [ ] 大输出写入 `.logs/`，最终只汇报摘要。
 
-Baseline verification commands:
+基线验证命令：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "MainWindow|ComboBox|Settings|AiBroadcast|PostRaceReview|SessionComparison|LapHistory|CornerAnalysis|Logs|Opponents" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 dotnet build F1Telemetry.sln --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-## Phase 1 - Gradual Page UI Polish
+## 阶段 1 - 逐页 UI 美化
 
-Work page by page. Each page milestone must finish tests, build, commit, and push before the next page begins.
+逐页推进。每个页面里程碑必须完成测试、构建、提交、推送后，再进入下一个页面。
 
-### 1. Analysis Broadcast
+### 1. 分析播报
 
-- [ ] Polish `F1Telemetry.App/Views/ChartsView.xaml` operation area controls.
-- [ ] Ensure mode `ComboBox` displays user-facing text instead of raw enum or type names.
-- [ ] Prevent dropdown wheel events from scrolling the page while the pointer is inside the dropdown.
-- [ ] Keep AI-disabled generate button behavior and report clearing behavior covered by tests.
-- [ ] Verify chart panes still show empty states when data is insufficient.
+- [ ] 美化 `F1Telemetry.App/Views/ChartsView.xaml` 的操作区控件。
+- [ ] 确保模式 `ComboBox` 显示用户可读文本，而不是 raw enum 或类型名。
+- [ ] 鼠标位于下拉框内部时，滚轮只滚动下拉列表，不带动主页滚动。
+- [ ] 保持 AI 关闭时生成按钮禁用、报告详情清空等行为有测试覆盖。
+- [ ] 验证数据不足时图表区域仍显示空状态。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "AiAnalysis|Dashboard|ComboBox|Charts" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
@@ -69,207 +69,207 @@ dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "AiAnalysis|Dash
 
 ### 2. AI / TTS
 
-- [ ] Polish `F1Telemetry.App/Views/AiTtsView.xaml` only after Analysis Broadcast is stable.
-- [ ] Keep voice, microphone, talk mode, tire inventory, and logs usable in small windows.
-- [ ] Keep `ComboBox` display contracts: no `ViewModel.ToString()` type names.
-- [ ] Keep dropdown list scrolling usable for long voice/device lists.
-- [ ] Keep `+/-` stepper buttons readable and centered.
+- [ ] 在分析播报稳定后，再美化 `F1Telemetry.App/Views/AiTtsView.xaml`。
+- [ ] 保持语音、麦克风、说话模式、轮胎库存、日志区在小窗口下可用。
+- [ ] 保持所有 `ComboBox` 显示用户可读文本，不显示 `ViewModel.ToString()` 类型名。
+- [ ] 长语音/设备列表必须能在下拉框内部滚动和选择。
+- [ ] `+/-` 步进按钮保持居中、可读、不遮挡。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "AiTts|ComboBox|Settings" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 3. Settings
+### 3. 设置
 
-- [ ] Polish `F1Telemetry.App/Views/SettingsView.xaml` in small sections: logs, UDP raw log, voice AI, updates.
-- [ ] Truncate long paths with tooltip full text.
-- [ ] Keep read-only fields `OneWay` or `TextBlock`.
-- [ ] Keep microphone and talk mode dropdowns scrollable and selectable.
-- [ ] Keep editable settings `TwoWay` with existing `UpdateSourceTrigger`.
+- [ ] 分区美化 `F1Telemetry.App/Views/SettingsView.xaml`：App 日志、UDP Raw Log、方向盘语音 AI、版本更新。
+- [ ] 长路径必须截断显示，Tooltip 显示完整路径。
+- [ ] 只读字段保持 `OneWay` 或 `TextBlock`。
+- [ ] 麦克风和说话模式下拉框必须能滚动、拖动滚动条和选择。
+- [ ] 可编辑设置保留现有 `TwoWay` 和 `UpdateSourceTrigger`。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "Settings|ComboBox|MainWindow" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 4. Lap History
+### 4. 单圈历史
 
-- [ ] Polish `F1Telemetry.App/Views/LapHistoryView.xaml` after core dropdown behavior is stable.
-- [ ] Keep session and lap bindings unchanged.
-- [ ] Ensure page-level vertical scrolling and table-level horizontal scrolling are both accessible.
-- [ ] Keep delete, refresh, and pagination buttons explicit page styles instead of broad global styles.
+- [ ] 在核心下拉框行为稳定后，美化 `F1Telemetry.App/Views/LapHistoryView.xaml`。
+- [ ] 保持 session/lap 关键绑定不变。
+- [ ] 页面整体支持纵向滚动，表格区域支持内部横向滚动。
+- [ ] 删除、刷新、分页按钮使用页面显式样式，不引入全局隐式样式。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "LapHistory|ComboBox" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 5. Post-Race Review
+### 5. 赛后复盘
 
-- [ ] Polish `F1Telemetry.App/Views/PostRaceReviewView.xaml`.
-- [ ] Preserve chart bindings and empty chart states.
-- [ ] Verify chart axes do not show unsafe negative ranges when data is sparse.
-- [ ] Keep export and refresh controls reachable in small windows.
+- [ ] 美化 `F1Telemetry.App/Views/PostRaceReviewView.xaml`。
+- [ ] 保持图表绑定和空状态不变。
+- [ ] 验证稀疏数据下图表坐标不会出现不安全的负范围。
+- [ ] 导出和刷新控件在小窗口中仍可访问。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "PostRaceReview|Chart|ComboBox" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 6. Session Comparison
+### 6. 多会话对比
 
-- [ ] Polish `F1Telemetry.App/Views/SessionComparisonView.xaml`.
-- [ ] Ensure track filter displays `DisplayName`, not `SessionComparisonTrackFilterViewModel`.
-- [ ] Keep chart bindings unchanged.
-- [ ] Verify chart axes and empty states.
-- [ ] Keep selected sessions readable and removable without layout overlap.
+- [ ] 美化 `F1Telemetry.App/Views/SessionComparisonView.xaml`。
+- [ ] 赛道筛选显示 `DisplayName`，不能显示 `SessionComparisonTrackFilterViewModel`。
+- [ ] 保持图表绑定不变。
+- [ ] 验证图表坐标和空状态。
+- [ ] 已选会话卡片必须可读、可删除、不重叠。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "SessionComparison|ComboBox|Chart" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 7. Corner Analysis
+### 7. 弯角分析
 
-- [ ] Polish `F1Telemetry.App/Views/CornerAnalysisView.xaml` only after shared dropdown behavior is stable.
-- [ ] Keep session, lap, and reference selectors usable with long lists.
-- [ ] Preserve chart and corner analysis bindings.
-- [ ] Verify small-window access with page scrolling.
+- [ ] 在共享下拉框行为稳定后，美化 `F1Telemetry.App/Views/CornerAnalysisView.xaml`。
+- [ ] session、lap、reference 选择器在长列表下仍可用。
+- [ ] 保持图表和弯角分析绑定不变。
+- [ ] 验证小窗口下页面滚动可访问。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "CornerAnalysis|ComboBox" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 8. Opponents
+### 8. 对手
 
-- [ ] Polish `F1Telemetry.App/Views/OpponentsView.xaml`.
-- [ ] Keep empty states user-facing: waiting for opponent data or telemetry limited.
-- [ ] Keep internal codes in tooltips or logs, not primary UI text.
-- [ ] Use card/list polish locally without introducing broad global templates.
+- [ ] 美化 `F1Telemetry.App/Views/OpponentsView.xaml`。
+- [ ] 空状态使用用户可读文案：等待对手数据、对手遥测受限。
+- [ ] 内部编码只放 Tooltip 或日志，不作为正文主显示。
+- [ ] 使用页面局部卡片/列表美化，不引入全局模板。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "Opponents" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 9. Event Logs
+### 9. 事件日志
 
-- [ ] Polish `F1Telemetry.App/Views/LogsView.xaml`.
-- [ ] Keep time, category, and summary visible.
-- [ ] Trim long text and expose the full text through tooltip.
-- [ ] Preserve `LogEntries` binding.
+- [ ] 美化 `F1Telemetry.App/Views/LogsView.xaml`。
+- [ ] 时间、分类、摘要保持可见。
+- [ ] 长文本截断，Tooltip 显示完整内容。
+- [ ] 保持 `LogEntries` 绑定不变。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "LogsView|Logs|ComboBox" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-### 10. Overview Regression Pass
+### 10. 实时概览回归检查
 
-- [ ] Treat `F1Telemetry.App/Views/OverviewView.xaml` as the style baseline, not a rewrite target.
-- [ ] Only fix concrete regressions found during other page work.
-- [ ] Verify top status and UDP port group remain non-wrapping.
+- [ ] `F1Telemetry.App/Views/OverviewView.xaml` 作为风格基准，不作为重写目标。
+- [ ] 只修复其他页面工作中暴露出的明确回归。
+- [ ] 验证顶部状态区和 UDP 端口组仍保持整体不换行。
 
-Recommended tests:
+推荐测试：
 
 ```powershell
 dotnet test F1Telemetry.Tests/F1Telemetry.Tests.csproj --filter "Overview|MainWindow|UdpPort" --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal
 ```
 
-## Page Milestone Checklist
+## 单页面里程碑检查清单
 
-Use this checklist for every page polish commit.
+每个页面 UI 美化提交都按这个清单执行。
 
-- [ ] Inspect the page XAML, ViewModel bindings, and existing tests.
-- [ ] Add or update the narrowest UI/XAML test first when practical.
-- [ ] Make local XAML/style changes only for the current page.
-- [ ] Avoid changing ViewModel data flow.
-- [ ] Check small-window behavior: page scrolls vertically, tables/lists scroll internally when needed.
-- [ ] Check dropdown behavior: opens, scrolls internally, can select, does not show object names.
-- [ ] Check disabled controls remain readable.
-- [ ] Run the page-specific filtered test command.
-- [ ] Run solution build.
-- [ ] Manually verify the page in the app when the change affects runtime interaction.
-- [ ] Commit and push only files from the current milestone.
+- [ ] 先查看页面 XAML、ViewModel 绑定和现有测试。
+- [ ] 能用测试表达的问题，优先补最窄 UI/XAML 测试。
+- [ ] 只对当前页面做局部 XAML/样式改动。
+- [ ] 不改 ViewModel 数据流。
+- [ ] 小窗口检查：页面可纵向滚动，表格/列表必要时可内部滚动。
+- [ ] 下拉框检查：能打开、能内部滚动、能选择、不显示对象名。
+- [ ] 禁用控件检查：禁用状态文字仍可读。
+- [ ] 运行页面对应的过滤测试命令。
+- [ ] 运行解决方案 build。
+- [ ] 涉及运行时交互时，手动打开 App 验证。
+- [ ] 只提交当前里程碑相关文件并推送。
 
-## Shared Style Rules
+## 共享样式规则
 
-- [ ] Keep shared resources keyed and opt-in.
-- [ ] Do not introduce global implicit control templates unless a separate stabilization plan explicitly approves it.
-- [ ] Add a shared keyed style only after at least two pages need the same stable pattern.
-- [ ] Prefer page-local layout fixes over shared template changes.
-- [ ] Keep `ComboBox` item text trimming, tooltip full text, and `MaxDropDownHeight` as shared contracts when safe.
-- [ ] Do not attach page-level scroll listeners that close dropdowns while the pointer or mouse capture is inside the dropdown popup.
+- [ ] 共享资源保持 keyed、显式引用、按需使用。
+- [ ] 除非有单独稳定化计划批准，不新增全局隐式控件模板。
+- [ ] 至少两个页面稳定复用同一模式后，才抽成共享 keyed 样式。
+- [ ] 优先使用页面局部布局修复，不用共享模板掩盖页面问题。
+- [ ] `ComboBox` 的下拉项截断、Tooltip 完整文本、`MaxDropDownHeight` 可以作为稳定后共享 contract。
+- [ ] 不添加会在鼠标位于下拉 Popup 内时关闭下拉框的页面级滚动监听。
 
-## Phase 2 - Readiness Gate Before Modularization
+## 阶段 2 - 模块化前置门槛
 
-Do not start page module extraction until all gate items are true.
+以下条件全部满足后，才能开始页面模块化。
 
-- [ ] Every page listed in Phase 1 has a passing targeted test command.
-- [ ] `dotnet build F1Telemetry.sln --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal` passes.
-- [ ] Manual smoke checks pass for settings, AI/TTS, analysis broadcast, session comparison, corner analysis, lap history, and post-race review.
-- [ ] No known blocking ComboBox regressions remain.
-- [ ] No page requires a large global style/template rewrite to remain usable.
-- [ ] Current UI limitations are documented in a plan or issue.
+- [ ] 阶段 1 列出的所有页面都通过对应 targeted test。
+- [ ] `dotnet build F1Telemetry.sln --no-restore -p:UseSharedCompilation=false -m:1 -v:minimal` 通过。
+- [ ] 设置、AI/TTS、分析播报、多会话对比、弯角分析、单圈历史、赛后复盘通过人工冒烟。
+- [ ] 没有阻塞级 ComboBox 回归。
+- [ ] 没有页面依赖大范围全局样式重写才能可用。
+- [ ] 当前仍存在的 UI 限制已经记录到计划或 issue。
 
-## Phase 3 - Page-Independent Module Plan
+## 阶段 3 - 页面独立模块化计划
 
-Start modularization only after Phase 2 passes. The first modularization goal is reducing change difficulty, not creating many projects.
+只在阶段 2 通过后开始。第一目标是降低改动难度，不是立刻拆成很多项目。
 
-### Module Definition
+### 页面模块定义
 
-A page module should contain:
+一个页面模块应包含：
 
-- The page view XAML and code-behind.
-- A page-specific ViewModel when the page currently depends on a large shared ViewModel surface.
-- Page-local converters, templates, and keyed resources when they are not shared by other pages.
-- Focused tests for that page's bindings and UI contracts.
+- 页面 View XAML 和 code-behind。
+- 当页面当前依赖过大的共享 ViewModel 表面时，增加或抽离页面专属 ViewModel。
+- 只服务该页面的 converter、template、keyed resource。
+- 覆盖该页面绑定和 UI contract 的聚焦测试。
 
-### Recommended Extraction Order
+### 推荐抽离顺序
 
-- [ ] Extract Analysis Broadcast page state from broad dashboard responsibilities into a dedicated page ViewModel while preserving existing public behavior.
-- [ ] Extract AI/TTS page settings and display state into a dedicated page ViewModel or coordinator facade.
-- [ ] Extract Settings page state into a dedicated settings ViewModel where it reduces binding risk.
-- [ ] Extract Lap History page browser state behind a page-level interface or facade if the current surface remains too wide.
-- [ ] Keep Post-Race Review, Session Comparison, and Corner Analysis on their existing specialized ViewModels unless a real duplication or ownership issue appears.
+- [ ] 将分析播报页面状态从过宽的 dashboard 职责中抽出，形成专属页面 ViewModel，同时保持现有公开行为。
+- [ ] 将 AI/TTS 页面设置和显示状态抽成页面 ViewModel 或 coordinator facade。
+- [ ] 在能降低绑定风险时，将设置页状态抽成独立 Settings ViewModel。
+- [ ] 如果单圈历史页面状态表面仍然过宽，再为历史浏览状态增加页面级接口或 facade。
+- [ ] 赛后复盘、多会话对比、弯角分析已有较专门的 ViewModel，除非出现真实重复或职责问题，否则暂不拆。
 
-### Modularization Boundaries
+### 模块化边界
 
-- [ ] Keep business services in their current domain projects.
-- [ ] Keep UDP parsing in `F1Telemetry.Udp`.
-- [ ] Keep storage schema and migration code unchanged unless a separate data task requests it.
-- [ ] Keep AI/TTS/RaceAssistant logic in their existing services.
-- [ ] Keep the app shell responsible only for navigation, global status, and page composition.
-- [ ] Do not create per-page projects until page ViewModels and tests are stable enough to justify that cost.
+- [ ] 业务服务保持在现有领域项目中。
+- [ ] UDP 解析保持在 `F1Telemetry.Udp`。
+- [ ] 数据库 schema 和迁移代码不在该计划内修改。
+- [ ] AI/TTS/RaceAssistant 逻辑保持在现有服务中。
+- [ ] App shell 只负责导航、全局状态和页面组合。
+- [ ] 不急着创建每页一个 csproj；只有当页面 ViewModel 和测试稳定后，再评估是否值得拆项目。
 
-## Expected Benefits And Costs
+## 预期收益与成本
 
-- Page-level UI polish first reduces the chance that module extraction preserves a broken UI state.
-- One page per milestone makes regressions easier to isolate and revert.
-- Dedicated page modules later should reduce change difficulty by shrinking binding surfaces and test scope.
-- Code complexity can increase if modules are created too early, especially if shared state is copied instead of owned clearly.
-- The safest path is to extract ownership only where a page has a repeated, proven maintenance problem.
+- 先逐页 UI 美化，可以避免模块化后固化已有 UI 问题。
+- 每页一个里程碑，回归更容易定位和回退。
+- 后续页面模块化会缩小绑定表面和测试范围，降低单页改动难度。
+- 如果过早拆模块，可能因为共享状态复制、依赖绕路而增加复杂度。
+- 最稳妥路径是：只有当某个页面反复造成维护问题时，才抽离它的明确所有权边界。
 
-## Final Verification Template
+## 最终汇报模板
 
-For each implementation milestone, report:
+每个执行里程碑结束时必须汇报：
 
-- Modified files.
-- Page or module polished.
-- Bindings intentionally preserved.
-- Tests/build results.
-- Manual verification result.
-- Current branch.
-- Commit hash.
-- Push status.
-- Remaining risks or known UI limitations.
+- 修改文件。
+- 本次美化或模块化的页面。
+- 明确保留的关键绑定。
+- 测试/build 结果。
+- 人工验证结果。
+- 当前分支。
+- commit hash。
+- push 状态。
+- 剩余风险或已知 UI 限制。
