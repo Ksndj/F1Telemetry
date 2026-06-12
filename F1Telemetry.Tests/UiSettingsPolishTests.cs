@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
 using F1Telemetry.App.AttachedProperties;
+using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Views;
 using F1Telemetry.TTS.Services;
 using Xunit;
@@ -245,6 +246,55 @@ public sealed class UiSettingsPolishTests
                 Assert.True(comboBox.IsDropDownOpen);
                 comboBox.SelectedItem = "Microphone device 64";
                 Assert.Equal("Microphone device 64", comboBox.SelectedItem);
+            }
+            finally
+            {
+                host.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies DisplayMemberPath selections render their user-facing label in the shared combo box chrome.
+    /// </summary>
+    [Fact]
+    public void DarkComboBox_DisplayMemberPathSelection_RendersDisplayName()
+    {
+        RunOnStaThread(() =>
+        {
+            var comboBox = new ComboBox
+            {
+                DisplayMemberPath = "DisplayName",
+                ItemsSource = new[]
+                {
+                    new PostRaceAiCompletionModeOptionViewModel
+                    {
+                        Mode = PostRaceAiCompletionMode.Auto,
+                        DisplayName = "自动完成",
+                        Description = "等待数据完整后生成。"
+                    }
+                },
+                SelectedIndex = 0,
+                Style = (Style)Application.Current.FindResource("DarkComboBoxStyle")
+            };
+            var host = CreateOffscreenHost(comboBox);
+
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                comboBox.ApplyTemplate();
+                comboBox.UpdateLayout();
+
+                var selectedText = FindDescendants<TextBlock>(comboBox)
+                    .Select(textBlock => textBlock.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToArray();
+
+                Assert.Contains("自动完成", selectedText);
+                Assert.DoesNotContain(
+                    selectedText,
+                    text => text.Contains(nameof(PostRaceAiCompletionModeOptionViewModel), StringComparison.Ordinal));
             }
             finally
             {
