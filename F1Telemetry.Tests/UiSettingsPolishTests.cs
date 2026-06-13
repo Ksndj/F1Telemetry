@@ -108,6 +108,47 @@ public sealed class UiSettingsPolishTests
     }
 
     /// <summary>
+    /// Verifies the dedicated AI/TTS page keeps key bindings while exposing the polished layout contract.
+    /// </summary>
+    [Fact]
+    public void AiTtsView_DefinesPolishedLayoutContracts()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "AiTtsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var scrollViewer = FindElementByName(document, "AiTtsScrollViewer");
+        var voiceComboBox = FindElementByName(document, "TtsVoiceComboBox");
+        var tyreInventory = FindElementByName(document, "RaceWeekendTyreInventoryItems");
+        var historyItems = FindElementByName(document, "RaceAssistantHistoryItems");
+        var logItems = FindElementByName(document, "AiTtsLogsItems");
+        var logMessage = FindElementByName(document, "AiTtsLogMessageText");
+        var decrementButton = FindElementByName(document, "TyreInventoryDecrementButton");
+        var incrementButton = FindElementByName(document, "TyreInventoryIncrementButton");
+
+        Assert.Equal("Disabled", scrollViewer.Attribute("HorizontalScrollBarVisibility")?.Value);
+        Assert.Equal("Auto", scrollViewer.Attribute("VerticalScrollBarVisibility")?.Value);
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", voiceComboBox.Attribute("Style")?.Value);
+        Assert.Equal("240", voiceComboBox.Attribute("MaxDropDownHeight")?.Value);
+        Assert.Equal("{Binding HasAvailableVoices}", voiceComboBox.Attribute("IsEnabled")?.Value);
+        Assert.Equal("{Binding AvailableVoices}", voiceComboBox.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{Binding TtsVoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}", voiceComboBox.Attribute("SelectedItem")?.Value);
+        Assert.Equal("{Binding RaceWeekendTyreInventoryItems}", tyreInventory.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{Binding RaceAssistantHistory}", historyItems.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{Binding AiTtsLogs}", logItems.Attribute("ItemsSource")?.Value);
+        Assert.Equal("CharacterEllipsis", logMessage.Attribute("TextTrimming")?.Value);
+        Assert.Equal("{Binding Message}", logMessage.Attribute("ToolTip")?.Value);
+        Assert.Equal("{Binding DecrementCommand}", decrementButton.Attribute("Command")?.Value);
+        Assert.Equal("{Binding IncrementCommand}", incrementButton.Attribute("Command")?.Value);
+        Assert.Equal("Center", decrementButton.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Equal("Center", incrementButton.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Contains("attached:PasswordBoxBinding.BoundPassword=\"{Binding AiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiSettingsPanel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TtsSettingsPanel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"RaceAssistantPanel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"TyreInventoryPanel\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"AiTtsLogsPanel\"", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies the legacy fallback dashboard keeps the same voice dropdown behavior.
     /// </summary>
     [Fact]
@@ -435,6 +476,12 @@ public sealed class UiSettingsPolishTests
     private static TextBlock FindTextBlock(DependencyObject root, string text)
     {
         return FindDescendants<TextBlock>(root).First(textBlock => textBlock.Text == text);
+    }
+
+    private static XElement FindElementByName(XContainer document, string name)
+    {
+        return document.Descendants()
+            .First(element => element.Attributes().Any(attribute => attribute.Name.LocalName == "Name" && attribute.Value == name));
     }
 
     private static Rect GetBounds(FrameworkElement element, Visual ancestor)
