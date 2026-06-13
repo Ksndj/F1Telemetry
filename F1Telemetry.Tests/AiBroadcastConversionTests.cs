@@ -137,10 +137,14 @@ public sealed class AiBroadcastConversionTests
         Assert.Contains("Command=\"{Binding RegeneratePostRaceAiSummaryCommand}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding PostRaceAiStatusText}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Style=\"{StaticResource DarkComboBoxStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("DisplayMemberPath=\"DisplayName\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectedItem=\"{Binding SelectedPostRaceAiCompletionMode}\"", xaml, StringComparison.Ordinal);
         Assert.Contains("x:Key=\"DarkComboBoxStyle\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("ItemContainerStyle\" Value=\"{StaticResource DarkComboBoxItemStyle}\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("PART_Popup", sharedStylesXaml, StringComparison.Ordinal);
-        Assert.Contains("SelectedItem.DisplayName", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionBoxItem", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.Contains("ContentTemplateSelector=\"{TemplateBinding ItemTemplateSelector}\"", sharedStylesXaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem.DisplayName", sharedStylesXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Value=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.DoesNotContain("Foreground=\"White\"", sharedStylesXaml, StringComparison.Ordinal);
         Assert.Contains("ToolTip=\"{Binding SelectedPostRaceAiCompletionMode.Description}\"", xaml, StringComparison.Ordinal);

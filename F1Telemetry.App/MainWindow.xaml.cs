@@ -48,6 +48,12 @@ public partial class MainWindow : Window
 
     private void ContentHostScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        if (IsMouseOverOpenComboBoxDropDown())
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (sender is not System.Windows.Controls.ScrollViewer scrollViewer
             || FindScrollableChild(e.OriginalSource as DependencyObject, scrollViewer, e.Delta) is not null
             || !CanScrollVertically(scrollViewer, e.Delta))
@@ -148,6 +154,32 @@ public partial class MainWindow : Window
         }
 
         return null;
+    }
+
+    private static bool IsMouseOverOpenComboBoxDropDown()
+    {
+        return Mouse.DirectlyOver is DependencyObject source
+            && IsInsideOpenComboBoxDropDown(source);
+    }
+
+    private static bool IsInsideOpenComboBoxDropDown(DependencyObject source)
+    {
+        for (var current = source; current is not null; current = GetParent(current))
+        {
+            if (current is System.Windows.Controls.ComboBoxItem comboBoxItem
+                && System.Windows.Controls.ItemsControl.ItemsControlFromItemContainer(comboBoxItem)
+                    is System.Windows.Controls.ComboBox { IsDropDownOpen: true })
+            {
+                return true;
+            }
+
+            if (current is FrameworkElement { TemplatedParent: System.Windows.Controls.ComboBox { IsDropDownOpen: true } })
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static DependencyObject? GetParent(DependencyObject source)

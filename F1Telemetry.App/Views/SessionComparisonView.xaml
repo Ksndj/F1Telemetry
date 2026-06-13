@@ -125,7 +125,7 @@
                                        Text="赛道筛选" />
                             <ComboBox Margin="0,8,0,0"
                                       Height="34"
-                                      DisplayMemberPath="SummaryText"
+                                      DisplayMemberPath="DisplayName"
                                       ItemsSource="{Binding SessionComparison.TrackFilters}"
                                       SelectedItem="{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}" />
                         </StackPanel>
