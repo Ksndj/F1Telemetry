@@ -6,82 +6,269 @@
              mc:Ignorable="d"
              d:DesignHeight="680"
              d:DesignWidth="1120">
-    <ScrollViewer x:Name="OpponentsScrollViewer"
-                  HorizontalScrollBarVisibility="Auto"
-                  VerticalScrollBarVisibility="Auto">
-        <Border MinWidth="760"
-                Padding="20"
-                CornerRadius="20"
-                Background="{StaticResource BgPanelBrush}">
-            <StackPanel>
-                <TextBlock FontSize="20"
-                           FontWeight="SemiBold"
-                           Foreground="{StaticResource FgPrimaryBrush}"
-                           Text="对手列表" />
-                <TextBlock Margin="0,6,0,0"
-                           Foreground="{StaticResource FgSectionBrush}"
-                           Text="车手、位置、轮胎、胎龄、Pit 状态、与我差距、上一圈对比。"
-                           TextWrapping="Wrap" />
+    <UserControl.Resources>
+        <Style x:Key="OpponentCarsItemsControlStyle" TargetType="{x:Type ItemsControl}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ItemsControl}">
+                        <Grid>
+                            <ItemsPresenter x:Name="OpponentCarsPresenter" />
+                            <Border x:Name="OpponentCarsEmptyState"
+                                    Style="{StaticResource EmptyStateStyle}"
+                                    Visibility="Collapsed">
+                                <StackPanel HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource EmptyStateTitleTextStyle}"
+                                               Text="等待对手数据" />
+                                    <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
+                                               Text="连接 F1 25 UDP 后，这里会显示前后车差距、轮胎与圈速对比。" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="False">
+                                <Setter TargetName="OpponentCarsPresenter" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="OpponentCarsEmptyState" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                <Border Margin="0,18,0,0"
-                        Padding="16"
-                        CornerRadius="16"
-                        Background="{StaticResource BgCardBrush}">
-                    <StackPanel>
-                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="前后车差距" />
-                        <TextBlock Margin="0,6,0,0"
+        <DataTemplate x:Key="OpponentCarRowTemplate">
+            <Border x:Name="OpponentCarRowCard"
+                    Style="{StaticResource MetricTileStyle}">
+                <Grid MinWidth="880">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="190" />
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="92" />
+                        <ColumnDefinition Width="96" />
+                        <ColumnDefinition Width="102" />
+                        <ColumnDefinition Width="140" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="OpponentDriverNameText"
+                               Style="{StaticResource TableCellTextStyle}"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource FgPrimaryBrush}"
+                               Text="{Binding DisplayName}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding DisplayName}" />
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Text="{Binding PositionText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding PositionText}" />
+                    <TextBlock x:Name="OpponentTyreText"
+                               Grid.Column="2"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Text="{Binding TyreText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding TyreText}" />
+                    <TextBlock Grid.Column="3"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Text="{Binding TyreAgeText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding TyreAgeText}" />
+                    <TextBlock x:Name="OpponentPitStatusText"
+                               Grid.Column="4"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Text="{Binding PitStatusText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding PitStatusText}" />
+                    <TextBlock x:Name="OpponentGapText"
+                               Grid.Column="5"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgLabelBrush}"
+                               Text="{Binding GapToPlayerText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding GapToPlayerText}" />
+                    <TextBlock x:Name="OpponentLastLapText"
+                               Grid.Column="6"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgLabelBrush}"
+                               Text="{Binding LastLapText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding LastLapText}" />
+                    <TextBlock x:Name="OpponentLapComparisonText"
+                               Grid.Column="7"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgLabelBrush}"
+                               Text="{Binding LapComparisonText}"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding LapComparisonText}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer x:Name="OpponentsScrollViewer"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+        <StackPanel Background="{StaticResource BgDeepBrush}">
+            <Border x:Name="OpponentsHeader"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="40" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Style="{StaticResource IconBadgeLargeStyle}">
+                        <TextBlock HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentPrimaryBrush}"
+                                   Text="OP" />
+                    </Border>
+                    <StackPanel Grid.Column="1"
+                                Margin="12,0,0,0">
+                        <TextBlock FontSize="24"
+                                   FontWeight="SemiBold"
                                    Foreground="{StaticResource FgPrimaryBrush}"
+                                   Text="对手"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="对手" />
+                        <TextBlock Margin="0,6,0,0"
+                                   Style="{StaticResource BodyTextStyle}"
+                                   Text="查看前后车差距、轮胎状态和上一圈对比。" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="OpponentGapSummaryCard"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}"
+                                           Text="G" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="前后车差距" />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource CardValueTextStyle}"
                                    Text="{Binding PlayerGapText}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
-                <Border Margin="0,12,0,0"
-                        Padding="16"
-                        CornerRadius="16"
-                        Background="{StaticResource BgCardBrush}">
+
+                <Border x:Name="OpponentLapComparisonCard"
+                        Grid.Column="2"
+                        Style="{StaticResource GlassCardStyle}">
                     <StackPanel>
-                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="上一圈对比" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="{StaticResource FgPrimaryBrush}"
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}"
+                                           Text="L" />
+                            </Border>
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="上一圈对比" />
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource CardValueTextStyle}"
                                    Text="{Binding OverviewLapComparisonText}"
                                    TextWrapping="Wrap" />
                     </StackPanel>
                 </Border>
+            </Grid>
 
-                <ItemsControl Margin="0,18,0,0"
-                              ItemsSource="{Binding OpponentCars}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Margin="0,0,0,10"
-                                    Padding="14"
-                                    CornerRadius="14"
-                                    Background="{StaticResource BgCardBrush}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="52" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="64" />
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="86" />
-                                        <ColumnDefinition Width="88" />
-                                        <ColumnDefinition Width="132" />
-                                    </Grid.ColumnDefinitions>
+            <Border x:Name="OpponentCarsPanel"
+                    Margin="0,12,0,0"
+                    Style="{StaticResource GlassCardStyle}">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="12" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
 
-                                    <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding DisplayName}" />
-                                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PositionText}" />
-                                    <TextBlock Grid.Column="2" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreText}" />
-                                    <TextBlock Grid.Column="3" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreAgeText}" />
-                                    <TextBlock Grid.Column="4" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PitStatusText}" />
-                                    <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="{Binding GapToPlayerText}" />
-                                    <TextBlock Grid.Column="6" Foreground="{StaticResource FgLabelBrush}" Text="{Binding LastLapText}" />
-                                    <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="{Binding LapComparisonText}" />
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </StackPanel>
-        </Border>
+                    <Grid x:Name="OpponentCarsHeader"
+                          Style="{StaticResource SectionHeaderStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeStyle}">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"
+                                       Text="R" />
+                        </Border>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="对手列表" />
+                            <TextBlock Margin="0,3,0,0"
+                                       Style="{StaticResource BodyTextStyle}"
+                                       Text="等待对手数据时显示空状态；游戏限制对手遥测时，列表会显示对手遥测受限。" />
+                        </StackPanel>
+                    </Grid>
+
+                    <ScrollViewer x:Name="OpponentCarsHorizontalScrollViewer"
+                                  Grid.Row="2"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <StackPanel MinWidth="940">
+                            <Grid Margin="14,0,14,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="190" />
+                                    <ColumnDefinition Width="64" />
+                                    <ColumnDefinition Width="120" />
+                                    <ColumnDefinition Width="76" />
+                                    <ColumnDefinition Width="92" />
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="102" />
+                                    <ColumnDefinition Width="140" />
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Style="{StaticResource HeaderLabelStyle}" Text="车手" />
+                                <TextBlock Grid.Column="1" Style="{StaticResource HeaderLabelStyle}" Text="位置" />
+                                <TextBlock Grid.Column="2" Style="{StaticResource HeaderLabelStyle}" Text="轮胎" />
+                                <TextBlock Grid.Column="3" Style="{StaticResource HeaderLabelStyle}" Text="胎龄" />
+                                <TextBlock Grid.Column="4" Style="{StaticResource HeaderLabelStyle}" Text="Pit" />
+                                <TextBlock Grid.Column="5" Style="{StaticResource HeaderLabelStyle}" Text="与我差距" />
+                                <TextBlock Grid.Column="6" Style="{StaticResource HeaderLabelStyle}" Text="上一圈" />
+                                <TextBlock Grid.Column="7" Style="{StaticResource HeaderLabelStyle}" Text="圈速对比" />
+                            </Grid>
+
+                            <ItemsControl x:Name="OpponentCarsItems"
+                                          ItemTemplate="{StaticResource OpponentCarRowTemplate}"
+                                          ItemsSource="{Binding OpponentCars}"
+                                          Style="{StaticResource OpponentCarsItemsControlStyle}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

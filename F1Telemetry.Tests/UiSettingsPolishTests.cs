@@ -410,6 +410,78 @@ public sealed class UiSettingsPolishTests
         });
     }
 
+    /// <summary>
+    /// Verifies the opponents page keeps its summary and row bindings during visual polish.
+    /// </summary>
+    [Fact]
+    public void OpponentsView_BindsSummaryAndOpponentRows()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "OpponentsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var opponentItems = FindNamedElement(document, "OpponentCarsItems");
+
+        Assert.Equal("{Binding OpponentCars}", opponentItems.Attribute("ItemsSource")?.Value);
+        Assert.Contains("Text=\"{Binding PlayerGapText}\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding OverviewLapComparisonText}\"", source, StringComparison.Ordinal);
+
+        foreach (var binding in new[]
+        {
+            "DisplayName",
+            "PositionText",
+            "TyreText",
+            "TyreAgeText",
+            "PitStatusText",
+            "GapToPlayerText",
+            "LastLapText",
+            "LapComparisonText"
+        })
+        {
+            Assert.Contains($"Text=\"{{Binding {binding}}}\"", source, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Verifies the opponents page exposes user-readable empty and restricted-state copy.
+    /// </summary>
+    [Fact]
+    public void OpponentsView_DefinesReadableEmptyAndRestrictedStates()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "OpponentsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var emptyState = FindNamedElement(document, "OpponentCarsEmptyState");
+
+        Assert.Equal("{StaticResource EmptyStateStyle}", emptyState.Attribute("Style")?.Value);
+        Assert.Contains("等待对手数据", source, StringComparison.Ordinal);
+        Assert.Contains("对手遥测受限", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"HasItems\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SessionComparisonTrackFilterViewModel", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies opponent rows keep long readable fields trimmed with tooltips instead of raw overflow.
+    /// </summary>
+    [Fact]
+    public void OpponentsView_KeepsLongOpponentFieldsReadable()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "OpponentsView.xaml"));
+
+        foreach (var elementName in new[]
+        {
+            "OpponentDriverNameText",
+            "OpponentTyreText",
+            "OpponentPitStatusText",
+            "OpponentGapText",
+            "OpponentLastLapText",
+            "OpponentLapComparisonText"
+        })
+        {
+            var textBlock = FindNamedElement(document, elementName);
+
+            Assert.Equal("CharacterEllipsis", textBlock.Attribute("TextTrimming")?.Value);
+            Assert.NotNull(textBlock.Attribute("ToolTip"));
+        }
+    }
+
     private static void AssertBindingPath(DependencyObject target, DependencyProperty property, string expectedPath)
     {
         var binding = BindingOperations.GetBinding(target, property);
@@ -435,6 +507,12 @@ public sealed class UiSettingsPolishTests
     private static TextBlock FindTextBlock(DependencyObject root, string text)
     {
         return FindDescendants<TextBlock>(root).First(textBlock => textBlock.Text == text);
+    }
+
+    private static XElement FindNamedElement(XDocument document, string name)
+    {
+        return document.Descendants()
+            .First(element => element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == name);
     }
 
     private static Rect GetBounds(FrameworkElement element, Visual ancestor)
