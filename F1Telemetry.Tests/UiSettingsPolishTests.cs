@@ -345,6 +345,98 @@ public sealed class UiSettingsPolishTests
     }
 
     /// <summary>
+    /// Verifies the lap history page uses the shared card and section styles as its visual baseline.
+    /// </summary>
+    [Fact]
+    public void LapHistoryView_UsesBaselineGlassCardsAndSectionHeaders()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LapHistoryView.xaml"));
+
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "LapHistoryHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "LapHistorySessionsHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "LapHistoryLapListHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "LapHistoryRecentHeader").Attribute("Style")?.Value);
+
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "LapHistorySessionsPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "LapHistoryLapListPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "LapHistoryRecentPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "LapHistorySessionItemCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "LapHistoryLapRowCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "LapHistoryBestTile").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "LapHistoryLastTile").Attribute("Style")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies lap history UI polish preserves the history browser bindings and command entry points.
+    /// </summary>
+    [Fact]
+    public void LapHistoryView_PreservesHistoryBindingsPaginationAndCommands()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LapHistoryView.xaml"));
+        var sessionList = FindNamedElement(document, "HistorySessionListBox");
+        var lapItems = FindNamedElement(document, "HistoryLapItemsControl");
+        var recentItems = FindNamedElement(document, "RecentLapSummariesItemsControl");
+        var tableScrollViewer = FindNamedElement(document, "LapHistoryTableScrollViewer");
+        var deleteButton = FindButtonByCommand(document, "HistoryBrowser.DeleteSessionCommand");
+
+        Assert.Equal("{Binding HistoryBrowser.HistorySessionPages.Items}", sessionList.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{Binding HistoryBrowser.SelectedSession, Mode=TwoWay}", sessionList.Attribute("SelectedItem")?.Value);
+        Assert.Equal("{StaticResource LapHistorySessionItemStyle}", sessionList.Attribute("ItemContainerStyle")?.Value);
+        Assert.Equal("{Binding HistoryBrowser.HistoryLapPages.Items}", lapItems.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{StaticResource LapSummaryRowTemplate}", lapItems.Attribute("ItemTemplate")?.Value);
+        Assert.Equal("{Binding RecentLapSummaries}", recentItems.Attribute("ItemsSource")?.Value);
+        Assert.Equal("{StaticResource LapSummaryRowTemplate}", recentItems.Attribute("ItemTemplate")?.Value);
+        Assert.Equal("Auto", tableScrollViewer.Attribute("HorizontalScrollBarVisibility")?.Value);
+
+        Assert.Equal("{Binding DataContext.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}", deleteButton.Attribute("Command")?.Value);
+        Assert.Equal("{Binding}", deleteButton.Attribute("CommandParameter")?.Value);
+        Assert.Equal("{Binding CanDelete}", deleteButton.Attribute("IsEnabled")?.Value);
+
+        Assert.Contains(
+            document.Descendants(),
+            element => element.Attribute("Text")?.Value == "{Binding HistoryBrowser.HistorySessionPages.PageText}");
+        Assert.Contains(
+            document.Descendants(),
+            element => element.Attribute("Text")?.Value == "{Binding HistoryBrowser.HistoryLapPages.PageText}");
+    }
+
+    /// <summary>
+    /// Verifies the lap row template still renders all telemetry columns after visual polish.
+    /// </summary>
+    [Fact]
+    public void LapHistoryView_LapSummaryTemplatePreservesTelemetryColumns()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LapHistoryView.xaml"));
+        var rowTemplate = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "DataTemplate"
+                && element.Attribute(XName.Get("Key", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == "LapSummaryRowTemplate");
+
+        foreach (var binding in new[]
+        {
+            "{Binding LapText}",
+            "{Binding LapTimeText}",
+            "{Binding Sector1Text}",
+            "{Binding Sector2Text}",
+            "{Binding Sector3Text}",
+            "{Binding AverageSpeedText}",
+            "{Binding FuelUsedLitresText}",
+            "{Binding ErsUsedText}",
+            "{Binding TyreWearDeltaText}",
+            "{Binding ValidityText}",
+            "{Binding TyreWindowText}",
+            "{Binding PitWindowText}"
+        })
+        {
+            Assert.Contains(rowTemplate.Descendants(), element => element.Attribute("Text")?.Value == binding);
+        }
+
+        Assert.Contains(rowTemplate.Descendants(), element => element.Attribute("Foreground")?.Value == "{Binding Sector1Foreground}");
+        Assert.Contains(rowTemplate.Descendants(), element => element.Attribute("Foreground")?.Value == "{Binding Sector2Foreground}");
+        Assert.Contains(rowTemplate.Descendants(), element => element.Attribute("Foreground")?.Value == "{Binding Sector3Foreground}");
+    }
+
+    /// <summary>
     /// Verifies the settings page lays out the voice AI status rows without visual overlap.
     /// </summary>
     [Fact]
@@ -435,6 +527,20 @@ public sealed class UiSettingsPolishTests
     private static TextBlock FindTextBlock(DependencyObject root, string text)
     {
         return FindDescendants<TextBlock>(root).First(textBlock => textBlock.Text == text);
+    }
+
+    private static XElement FindNamedElement(XDocument document, string name)
+    {
+        return document.Descendants()
+            .First(element => element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == name);
+    }
+
+    private static XElement FindButtonByCommand(XDocument document, string commandFragment)
+    {
+        return document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "Button"
+                && element.Attribute("Command")?.Value.Contains(commandFragment, StringComparison.Ordinal) == true);
     }
 
     private static Rect GetBounds(FrameworkElement element, Visual ancestor)
