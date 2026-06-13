@@ -474,6 +474,8 @@ public sealed class MainWindowTests
         Assert.Contains("ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta)", codeBehind, StringComparison.Ordinal);
         Assert.Contains("CanScrollVertically", codeBehind, StringComparison.Ordinal);
         Assert.Contains("FindScrollableChild", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsMouseOverOpenComboBoxDropDown()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsInsideOpenComboBoxDropDown", codeBehind, StringComparison.Ordinal);
         Assert.Contains("e.Handled = true", codeBehind, StringComparison.Ordinal);
     }
 

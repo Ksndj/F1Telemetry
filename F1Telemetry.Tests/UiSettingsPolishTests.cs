@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using System.Xml.Linq;
 using F1Telemetry.App.AttachedProperties;
+using F1Telemetry.App.ViewModels;
 using F1Telemetry.App.Views;
 using F1Telemetry.TTS.Services;
 using Xunit;
@@ -190,6 +191,157 @@ public sealed class UiSettingsPolishTests
                 && element.Attribute("Property")?.Value == "Foreground");
 
         Assert.Equal("{StaticResource FgPrimaryBrush}", foregroundSetter.Attribute("Value")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the shared combo box chrome renders strings and DisplayMemberPath selections without object-name fallbacks.
+    /// </summary>
+    [Fact]
+    public void SharedStyles_DarkComboBoxStyle_UsesSelectionBoxItemAndDefaultPopupInteraction()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Styles", "SharedStyles.xaml"));
+
+        Assert.Contains("x:Key=\"DarkComboBoxStyle\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionBoxItem", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionBoxItemTemplate", xaml, StringComparison.Ordinal);
+        Assert.Contains("SelectionBoxItemStringFormat", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedItem.DisplayName", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("ComboBoxPopupBehavior", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("PreviewMouseWheel", xaml, StringComparison.Ordinal);
+        Assert.Contains("MaxDropDownHeight\" Value=\"240\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("TextTrimming\" Value=\"CharacterEllipsis\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("ToolTip\" Value=\"{Binding Text, RelativeSource={RelativeSource Self}}\"", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies long combo box lists can scroll internally without an auto-close behavior taking over.
+    /// </summary>
+    [Fact]
+    public void DarkComboBox_LongDropDown_StaysOpenWhenInternalListScrolls()
+    {
+        RunOnStaThread(() =>
+        {
+            var comboBox = new ComboBox
+            {
+                ItemsSource = Enumerable.Range(1, 80).Select(index => $"Microphone device {index}").ToArray(),
+                SelectedIndex = 0,
+                Style = (Style)Application.Current.FindResource("DarkComboBoxStyle")
+            };
+            var host = CreateOffscreenHost(comboBox);
+
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                comboBox.ApplyTemplate();
+                comboBox.IsDropDownOpen = true;
+                comboBox.UpdateLayout();
+
+                var popup = Assert.IsType<Popup>(comboBox.Template.FindName("PART_Popup", comboBox));
+                Assert.NotNull(popup.Child);
+                var scrollViewer = Assert.Single(FindDescendants<ScrollViewer>(popup.Child!));
+                scrollViewer.ScrollToEnd();
+                scrollViewer.UpdateLayout();
+
+                Assert.True(comboBox.IsDropDownOpen);
+                comboBox.SelectedItem = "Microphone device 64";
+                Assert.Equal("Microphone device 64", comboBox.SelectedItem);
+            }
+            finally
+            {
+                host.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies DisplayMemberPath selections render their user-facing label in the shared combo box chrome.
+    /// </summary>
+    [Fact]
+    public void DarkComboBox_DisplayMemberPathSelection_RendersDisplayName()
+    {
+        RunOnStaThread(() =>
+        {
+            var comboBox = new ComboBox
+            {
+                DisplayMemberPath = "DisplayName",
+                ItemsSource = new[]
+                {
+                    new PostRaceAiCompletionModeOptionViewModel
+                    {
+                        Mode = PostRaceAiCompletionMode.Auto,
+                        DisplayName = "自动完成",
+                        Description = "等待数据完整后生成。"
+                    }
+                },
+                SelectedIndex = 0,
+                Style = (Style)Application.Current.FindResource("DarkComboBoxStyle")
+            };
+            var host = CreateOffscreenHost(comboBox);
+
+            try
+            {
+                host.Show();
+                host.UpdateLayout();
+                comboBox.ApplyTemplate();
+                comboBox.UpdateLayout();
+
+                var selectedText = FindDescendants<TextBlock>(comboBox)
+                    .Select(textBlock => textBlock.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+                    .ToArray();
+
+                Assert.Contains("自动完成", selectedText);
+                Assert.DoesNotContain(
+                    selectedText,
+                    text => text.Contains(nameof(PostRaceAiCompletionModeOptionViewModel), StringComparison.Ordinal));
+            }
+            finally
+            {
+                host.Close();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Verifies the session comparison track filter shows user-facing names while preserving selection binding.
+    /// </summary>
+    [Fact]
+    public void SessionComparisonView_TrackFilterComboBox_UsesDisplayNameWithoutChangingSelectionBinding()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SessionComparisonView.xaml"));
+        var comboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("ItemsSource")?.Value == "{Binding SessionComparison.TrackFilters}");
+
+        Assert.Equal("DisplayName", comboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal("{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}", comboBox.Attribute("SelectedItem")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies Settings voice AI dropdowns show display names while preserving existing selection paths.
+    /// </summary>
+    [Fact]
+    public void SettingsView_VoiceAiComboBoxes_UseDisplayNameWithoutChangingSelectionBindings()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var talkModeComboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("ItemsSource")?.Value == "{Binding VoiceAiTalkModeOptions}");
+        var microphoneComboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("ItemsSource")?.Value == "{Binding VoiceAiMicrophoneDevices}");
+
+        Assert.Equal("DisplayName", talkModeComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal(
+            "{Binding SelectedVoiceAiTalkModeOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            talkModeComboBox.Attribute("SelectedItem")?.Value);
+        Assert.Equal("DisplayName", microphoneComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal("{Binding VoiceAiMicrophoneDeviceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}", microphoneComboBox.Attribute("SelectedValue")?.Value);
+        Assert.Equal("DeviceId", microphoneComboBox.Attribute("SelectedValuePath")?.Value);
     }
 
     /// <summary>
