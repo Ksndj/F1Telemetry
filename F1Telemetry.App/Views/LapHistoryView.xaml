@@ -8,330 +8,496 @@
              d:DesignHeight="680"
              d:DesignWidth="1120">
     <UserControl.Resources>
+        <Style x:Key="LapHistorySessionItemStyle" TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="LapHistorySessionItemChrome"
+                                Padding="2"
+                                Background="{StaticResource TransparentBrush}"
+                                BorderBrush="{StaticResource TransparentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <ContentPresenter Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="LapHistorySessionItemChrome" Property="Background" Value="{StaticResource BgListItemHoverBrush}" />
+                                <Setter TargetName="LapHistorySessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="LapHistorySessionItemChrome" Property="Background" Value="{StaticResource BgListItemSelectedBrush}" />
+                                <Setter TargetName="LapHistorySessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="LapHistorySessionItemChrome" Property="BorderBrush" Value="{StaticResource AccentPrimaryFocusBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="LapSummaryRowTemplate">
-            <Border Margin="0,0,0,10"
-                    Padding="14"
-                    CornerRadius="14"
-                    Background="{StaticResource BgCardBrush}">
-                <Grid>
+            <Border x:Name="LapHistoryLapRowCard"
+                    Style="{StaticResource MetricTileStyle}">
+                <Grid MinWidth="900">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="72" />
-                        <ColumnDefinition Width="92" />
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="96" />
                         <ColumnDefinition Width="230" />
                         <ColumnDefinition Width="88" />
-                        <ColumnDefinition Width="74" />
-                        <ColumnDefinition Width="74" />
                         <ColumnDefinition Width="76" />
-                        <ColumnDefinition Width="64" />
-                        <ColumnDefinition Width="140" />
-                        <ColumnDefinition Width="96" />
+                        <ColumnDefinition Width="76" />
+                        <ColumnDefinition Width="82" />
+                        <ColumnDefinition Width="70" />
+                        <ColumnDefinition Width="134" />
+                        <ColumnDefinition Width="84" />
                     </Grid.ColumnDefinitions>
 
-                    <TextBlock Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding LapText}" />
-                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding LapTimeText}" />
+                    <TextBlock Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgPrimaryBrush}"
+                               FontWeight="SemiBold"
+                               Text="{Binding LapText}" />
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgPrimaryBrush}"
+                               Text="{Binding LapTimeText}" />
                     <StackPanel Grid.Column="2"
+                                VerticalAlignment="Center"
                                 Orientation="Horizontal">
-                        <TextBlock Foreground="{Binding Sector1Foreground}"
+                        <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                   Foreground="{Binding Sector1Foreground}"
                                    Text="{Binding Sector1Text}" />
                         <TextBlock Foreground="{StaticResource FgMutedBrush}"
                                    Text=" / " />
-                        <TextBlock Foreground="{Binding Sector2Foreground}"
+                        <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                   Foreground="{Binding Sector2Foreground}"
                                    Text="{Binding Sector2Text}" />
                         <TextBlock Foreground="{StaticResource FgMutedBrush}"
                                    Text=" / " />
-                        <TextBlock Foreground="{Binding Sector3Foreground}"
+                        <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                   Foreground="{Binding Sector3Foreground}"
                                    Text="{Binding Sector3Text}" />
                     </StackPanel>
-                    <TextBlock Grid.Column="3" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding AverageSpeedText}" />
-                    <TextBlock Grid.Column="4" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding FuelUsedLitresText}" />
-                    <TextBlock Grid.Column="5" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding ErsUsedText}" />
-                    <TextBlock Grid.Column="6" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreWearDeltaText}" />
-                    <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="{Binding ValidityText}" />
-                    <TextBlock Grid.Column="8" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding TyreWindowText}" />
-                    <TextBlock Grid.Column="9" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding PitWindowText}" />
+                    <TextBlock Grid.Column="3" Style="{StaticResource TableCellTextStyle}" Text="{Binding AverageSpeedText}" />
+                    <TextBlock Grid.Column="4" Style="{StaticResource TableCellTextStyle}" Text="{Binding FuelUsedLitresText}" />
+                    <TextBlock Grid.Column="5" Style="{StaticResource TableCellTextStyle}" Text="{Binding ErsUsedText}" />
+                    <TextBlock Grid.Column="6" Style="{StaticResource TableCellTextStyle}" Text="{Binding TyreWearDeltaText}" />
+                    <TextBlock Grid.Column="7"
+                               Style="{StaticResource TableCellTextStyle}"
+                               Foreground="{StaticResource FgLabelBrush}"
+                               Text="{Binding ValidityText}" />
+                    <TextBlock Grid.Column="8" Style="{StaticResource TableCellTextStyle}" Text="{Binding TyreWindowText}" />
+                    <TextBlock Grid.Column="9" Style="{StaticResource TableCellTextStyle}" Text="{Binding PitWindowText}" />
                 </Grid>
             </Border>
         </DataTemplate>
     </UserControl.Resources>
 
     <ScrollViewer x:Name="LapHistoryScrollViewer"
-                  HorizontalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-        <Border MinWidth="1120"
-                Padding="20"
-                CornerRadius="20"
+        <Border Padding="20"
                 Background="{StaticResource BgPanelBrush}">
             <StackPanel>
-                <Grid>
+                <Grid x:Name="LapHistoryHeader"
+                      Style="{StaticResource SectionHeaderStyle}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="140" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <TextBlock FontSize="20"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource FgPrimaryBrush}"
-                                   Text="历史会话" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="{StaticResource FgSectionBrush}"
-                                   Text="{Binding HistoryBrowser.StatusText, TargetNullValue=历史会话状态待刷新。}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Foreground="{StaticResource FgMutedBrush}"
-                                   Text="{Binding HistoryBrowser.EmptyStateText}"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Foreground="{StaticResource FgSectionBrush}"
-                                   Text="浏览已缓存的历史 UDP 会话，选择左侧会话后在右侧查看对应圈列表。"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="40" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource IconBadgeLargeStyle}">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"
+                                       Text="LH" />
+                        </Border>
+                        <StackPanel Grid.Column="1"
+                                    Margin="12,0,0,0">
+                            <TextBlock FontSize="22"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource FgPrimaryBrush}"
+                                       Text="单圈历史" />
+                            <TextBlock Margin="0,6,0,0"
+                                       Foreground="{StaticResource FgSectionBrush}"
+                                       Text="{Binding HistoryBrowser.StatusText, TargetNullValue=历史会话状态待刷新。}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Foreground="{StaticResource FgMutedBrush}"
+                                       Text="{Binding HistoryBrowser.EmptyStateText}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Margin="0,4,0,0"
+                                       Foreground="{StaticResource FgSectionBrush}"
+                                       Text="浏览已缓存的历史 UDP 会话，选择左侧会话后在右侧查看对应圈列表。"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+
                     <Button Grid.Column="1"
-                            Width="120"
-                            Height="34"
+                            MinWidth="112"
+                            Height="36"
+                            Margin="18,0,0,0"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Command="{Binding HistoryBrowser.RefreshSessionsCommand}"
-                            Content="刷新会话" />
+                            Content="刷新会话"
+                            Style="{StaticResource PrimaryButtonStyle}" />
                 </Grid>
 
-                <Border Margin="0,18,0,0"
-                        Padding="16"
-                        CornerRadius="16"
-                        Background="{StaticResource BgCardInnerBrush}">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="340" />
-                            <ColumnDefinition Width="14" />
-                            <ColumnDefinition Width="*" MinWidth="800" />
-                        </Grid.ColumnDefinitions>
+                <Grid Margin="0,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-                        <Border Padding="12"
-                                CornerRadius="12"
-                                Background="{StaticResource BgCardBrush}">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="10" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="8" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Foreground="{StaticResource FgLabelBrush}"
-                                           Text="会话列表" />
-                                <ListBox x:Name="HistorySessionListBox"
-                                         Grid.Row="2"
-                                         MinHeight="220"
-                                         attached:AdaptivePageSizeBehavior.PagedCollection="{Binding HistoryBrowser.HistorySessionPages}"
-                                         attached:AdaptivePageSizeBehavior.EstimatedItemHeight="150"
-                                         attached:AdaptivePageSizeBehavior.MinPageSize="2"
-                                         attached:AdaptivePageSizeBehavior.MaxPageSize="8"
-                                         Background="{StaticResource TransparentBrush}"
-                                         BorderThickness="0"
-                                         HorizontalContentAlignment="Stretch"
-                                         ItemsSource="{Binding HistoryBrowser.HistorySessionPages.Items}"
-                                         SelectedItem="{Binding HistoryBrowser.SelectedSession, Mode=TwoWay}">
-                                    <ListBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="10"
-                                                    CornerRadius="10"
-                                                    Background="{StaticResource BgPanelBrush}">
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="68" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <StackPanel>
-                                                        <TextBlock Foreground="{StaticResource FgPrimaryBrush}"
-                                                                   FontWeight="SemiBold"
-                                                                   Text="{Binding SummaryText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,5,0,0"
-                                                                   Foreground="{StaticResource FgSecondaryBrush}"
-                                                                   Text="{Binding TrackText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,3,0,0"
-                                                                   Foreground="{StaticResource FgSectionBrush}"
-                                                                   Text="{Binding SessionTypeText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,3,0,0"
-                                                                   Foreground="{StaticResource FgMutedBrush}"
-                                                                   Text="{Binding StartedAtText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,3,0,0"
-                                                                   Foreground="{StaticResource FgMutedBrush}"
-                                                                   Text="{Binding EndedAtText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,3,0,0"
-                                                                   Foreground="{StaticResource FgMutedBrush}"
-                                                                   Text="{Binding DurationText}"
-                                                                   TextWrapping="Wrap" />
-                                                        <TextBlock Margin="0,3,0,0"
-                                                                   Foreground="{StaticResource FgMutedBrush}"
-                                                                   Text="{Binding SessionUid}"
-                                                                   TextWrapping="Wrap" />
-                                                    </StackPanel>
-                                                    <Button Grid.Column="1"
-                                                            Width="58"
-                                                            Height="28"
-                                                            HorizontalAlignment="Right"
-                                                            VerticalAlignment="Top"
-                                                            Command="{Binding DataContext.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
-                                                            CommandParameter="{Binding}"
-                                                            Content="删除"
-                                                            IsEnabled="{Binding CanDelete}" />
-                                                </Grid>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ListBox.ItemTemplate>
-                                </ListBox>
-                                <StackPanel Grid.Row="4"
-                                            HorizontalAlignment="Right"
-                                            Orientation="Horizontal">
-                                    <Button Width="64"
-                                            Height="28"
-                                            Command="{Binding HistoryBrowser.HistorySessionPages.PreviousPageCommand}"
-                                            Content="上一页" />
-                                    <TextBlock Margin="10,0"
+                    <Border x:Name="LapHistorySessionsPanel"
+                            Style="{StaticResource GlassCardStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid x:Name="LapHistorySessionsHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock HorizontalAlignment="Center"
                                                VerticalAlignment="Center"
-                                               Foreground="{StaticResource FgSectionBrush}"
-                                               Text="{Binding HistoryBrowser.HistorySessionPages.PageText}" />
-                                    <Button Width="64"
-                                            Height="28"
-                                            Command="{Binding HistoryBrowser.HistorySessionPages.NextPageCommand}"
-                                            Content="下一页" />
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentPrimaryBrush}"
+                                               Text="S" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="10,0,0,0">
+                                    <TextBlock FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
+                                               Text="历史会话" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Foreground="{StaticResource FgMutedBrush}"
+                                               Text="会话列表"
+                                               TextWrapping="Wrap" />
                                 </StackPanel>
                             </Grid>
-                        </Border>
 
-                        <Border Grid.Column="2"
-                                Padding="12"
-                                CornerRadius="12"
-                                Background="{StaticResource BgCardBrush}">
-                            <Grid x:Name="HistoryLapListHost"
-                                  attached:AdaptivePageSizeBehavior.PagedCollection="{Binding HistoryBrowser.HistoryLapPages}"
-                                  attached:AdaptivePageSizeBehavior.EstimatedItemHeight="58"
-                                  attached:AdaptivePageSizeBehavior.ChromeHeight="78"
-                                  attached:AdaptivePageSizeBehavior.MinPageSize="4"
-                                  attached:AdaptivePageSizeBehavior.MaxPageSize="20">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+                            <ListBox x:Name="HistorySessionListBox"
+                                     Grid.Row="1"
+                                     MinHeight="240"
+                                     attached:AdaptivePageSizeBehavior.PagedCollection="{Binding HistoryBrowser.HistorySessionPages}"
+                                     attached:AdaptivePageSizeBehavior.EstimatedItemHeight="150"
+                                     attached:AdaptivePageSizeBehavior.MinPageSize="2"
+                                     attached:AdaptivePageSizeBehavior.MaxPageSize="8"
+                                     Background="{StaticResource TransparentBrush}"
+                                     BorderThickness="0"
+                                     HorizontalContentAlignment="Stretch"
+                                     ItemContainerStyle="{StaticResource LapHistorySessionItemStyle}"
+                                     ItemsSource="{Binding HistoryBrowser.HistorySessionPages.Items}"
+                                     SelectedItem="{Binding HistoryBrowser.SelectedSession, Mode=TwoWay}">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="LapHistorySessionItemCard"
+                                                Style="{StaticResource MetricTileStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel>
+                                                    <TextBlock FontWeight="SemiBold"
+                                                               Foreground="{StaticResource FgPrimaryBrush}"
+                                                               Text="{Binding SummaryText}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               TextWrapping="Wrap" />
+                                                    <TextBlock Margin="0,6,0,0"
+                                                               Foreground="{StaticResource FgSecondaryBrush}"
+                                                               Text="{Binding TrackText}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="{StaticResource FgSectionBrush}"
+                                                               Text="{Binding SessionTypeText}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="{StaticResource FgMutedBrush}"
+                                                               Text="{Binding StartedAtText}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="{StaticResource FgMutedBrush}"
+                                                               Text="{Binding EndedAtText}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="{StaticResource FgMutedBrush}"
+                                                               Text="{Binding DurationText}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Margin="0,4,0,0"
+                                                               Foreground="{StaticResource FgMutedBrush}"
+                                                               Text="{Binding SessionUid}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               ToolTip="{Binding SessionUid}" />
+                                                </StackPanel>
+                                                <Button Grid.Column="1"
+                                                        MinWidth="58"
+                                                        Height="30"
+                                                        Margin="10,0,0,0"
+                                                        HorizontalAlignment="Right"
+                                                        VerticalAlignment="Top"
+                                                        Command="{Binding DataContext.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                        CommandParameter="{Binding}"
+                                                        Content="删除"
+                                                        IsEnabled="{Binding CanDelete}"
+                                                        Style="{StaticResource SecondaryButtonStyle}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <StackPanel Grid.Row="2"
+                                        Margin="0,12,0,0"
+                                        HorizontalAlignment="Right"
+                                        Orientation="Horizontal">
+                                <Button MinWidth="68"
+                                        Height="30"
+                                        Command="{Binding HistoryBrowser.HistorySessionPages.PreviousPageCommand}"
+                                        Content="上一页"
+                                        Style="{StaticResource SecondaryButtonStyle}" />
+                                <TextBlock Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource FgSectionBrush}"
+                                           Text="{Binding HistoryBrowser.HistorySessionPages.PageText}" />
+                                <Button MinWidth="68"
+                                        Height="30"
+                                        Command="{Binding HistoryBrowser.HistorySessionPages.NextPageCommand}"
+                                        Content="下一页"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border x:Name="LapHistoryLapListPanel"
+                            Grid.Column="2"
+                            Style="{StaticResource GlassCardStyle}">
+                        <Grid x:Name="HistoryLapListHost"
+                              attached:AdaptivePageSizeBehavior.PagedCollection="{Binding HistoryBrowser.HistoryLapPages}"
+                              attached:AdaptivePageSizeBehavior.EstimatedItemHeight="58"
+                              attached:AdaptivePageSizeBehavior.ChromeHeight="78"
+                              attached:AdaptivePageSizeBehavior.MinPageSize="4"
+                              attached:AdaptivePageSizeBehavior.MaxPageSize="20">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Grid x:Name="LapHistoryLapListHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="32" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource AccentPrimaryBrush}"
+                                               Text="L" />
+                                </Border>
+                                <StackPanel Grid.Column="1"
+                                            Margin="10,0,0,0">
+                                    <TextBlock FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
+                                               Text="历史会话圈列表" />
+                                    <TextBlock Margin="0,4,0,0"
+                                               Foreground="{StaticResource FgSectionBrush}"
+                                               Text="{Binding HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话。}"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+
+                            <ScrollViewer x:Name="LapHistoryTableScrollViewer"
+                                          Grid.Row="2"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <StackPanel MinWidth="930">
+                                    <Grid Margin="14,0,14,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="96" />
+                                            <ColumnDefinition Width="230" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="76" />
+                                            <ColumnDefinition Width="76" />
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="134" />
+                                            <ColumnDefinition Width="84" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="圈号" />
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource FgLabelBrush}" Text="圈速" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource FgLabelBrush}" Text="分段" />
+                                        <TextBlock Grid.Column="3" Foreground="{StaticResource FgLabelBrush}" Text="均速" />
+                                        <TextBlock Grid.Column="4" Foreground="{StaticResource FgLabelBrush}" Text="燃油" />
+                                        <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="ERS" />
+                                        <TextBlock Grid.Column="6" Foreground="{StaticResource FgLabelBrush}" Text="磨损" />
+                                        <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="状态" />
+                                        <TextBlock Grid.Column="8" Foreground="{StaticResource FgLabelBrush}" Text="轮胎" />
+                                        <TextBlock Grid.Column="9" Foreground="{StaticResource FgLabelBrush}" Text="进站" />
+                                    </Grid>
+                                    <ItemsControl x:Name="HistoryLapItemsControl"
+                                                  ItemTemplate="{StaticResource LapSummaryRowTemplate}"
+                                                  ItemsSource="{Binding HistoryBrowser.HistoryLapPages.Items}" />
+                                </StackPanel>
+                            </ScrollViewer>
+
+                            <StackPanel Grid.Row="3"
+                                        Margin="0,12,0,0"
+                                        HorizontalAlignment="Right"
+                                        Orientation="Horizontal">
+                                <Button MinWidth="68"
+                                        Height="30"
+                                        Command="{Binding HistoryBrowser.HistoryLapPages.PreviousPageCommand}"
+                                        Content="上一页"
+                                        Style="{StaticResource SecondaryButtonStyle}" />
+                                <TextBlock Margin="10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{StaticResource FgSectionBrush}"
+                                           Text="{Binding HistoryBrowser.HistoryLapPages.PageText}" />
+                                <Button MinWidth="68"
+                                        Height="30"
+                                        Command="{Binding HistoryBrowser.HistoryLapPages.NextPageCommand}"
+                                        Content="下一页"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Border x:Name="LapHistoryRecentPanel"
+                        Margin="0,18,0,0"
+                        Style="{StaticResource GlassCardStyle}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <Grid x:Name="LapHistoryRecentHeader"
+                              Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="32" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}"
+                                           Text="R" />
+                            </Border>
+                            <StackPanel Grid.Column="1"
+                                        Margin="10,0,0,0">
                                 <TextBlock FontSize="16"
                                            FontWeight="SemiBold"
                                            Foreground="{StaticResource FgPrimaryBrush}"
-                                           Text="历史会话圈列表" />
-                                <TextBlock Grid.Row="1"
-                                           Margin="0,5,0,0"
+                                           Text="当前实时会话最近圈" />
+                                <TextBlock Margin="0,4,0,0"
                                            Foreground="{StaticResource FgSectionBrush}"
-                                           Text="{Binding HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话。}"
+                                           Text="这里来自当前正在运行的 UDP 会话/缓存，不会随上方选中的历史会话切换。"
                                            TextWrapping="Wrap" />
-                                <Grid Grid.Row="2"
-                                      Margin="14,12,14,8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="72" />
-                                        <ColumnDefinition Width="92" />
-                                        <ColumnDefinition Width="230" />
-                                        <ColumnDefinition Width="88" />
-                                        <ColumnDefinition Width="74" />
-                                        <ColumnDefinition Width="74" />
-                                        <ColumnDefinition Width="76" />
-                                        <ColumnDefinition Width="64" />
-                                        <ColumnDefinition Width="140" />
-                                        <ColumnDefinition Width="96" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="圈号" />
-                                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgLabelBrush}" Text="圈速" />
-                                    <TextBlock Grid.Column="2" Foreground="{StaticResource FgLabelBrush}" Text="分段" />
-                                    <TextBlock Grid.Column="3" Foreground="{StaticResource FgLabelBrush}" Text="均速" />
-                                    <TextBlock Grid.Column="4" Foreground="{StaticResource FgLabelBrush}" Text="燃油" />
-                                    <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="ERS" />
-                                    <TextBlock Grid.Column="6" Foreground="{StaticResource FgLabelBrush}" Text="磨损" />
-                                    <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="状态" />
-                                    <TextBlock Grid.Column="8" Foreground="{StaticResource FgLabelBrush}" Text="轮胎" />
-                                    <TextBlock Grid.Column="9" Foreground="{StaticResource FgLabelBrush}" Text="进站" />
-                                </Grid>
-                                <ItemsControl Grid.Row="3"
-                                              Margin="0,12,0,0"
-                                              ItemTemplate="{StaticResource LapSummaryRowTemplate}"
-                                              ItemsSource="{Binding HistoryBrowser.HistoryLapPages.Items}" />
-                                <StackPanel Grid.Row="4"
-                                            Margin="0,8,0,0"
-                                            HorizontalAlignment="Right"
-                                            Orientation="Horizontal">
-                                    <Button Width="64"
-                                            Height="28"
-                                            Command="{Binding HistoryBrowser.HistoryLapPages.PreviousPageCommand}"
-                                            Content="上一页" />
-                                    <TextBlock Margin="10,0"
-                                               VerticalAlignment="Center"
-                                               Foreground="{StaticResource FgSectionBrush}"
-                                               Text="{Binding HistoryBrowser.HistoryLapPages.PageText}" />
-                                    <Button Width="64"
-                                            Height="28"
-                                            Command="{Binding HistoryBrowser.HistoryLapPages.NextPageCommand}"
-                                            Content="下一页" />
-                                </StackPanel>
-                            </Grid>
-                        </Border>
-                    </Grid>
-                </Border>
+                            </StackPanel>
+                        </Grid>
 
-                <Border Margin="0,18,0,0"
-                        Padding="16"
-                        CornerRadius="16"
-                        Background="{StaticResource BgCardInnerBrush}">
-                    <StackPanel>
-                        <TextBlock FontSize="16"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource FgPrimaryBrush}"
-                                   Text="当前实时会话最近圈" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="{StaticResource FgSectionBrush}"
-                                   Text="这里来自当前正在运行的 UDP 会话/缓存，不会随上方选中的历史会话切换。"
-                                   TextWrapping="Wrap" />
-
-                        <Grid Margin="0,18,0,0">
+                        <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="16" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
 
-                            <Border Padding="14"
-                                    CornerRadius="14"
-                                    Background="{StaticResource BgCardBrush}">
-                                <StackPanel>
-                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Best" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource FgPrimaryBrush}"
-                                               Text="{Binding BestLapSummaryText}"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-                            </Border>
+                            <StackPanel>
+                                <Border x:Name="LapHistoryBestTile"
+                                        Style="{StaticResource MetricTileStyle}">
+                                    <StackPanel>
+                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Best" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource FgPrimaryBrush}"
+                                                   Text="{Binding BestLapSummaryText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
 
-                            <Border Grid.Column="2"
-                                    Padding="14"
-                                    CornerRadius="14"
-                                    Background="{StaticResource BgCardBrush}">
-                                <StackPanel>
-                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Last" />
-                                    <TextBlock Margin="0,6,0,0"
-                                               Foreground="{StaticResource FgPrimaryBrush}"
-                                               Text="{Binding LastLapSummaryText}"
-                                               TextWrapping="Wrap" />
+                                <Border x:Name="LapHistoryLastTile"
+                                        Style="{StaticResource MetricTileStyle}">
+                                    <StackPanel>
+                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="Last" />
+                                        <TextBlock Margin="0,6,0,0"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource FgPrimaryBrush}"
+                                                   Text="{Binding LastLapSummaryText}"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <ScrollViewer Grid.Column="2"
+                                          HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Disabled">
+                                <StackPanel MinWidth="930">
+                                    <Grid Margin="14,0,14,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="64" />
+                                            <ColumnDefinition Width="96" />
+                                            <ColumnDefinition Width="230" />
+                                            <ColumnDefinition Width="88" />
+                                            <ColumnDefinition Width="76" />
+                                            <ColumnDefinition Width="76" />
+                                            <ColumnDefinition Width="82" />
+                                            <ColumnDefinition Width="70" />
+                                            <ColumnDefinition Width="134" />
+                                            <ColumnDefinition Width="84" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="圈号" />
+                                        <TextBlock Grid.Column="1" Foreground="{StaticResource FgLabelBrush}" Text="圈速" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource FgLabelBrush}" Text="分段" />
+                                        <TextBlock Grid.Column="3" Foreground="{StaticResource FgLabelBrush}" Text="均速" />
+                                        <TextBlock Grid.Column="4" Foreground="{StaticResource FgLabelBrush}" Text="燃油" />
+                                        <TextBlock Grid.Column="5" Foreground="{StaticResource FgLabelBrush}" Text="ERS" />
+                                        <TextBlock Grid.Column="6" Foreground="{StaticResource FgLabelBrush}" Text="磨损" />
+                                        <TextBlock Grid.Column="7" Foreground="{StaticResource FgLabelBrush}" Text="状态" />
+                                        <TextBlock Grid.Column="8" Foreground="{StaticResource FgLabelBrush}" Text="轮胎" />
+                                        <TextBlock Grid.Column="9" Foreground="{StaticResource FgLabelBrush}" Text="进站" />
+                                    </Grid>
+                                    <ItemsControl x:Name="RecentLapSummariesItemsControl"
+                                                  ItemTemplate="{StaticResource LapSummaryRowTemplate}"
+                                                  ItemsSource="{Binding RecentLapSummaries}" />
                                 </StackPanel>
-                            </Border>
+                            </ScrollViewer>
                         </Grid>
-
-                        <ItemsControl Margin="0,18,0,0"
-                                      ItemTemplate="{StaticResource LapSummaryRowTemplate}"
-                                      ItemsSource="{Binding RecentLapSummaries}" />
-                    </StackPanel>
+                    </Grid>
                 </Border>
             </StackPanel>
         </Border>
