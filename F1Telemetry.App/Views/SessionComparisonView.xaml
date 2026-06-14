@@ -12,8 +12,9 @@
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
         <DataTemplate x:Key="CandidateSessionTemplate">
-            <Border Margin="0,0,0,10"
-                    Style="{StaticResource InnerCardStyle}">
+            <Border x:Name="CandidateSessionCard"
+                    Margin="0,0,0,10"
+                    Style="{StaticResource MetricTileStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -41,21 +42,23 @@
                     </CheckBox>
                     <Button Grid.Column="1"
                             Width="58"
-                            Height="28"
+                            Height="30"
                             HorizontalAlignment="Right"
                             VerticalAlignment="Top"
                             Command="{Binding DataContext.SessionComparison.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                             CommandParameter="{Binding}"
                             Content="删除"
-                            IsEnabled="{Binding CanDelete}" />
+                            IsEnabled="{Binding CanDelete}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
                 </Grid>
             </Border>
         </DataTemplate>
 
         <DataTemplate x:Key="SummaryRowTemplate">
-            <Border Margin="0,0,10,10"
+            <Border x:Name="SessionComparisonSummaryCard"
+                    Margin="0,0,10,10"
                     Width="220"
-                    Style="{StaticResource InnerCardStyle}">
+                    Style="{StaticResource MetricTileStyle}">
                 <StackPanel>
                     <TextBlock FontWeight="SemiBold"
                                Foreground="{StaticResource FgPrimaryBrush}"
@@ -98,7 +101,8 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource SectionCardStyle}">
+                <Border x:Name="SessionComparisonCandidatePanel"
+                        Style="{StaticResource GlassCardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -112,22 +116,36 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                       Text="多会话对比" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Style="{StaticResource MutedTextStyle}"
-                                       Text="这里对比已保存的历史 UDP 会话，用于赛后横向复盘；不会读取或代表当前正在接收的实时 UDP 会话。" />
-                        </StackPanel>
+                        <Grid x:Name="SessionComparisonCandidateHeader"
+                              Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}"
+                                           Text="&#xE7C1;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                           Text="多会话对比" />
+                                <TextBlock Margin="0,5,0,0"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           Text="对比已保存的历史 UDP 会话，用于赛后横向复盘；不会读取或代表当前正在接收的实时 UDP 会话。" />
+                            </StackPanel>
+                        </Grid>
 
                         <StackPanel Grid.Row="2">
                             <TextBlock Style="{StaticResource LabelTextStyle}"
                                        Text="赛道筛选" />
                             <ComboBox Margin="0,8,0,0"
                                       Height="34"
+                                      Width="Auto"
                                       DisplayMemberPath="DisplayName"
                                       ItemsSource="{Binding SessionComparison.TrackFilters}"
-                                      SelectedItem="{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}" />
+                                      SelectedItem="{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}"
+                                      Style="{StaticResource DarkComboBoxStyle}" />
                         </StackPanel>
 
                         <Grid Grid.Row="4">
@@ -149,7 +167,8 @@
                                     HorizontalAlignment="Right"
                                     VerticalAlignment="Top"
                                     Command="{Binding SessionComparison.RefreshCommand}"
-                                    Content="刷新" />
+                                    Content="刷新"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
                         </Grid>
 
                         <Grid x:Name="CandidateSessionListHost"
@@ -178,18 +197,20 @@
                         <StackPanel Grid.Row="8"
                                     HorizontalAlignment="Right"
                                     Orientation="Horizontal">
-                            <Button Width="64"
-                                    Height="28"
+                            <Button Width="68"
+                                    Height="30"
                                     Command="{Binding SessionComparison.CandidateSessionPages.PreviousPageCommand}"
-                                    Content="上一页" />
+                                    Content="上一页"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
                             <TextBlock Margin="10,0"
                                        VerticalAlignment="Center"
                                        Style="{StaticResource MutedTextStyle}"
                                        Text="{Binding SessionComparison.CandidateSessionPages.PageText}" />
-                            <Button Width="64"
-                                    Height="28"
+                            <Button Width="68"
+                                    Height="30"
                                     Command="{Binding SessionComparison.CandidateSessionPages.NextPageCommand}"
-                                    Content="下一页" />
+                                    Content="下一页"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -198,23 +219,31 @@
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                    <Border Style="{StaticResource SectionCardStyle}">
+                    <Border x:Name="SessionComparisonSummaryPanel"
+                            Style="{StaticResource GlassCardStyle}">
                         <StackPanel>
-                            <Grid>
+                            <Grid x:Name="SessionComparisonSummaryHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="150" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource IconTextStyle}"
+                                               Text="&#xE9D2;" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}"
                                                Text="差异摘要" />
                                     <TextBlock Margin="0,6,0,0"
-                                               Style="{StaticResource MutedTextStyle}"
+                                               Style="{StaticResource BodyTextStyle}"
                                                Text="选择两个或更多历史会话后，这里汇总圈速、燃油、ERS 与轮胎磨损的对比差异。" />
                                 </StackPanel>
-                                <Border Grid.Column="1"
-                                        Padding="12,7"
-                                        HorizontalAlignment="Right"
+                                <Border Grid.Column="3"
+                                         Padding="12,7"
+                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Top"
                                         CornerRadius="12"
                                         Background="{StaticResource BgLoadingBadgeBrush}"
@@ -236,14 +265,29 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Margin="0,16,0,0"
-                            Style="{StaticResource SectionCardStyle}">
+                    <Border x:Name="SessionComparisonChartsPanel"
+                            Margin="0,16,0,0"
+                            Style="{StaticResource GlassCardStyle}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                       Text="历史趋势对比" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Style="{StaticResource MutedTextStyle}"
-                                       Text="图表只使用已保存历史会话数据，不随当前实时 UDP 数据刷新。" />
+                            <Grid x:Name="SessionComparisonChartsHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource IconTextStyle}"
+                                               Text="&#xE9D9;" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                               Text="历史趋势对比" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Style="{StaticResource BodyTextStyle}"
+                                               Text="图表只使用已保存历史会话数据，不随当前实时 UDP 数据刷新。" />
+                                </StackPanel>
+                            </Grid>
 
                             <Grid Margin="0,16,0,0">
                                 <Grid.ColumnDefinitions>
