@@ -15,12 +15,31 @@
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="{x:Type ListBoxItem}">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        <Border x:Name="SessionItemChrome"
+                                Padding="2"
+                                Background="{StaticResource TransparentBrush}"
+                                BorderBrush="{StaticResource TransparentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="Background" Value="{StaticResource BgListItemHoverBrush}" />
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="Background" Value="{StaticResource BgListItemSelectedBrush}" />
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource AccentPrimaryFocusBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>

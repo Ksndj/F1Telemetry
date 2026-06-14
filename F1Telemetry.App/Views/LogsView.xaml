@@ -26,8 +26,8 @@
         <Style x:Key="LogCategoryPillStyle" TargetType="{x:Type Border}">
             <Setter Property="HorizontalAlignment" Value="Left" />
             <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="MinWidth" Value="72" />
-            <Setter Property="MaxWidth" Value="104" />
+            <Setter Property="MinWidth" Value="88" />
+            <Setter Property="MaxWidth" Value="128" />
             <Setter Property="Padding" Value="8,3" />
             <Setter Property="CornerRadius" Value="6" />
             <Setter Property="Background" Value="{StaticResource BgPillBrush}" />
@@ -62,6 +62,7 @@
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
             <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Category}" Value="UDP">
                     <Setter Property="Foreground" Value="{StaticResource LogCategoryUdpFgBrush}" />
@@ -116,7 +117,7 @@
                 <Grid MinWidth="840">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="96" />
-                        <ColumnDefinition Width="128" />
+                        <ColumnDefinition Width="144" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
@@ -132,14 +133,18 @@
                         <TextBlock x:Name="LogCategoryText"
                                    Style="{StaticResource LogCategoryTextStyle}"
                                    Text="{Binding Category}"
+                                   TextTrimming="CharacterEllipsis"
+                                   TextWrapping="NoWrap"
                                    ToolTip="{Binding Category}" />
                     </Border>
                     <TextBlock x:Name="LogMessageText"
                                Grid.Column="2"
                                Style="{StaticResource TableCellTextStyle}"
                                Foreground="{StaticResource FgPrimaryBrush}"
+                               MaxHeight="22"
                                Text="{Binding Message}"
                                TextTrimming="CharacterEllipsis"
+                               TextWrapping="NoWrap"
                                ToolTip="{Binding Message}" />
                 </Grid>
             </Border>

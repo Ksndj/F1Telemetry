@@ -409,6 +409,7 @@ public sealed class UiSettingsPolishTests
     public void PostRaceReviewView_PreservesSelectionPagingExportAndChartBindings()
     {
         var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
         var sessionList = FindNamedElement(document, "PostRaceHistorySessionListBox");
         var historyCard = FindNamedElement(document, "PostRaceHistorySessionCard");
         var deleteButton = historyCard.Descendants().First(element => element.Name.LocalName == "Button");
@@ -421,6 +422,12 @@ public sealed class UiSettingsPolishTests
 
         Assert.Equal("{Binding PostRaceReview.HistoryBrowser.SelectedSession, Mode=TwoWay}", sessionList.Attribute("SelectedItem")?.Value);
         Assert.Equal("{StaticResource PostRaceHistorySessionItemStyle}", sessionList.Attribute("ItemContainerStyle")?.Value);
+        Assert.Contains("x:Name=\"SessionItemChrome\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsSelected\"", source, StringComparison.Ordinal);
+        Assert.Contains("BgListItemSelectedBrush", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsKeyboardFocusWithin\"", source, StringComparison.Ordinal);
+        Assert.Contains("AccentPrimaryFocusBrush", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("FocusVisualStyle", source, StringComparison.Ordinal);
         Assert.Equal(
             "{Binding DataContext.PostRaceReview.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}",
             deleteButton.Attribute("Command")?.Value);
@@ -437,6 +444,71 @@ public sealed class UiSettingsPolishTests
         Assert.Contains("{Binding PostRaceReview.FuelTrendPanel}", chartBindings);
         Assert.Contains("{Binding PostRaceReview.ErsTrendPanel}", chartBindings);
         Assert.Contains("{Binding PostRaceReview.TyreWearTrendPanel}", chartBindings);
+    }
+
+    /// <summary>
+    /// Verifies the corner analysis selectors keep their display contracts without changing selection bindings.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_FilterComboBoxes_UseSharedDarkStyleAndPreserveSelectionBindings()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+        var sessionComboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("ItemsSource")?.Value == "{Binding CornerAnalysis.HistoryBrowser.HistorySessions}");
+        var lapComboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("SelectedItem")?.Value == "{Binding CornerAnalysis.SelectedLap, Mode=TwoWay}");
+        var referenceComboBox = document.Descendants()
+            .First(element =>
+                element.Name.LocalName == "ComboBox"
+                && element.Attribute("SelectedItem")?.Value == "{Binding CornerAnalysis.SelectedReferenceLap, Mode=TwoWay}");
+
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", sessionComboBox.Attribute("Style")?.Value);
+        Assert.Equal("SummaryText", sessionComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal("{Binding CornerAnalysis.HistoryBrowser.SelectedSession, Mode=TwoWay}", sessionComboBox.Attribute("SelectedItem")?.Value);
+
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", lapComboBox.Attribute("Style")?.Value);
+        Assert.Equal("LapText", lapComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal("{Binding CornerAnalysis.SelectedLap, Mode=TwoWay}", lapComboBox.Attribute("SelectedItem")?.Value);
+
+        Assert.Equal("{StaticResource CornerAnalysisReferencePickerComboBoxStyle}", referenceComboBox.Attribute("Style")?.Value);
+        Assert.Equal("LapText", referenceComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal("True", referenceComboBox.Attribute("IsEditable")?.Value);
+        Assert.Equal("True", referenceComboBox.Attribute("IsReadOnly")?.Value);
+        Assert.Equal("{Binding CornerAnalysis.ReferencePickerText, Mode=OneWay}", referenceComboBox.Attribute("Text")?.Value);
+        Assert.Equal("{Binding CornerAnalysis.HasReferenceLapChoices}", referenceComboBox.Attribute("IsEnabled")?.Value);
+
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+        Assert.DoesNotContain("Style=\"{StaticResource DarkComboBoxStyle}\" DisplayMemberPath=\"LapText\" IsEditable=\"True\"", xaml, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the corner analysis page uses the same glass card and section header language as the baseline pages.
+    /// </summary>
+    [Fact]
+    public void CornerAnalysisView_UsesBaselineGlassCardsAndSectionHeaders()
+    {
+        var xaml = File.ReadAllText(FindRepositoryFile("F1Telemetry.App", "Views", "CornerAnalysisView.xaml"));
+        var document = XDocument.Parse(xaml);
+
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisFilterBar").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisListPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisDetailPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisTrackMapPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisVisualEvidencePanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisEngineerAdvicePanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "CornerAnalysisNotesPanel").Attribute("Style")?.Value);
+
+        Assert.Contains("Style=\"{StaticResource SectionHeaderStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource IconBadgeStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource IconTextStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Style=\"{StaticResource SectionTitleTextStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource PanelStyle}\"", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("Style=\"{StaticResource CardStyle}\"", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>
