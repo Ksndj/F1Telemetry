@@ -391,6 +391,83 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("ItemsSource=\"{Binding LogEntries}\"", text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Verifies that LogsView uses the shared card styles for its polished layout.
+    /// </summary>
+    [Fact]
+    public void LogsView_UsesPolishedCardsAndLocalLogScrolling()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LogsView.xaml"));
+        var scrollViewer = FindElementByName(document, "LogsScrollViewer");
+        var logScrollViewer = FindElementByName(document, "LogEntriesScrollViewer");
+
+        Assert.Equal("Disabled", scrollViewer.Attribute("HorizontalScrollBarVisibility")?.Value);
+        Assert.Equal("Auto", scrollViewer.Attribute("VerticalScrollBarVisibility")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindElementByName(document, "LogsHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindElementByName(document, "LogsSourceTile").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindElementByName(document, "LogsColumnsTile").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindElementByName(document, "LogsLongTextTile").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindElementByName(document, "LogsStreamPanel").Attribute("Style")?.Value);
+        Assert.Equal("Auto", logScrollViewer.Attribute("HorizontalScrollBarVisibility")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies that LogsView preserves the unified log stream binding and required visible columns.
+    /// </summary>
+    [Fact]
+    public void LogsView_PreservesLogEntriesBindingAndColumns()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LogsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var logEntries = FindElementByName(document, "LogEntriesItems");
+
+        Assert.Equal("ItemsControl", logEntries.Name.LocalName);
+        Assert.Equal("{Binding LogEntries}", logEntries.Attribute("ItemsSource")?.Value);
+        Assert.Contains("Text=\"时间\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"分类\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"摘要\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Timestamp}\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Category}\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Message}\"", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies that LogsView exposes a readable empty state and keeps long log text inspectable.
+    /// </summary>
+    [Fact]
+    public void LogsView_DefinesReadableEmptyStateAndLongTextTooltips()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LogsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var emptyState = FindElementByName(document, "LogEntriesEmptyState");
+        var timestamp = FindElementByName(document, "LogTimestampText");
+        var category = FindElementByName(document, "LogCategoryText");
+        var message = FindElementByName(document, "LogMessageText");
+
+        Assert.Equal("{StaticResource EmptyStateStyle}", emptyState.Attribute("Style")?.Value);
+        Assert.Contains("暂无日志", source, StringComparison.Ordinal);
+        Assert.Contains("连接或操作后显示事件日志", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"HasItems\"", source, StringComparison.Ordinal);
+        Assert.Equal("{Binding Timestamp}", timestamp.Attribute("ToolTip")?.Value);
+        Assert.Equal("{Binding Category}", category.Attribute("ToolTip")?.Value);
+        Assert.Equal("CharacterEllipsis", category.Attribute("TextTrimming")?.Value);
+        Assert.Equal("NoWrap", category.Attribute("TextWrapping")?.Value);
+        Assert.Equal("{Binding Message}", message.Attribute("ToolTip")?.Value);
+        Assert.Equal("22", message.Attribute("MaxHeight")?.Value);
+        Assert.Equal("CharacterEllipsis", message.Attribute("TextTrimming")?.Value);
+        Assert.Equal("NoWrap", message.Attribute("TextWrapping")?.Value);
+
+        var rowColumnDefinitions = FindElementByName(document, "LogEntryRowCard")
+            .Descendants()
+            .First(element => element.Name.LocalName == "Grid.ColumnDefinitions");
+        var rowColumns = rowColumnDefinitions.Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .Select(element => element.Attribute("Width")?.Value ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal(new[] { "96", "144", "*" }, rowColumns);
+    }
+
     private static LogEntryViewModel CreateLog(string category, string message)
     {
         return new LogEntryViewModel
