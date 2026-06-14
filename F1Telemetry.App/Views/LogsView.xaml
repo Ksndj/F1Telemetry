@@ -6,288 +6,48 @@
              mc:Ignorable="d"
              d:DesignHeight="680"
              d:DesignWidth="1120">
-<UserControl.Resources>
-        <SolidColorBrush x:Key="LogCategoryUdpBgBrush" Color="#07333A" />
-        <SolidColorBrush x:Key="LogCategoryUdpBorderBrush" Color="#147C8F" />
-        <SolidColorBrush x:Key="LogCategoryUdpFgBrush" Color="#7DD3FC" />
-        <SolidColorBrush x:Key="LogCategoryRaceBgBrush" Color="#3A2A05" />
-        <SolidColorBrush x:Key="LogCategoryRaceBorderBrush" Color="#A67C10" />
-        <SolidColorBrush x:Key="LogCategoryRaceFgBrush" Color="#F6C453" />
-        <SolidColorBrush x:Key="LogCategoryAiBgBrush" Color="#2A1A3F" />
-        <SolidColorBrush x:Key="LogCategoryAiBorderBrush" Color="#7A4FB3" />
-        <SolidColorBrush x:Key="LogCategoryAiFgBrush" Color="#D8B4FE" />
-        <SolidColorBrush x:Key="LogCategoryTtsBgBrush" Color="#102D4A" />
-        <SolidColorBrush x:Key="LogCategoryTtsBorderBrush" Color="#2F77B8" />
-        <SolidColorBrush x:Key="LogCategoryTtsFgBrush" Color="#93C5FD" />
-        <SolidColorBrush x:Key="LogCategoryStorageBgBrush" Color="#122B1C" />
-        <SolidColorBrush x:Key="LogCategoryStorageBorderBrush" Color="#2F8A4A" />
-        <SolidColorBrush x:Key="LogCategoryStorageFgBrush" Color="#86EFAC" />
-
-        <Style x:Key="LogCategoryPillStyle" TargetType="{x:Type Border}">
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="VerticalAlignment" Value="Center" />
-            <Setter Property="MinWidth" Value="72" />
-            <Setter Property="MaxWidth" Value="104" />
-            <Setter Property="Padding" Value="8,3" />
-            <Setter Property="CornerRadius" Value="6" />
-            <Setter Property="Background" Value="{StaticResource BgPillBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderPillBrush}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding Category}" Value="UDP">
-                    <Setter Property="Background" Value="{StaticResource LogCategoryUdpBgBrush}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource LogCategoryUdpBorderBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="RaceEvent">
-                    <Setter Property="Background" Value="{StaticResource LogCategoryRaceBgBrush}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource LogCategoryRaceBorderBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="AI">
-                    <Setter Property="Background" Value="{StaticResource LogCategoryAiBgBrush}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource LogCategoryAiBorderBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="TTS">
-                    <Setter Property="Background" Value="{StaticResource LogCategoryTtsBgBrush}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource LogCategoryTtsBorderBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="Storage">
-                    <Setter Property="Background" Value="{StaticResource LogCategoryStorageBgBrush}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource LogCategoryStorageBorderBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="LogCategoryTextStyle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource TableCellTextStyle}">
-            <Setter Property="HorizontalAlignment" Value="Center" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
-            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
-            <Style.Triggers>
-                <DataTrigger Binding="{Binding Category}" Value="UDP">
-                    <Setter Property="Foreground" Value="{StaticResource LogCategoryUdpFgBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="RaceEvent">
-                    <Setter Property="Foreground" Value="{StaticResource LogCategoryRaceFgBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="AI">
-                    <Setter Property="Foreground" Value="{StaticResource LogCategoryAiFgBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="TTS">
-                    <Setter Property="Foreground" Value="{StaticResource LogCategoryTtsFgBrush}" />
-                </DataTrigger>
-                <DataTrigger Binding="{Binding Category}" Value="Storage">
-                    <Setter Property="Foreground" Value="{StaticResource LogCategoryStorageFgBrush}" />
-                </DataTrigger>
-            </Style.Triggers>
-        </Style>
-
-        <Style x:Key="LogEntriesItemsControlStyle" TargetType="{x:Type ItemsControl}">
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type ItemsControl}">
-                        <Grid>
-                            <ItemsPresenter x:Name="LogEntriesPresenter" />
-                            <Border x:Name="LogEntriesEmptyState"
-                                    Style="{StaticResource EmptyStateStyle}"
-                                    Visibility="Collapsed">
-                                <StackPanel HorizontalAlignment="Center"
-                                            VerticalAlignment="Center">
-                                    <TextBlock Style="{StaticResource EmptyStateTitleTextStyle}"
-                                               Text="暂无日志" />
-                                    <TextBlock Style="{StaticResource EmptyStateBodyTextStyle}"
-                                               Text="连接或操作后显示事件日志" />
-                                </StackPanel>
-                            </Border>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="HasItems" Value="False">
-                                <Setter TargetName="LogEntriesPresenter" Property="Visibility" Value="Collapsed" />
-                                <Setter TargetName="LogEntriesEmptyState" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <DataTemplate x:Key="LogEntryRowTemplate">
-            <Border x:Name="LogEntryRowCard"
-                    Style="{StaticResource MetricTileStyle}">
-                <Grid MinWidth="840">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="96" />
-                        <ColumnDefinition Width="128" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <TextBlock x:Name="LogTimestampText"
-                               Style="{StaticResource TableCellTextStyle}"
-                               Foreground="{StaticResource FgLabelBrush}"
-                               Text="{Binding Timestamp}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Timestamp}" />
-                    <Border Grid.Column="1"
-                            Style="{StaticResource LogCategoryPillStyle}"
-                            ToolTip="{Binding Category}">
-                        <TextBlock x:Name="LogCategoryText"
-                                   Style="{StaticResource LogCategoryTextStyle}"
-                                   Text="{Binding Category}"
-                                   ToolTip="{Binding Category}" />
-                    </Border>
-                    <TextBlock x:Name="LogMessageText"
-                               Grid.Column="2"
-                               Style="{StaticResource TableCellTextStyle}"
-                               Foreground="{StaticResource FgPrimaryBrush}"
-                               Text="{Binding Message}"
-                               TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding Message}" />
-                </Grid>
-            </Border>
-        </DataTemplate>
-    </UserControl.Resources>
-
     <ScrollViewer x:Name="LogsScrollViewer"
                   HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-        <StackPanel Background="{StaticResource BgDeepBrush}">
-            <Border x:Name="LogsHeader"
-                    Margin="0,0,0,12"
-                    Style="{StaticResource GlassCardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="40" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+        <Border Padding="20"
+                CornerRadius="20"
+                Background="{StaticResource BgPanelBrush}">
+            <StackPanel>
+                <TextBlock FontSize="20"
+                           FontWeight="SemiBold"
+                           Foreground="{StaticResource FgPrimaryBrush}"
+                           Text="事件日志" />
+                <TextBlock Margin="0,6,0,0"
+                           Foreground="{StaticResource FgSectionBrush}"
+                           Text="完整日志按 System / UDP / RaceEvent / AI / TTS / Storage 分类显示。"
+                           TextWrapping="Wrap" />
 
-                    <Border Style="{StaticResource IconBadgeLargeStyle}">
-                        <TextBlock HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource AccentPrimaryBrush}"
-                                   Text="LOG" />
-                    </Border>
-                    <StackPanel Grid.Column="1"
-                                Margin="12,0,0,0">
-                        <TextBlock FontSize="24"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource FgPrimaryBrush}"
-                                   Text="事件日志"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="事件日志" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Style="{StaticResource BodyTextStyle}"
-                                   Text="完整日志按 System / UDP / RaceEvent / AI / TTS / Storage 分类显示。" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="12" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <Border x:Name="LogsSourceTile"
-                        Style="{StaticResource MetricTileStyle}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="最新日志" />
-                        <TextBlock Style="{StaticResource CardValueTextStyle}"
-                                   Text="统一事件流"
-                                   ToolTip="统一事件流" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Style="{StaticResource BodyTextStyle}"
-                                   Text="来自 LogEntries" />
-                    </StackPanel>
-                </Border>
-
-                <Border x:Name="LogsColumnsTile"
-                        Grid.Column="2"
-                        Style="{StaticResource MetricTileStyle}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="分类" />
-                        <TextBlock Style="{StaticResource CardValueTextStyle}"
-                                   Text="System / UDP / RaceEvent"
-                                   ToolTip="System / UDP / RaceEvent / AI / TTS / Storage" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Style="{StaticResource BodyTextStyle}"
-                                   Text="保留时间、分类、摘要三列" />
-                    </StackPanel>
-                </Border>
-
-                <Border x:Name="LogsLongTextTile"
-                        Grid.Column="4"
-                        Style="{StaticResource MetricTileStyle}">
-                    <StackPanel>
-                        <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="日志状态" />
-                        <TextBlock Style="{StaticResource CardValueTextStyle}"
-                                   Text="长文本悬停查看完整内容"
-                                   ToolTip="长文本悬停查看完整内容" />
-                        <TextBlock Margin="0,4,0,0"
-                                   Style="{StaticResource BodyTextStyle}"
-                                   Text="空列表显示统一空状态" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <Border x:Name="LogsStreamPanel"
-                    Margin="0,12,0,0"
-                    Style="{StaticResource GlassCardStyle}">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="12" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-
-                    <Grid x:Name="LogsStreamHeader"
-                          Style="{StaticResource SectionHeaderStyle}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="34" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Border Style="{StaticResource IconBadgeStyle}">
-                            <TextBlock HorizontalAlignment="Center"
-                                       VerticalAlignment="Center"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentPrimaryBrush}"
-                                       Text="L" />
-                        </Border>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock Style="{StaticResource SectionTitleTextStyle}"
-                                       Text="日志流" />
-                            <TextBlock Margin="0,3,0,0"
-                                       Style="{StaticResource BodyTextStyle}"
-                                       Text="按时间查看 System / UDP / RaceEvent / AI / TTS / Storage 分类日志。" />
-                        </StackPanel>
-                    </Grid>
-
-                    <ScrollViewer x:Name="LogEntriesScrollViewer"
-                                  Grid.Row="2"
-                                  HorizontalScrollBarVisibility="Auto"
-                                  VerticalScrollBarVisibility="Disabled">
-                        <StackPanel MinWidth="900">
-                            <Grid Margin="14,0,14,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="96" />
-                                    <ColumnDefinition Width="128" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Style="{StaticResource HeaderLabelStyle}" Text="时间" />
-                                <TextBlock Grid.Column="1" Style="{StaticResource HeaderLabelStyle}" Text="分类" />
-                                <TextBlock Grid.Column="2" Style="{StaticResource HeaderLabelStyle}" Text="摘要" />
-                            </Grid>
-
-                            <ItemsControl x:Name="LogEntriesItems"
-                                          ItemTemplate="{StaticResource LogEntryRowTemplate}"
-                                          ItemsSource="{Binding LogEntries}"
-                                          Style="{StaticResource LogEntriesItemsControlStyle}" />
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </Border>
-        </StackPanel>
+                <ItemsControl Margin="0,18,0,0"
+                              ItemsSource="{Binding LogEntries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Margin="0,0,0,8"
+                                    Padding="12"
+                                    CornerRadius="12"
+                                    Background="{StaticResource BgCardBrush}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="70" />
+                                        <ColumnDefinition Width="54" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
+                                    <TextBlock Grid.Column="1" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding Category}" />
+                                    <TextBlock Grid.Column="2"
+                                               Foreground="{StaticResource FgPrimaryBrush}"
+                                               Text="{Binding Message}"
+                                               TextWrapping="Wrap" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
     </ScrollViewer>
 </UserControl>
