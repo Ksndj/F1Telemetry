@@ -617,6 +617,7 @@ public sealed class UiSettingsPolishTests
     public void LapHistoryView_PreservesHistoryBindingsPaginationAndCommands()
     {
         var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "LapHistoryView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
         var sessionList = FindNamedElement(document, "HistorySessionListBox");
         var lapItems = FindNamedElement(document, "HistoryLapItemsControl");
         var recentItems = FindNamedElement(document, "RecentLapSummariesItemsControl");
@@ -626,6 +627,12 @@ public sealed class UiSettingsPolishTests
         Assert.Equal("{Binding HistoryBrowser.HistorySessionPages.Items}", sessionList.Attribute("ItemsSource")?.Value);
         Assert.Equal("{Binding HistoryBrowser.SelectedSession, Mode=TwoWay}", sessionList.Attribute("SelectedItem")?.Value);
         Assert.Equal("{StaticResource LapHistorySessionItemStyle}", sessionList.Attribute("ItemContainerStyle")?.Value);
+        Assert.Contains("x:Name=\"LapHistorySessionItemChrome\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsSelected\"", source, StringComparison.Ordinal);
+        Assert.Contains("BgListItemSelectedBrush", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsKeyboardFocusWithin\"", source, StringComparison.Ordinal);
+        Assert.Contains("AccentPrimaryFocusBrush", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("FocusVisualStyle", source, StringComparison.Ordinal);
         Assert.Equal("{Binding HistoryBrowser.HistoryLapPages.Items}", lapItems.Attribute("ItemsSource")?.Value);
         Assert.Equal("{StaticResource LapSummaryRowTemplate}", lapItems.Attribute("ItemTemplate")?.Value);
         Assert.Equal("{Binding RecentLapSummaries}", recentItems.Attribute("ItemsSource")?.Value);
