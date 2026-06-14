@@ -450,8 +450,22 @@ public sealed class EventSummaryAndLogCategoryTests
         Assert.Contains("Property=\"HasItems\"", source, StringComparison.Ordinal);
         Assert.Equal("{Binding Timestamp}", timestamp.Attribute("ToolTip")?.Value);
         Assert.Equal("{Binding Category}", category.Attribute("ToolTip")?.Value);
+        Assert.Equal("CharacterEllipsis", category.Attribute("TextTrimming")?.Value);
+        Assert.Equal("NoWrap", category.Attribute("TextWrapping")?.Value);
         Assert.Equal("{Binding Message}", message.Attribute("ToolTip")?.Value);
+        Assert.Equal("22", message.Attribute("MaxHeight")?.Value);
         Assert.Equal("CharacterEllipsis", message.Attribute("TextTrimming")?.Value);
+        Assert.Equal("NoWrap", message.Attribute("TextWrapping")?.Value);
+
+        var rowColumnDefinitions = FindElementByName(document, "LogEntryRowCard")
+            .Descendants()
+            .First(element => element.Name.LocalName == "Grid.ColumnDefinitions");
+        var rowColumns = rowColumnDefinitions.Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .Select(element => element.Attribute("Width")?.Value ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal(new[] { "96", "144", "*" }, rowColumns);
     }
 
     private static LogEntryViewModel CreateLog(string category, string message)
