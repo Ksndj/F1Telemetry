@@ -494,6 +494,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             },
             () => VoiceAssistantEnabled || VoiceAiEnabled);
         _openRaceAssistantCommand = new RelayCommand(OpenRaceAssistantPanel);
+        AiTts = new AiTtsViewModel(this);
+        Settings = new SettingsViewModel(this);
 
         _udpListener.DatagramReceived += OnDatagramReceived;
         _udpListener.ReceiveFaulted += OnReceiveFaulted;
@@ -565,6 +567,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// Gets the dedicated page view model for AI broadcast.
     /// </summary>
     public AiBroadcastViewModel AiBroadcast { get; }
+
+    /// <summary>
+    /// Gets the dedicated page view model for AI/TTS controls.
+    /// </summary>
+    public AiTtsViewModel AiTts { get; }
+
+    /// <summary>
+    /// Gets the dedicated page view model for Settings controls.
+    /// </summary>
+    public SettingsViewModel Settings { get; }
 
     /// <summary>
     /// Gets a value indicating whether the sidebar is expanded.
@@ -2707,6 +2719,8 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _packetDispatcher.PacketDispatched -= OnPacketDispatched;
         _storagePersistenceService.LogEmitted -= OnStorageLogEmitted;
         AiBroadcast.PropertyChanged -= OnAiBroadcastPropertyChanged;
+        AiTts.Dispose();
+        Settings.Dispose();
 
         try
         {

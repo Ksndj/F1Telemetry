@@ -36,11 +36,11 @@
     </DataTemplate>
 
     <DataTemplate x:Key="AiTtsContentTemplate">
-        <views:AiTtsView DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+        <views:AiTtsView DataContext="{Binding DataContext.AiTts, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
     </DataTemplate>
 
     <DataTemplate x:Key="SettingsContentTemplate">
-        <views:SettingsView DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+        <views:SettingsView DataContext="{Binding DataContext.Settings, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
     </DataTemplate>
 
     <DataTemplate x:Key="PlaceholderContentTemplate">
