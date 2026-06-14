@@ -345,6 +345,74 @@ public sealed class UiSettingsPolishTests
     }
 
     /// <summary>
+    /// Verifies the polished Settings page keeps binding contracts while adding dense layout anchors.
+    /// </summary>
+    [Fact]
+    public void SettingsView_DefinesPolishedLayoutContracts()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SettingsView.xaml"));
+        var scrollViewer = FindElementByName(document, "SettingsScrollViewer");
+
+        Assert.Equal("Disabled", scrollViewer.Attribute("HorizontalScrollBarVisibility")?.Value);
+        Assert.Equal("Auto", scrollViewer.Attribute("VerticalScrollBarVisibility")?.Value);
+
+        foreach (var sectionName in new[]
+                 {
+                     "SettingsSummarySection",
+                     "RuntimeLogSection",
+                     "UdpRawLogSection",
+                     "VoiceAiSection",
+                     "VersionUpdateSection"
+                 })
+        {
+            Assert.Equal("Border", FindElementByName(document, sectionName).Name.LocalName);
+        }
+
+        foreach (var textBlockName in new[]
+                 {
+                     "AppLogDirectoryTextBlock",
+                     "AppLogLastFilePathTextBlock",
+                     "RaceAssistantLogDirectoryTextBlock",
+                     "RaceAssistantLogLastFilePathTextBlock",
+                     "UdpRawLogDirectoryTextBlock",
+                     "UdpRawLogLastFilePathTextBlock"
+                 })
+        {
+            var textBlock = FindElementByName(document, textBlockName);
+
+            Assert.Equal("CharacterEllipsis", textBlock.Attribute("TextTrimming")?.Value);
+            Assert.Equal("NoWrap", textBlock.Attribute("TextWrapping")?.Value);
+            Assert.Equal(textBlock.Attribute("Text")?.Value, textBlock.Attribute("ToolTip")?.Value);
+        }
+
+        var talkModeComboBox = FindElementByName(document, "VoiceAiTalkModeComboBox");
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", talkModeComboBox.Attribute("Style")?.Value);
+        Assert.Equal("240", talkModeComboBox.Attribute("MaxDropDownHeight")?.Value);
+        Assert.Equal("DisplayName", talkModeComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal(
+            "{Binding SelectedVoiceAiTalkModeOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            talkModeComboBox.Attribute("SelectedItem")?.Value);
+
+        var microphoneComboBox = FindElementByName(document, "VoiceAiMicrophoneComboBox");
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", microphoneComboBox.Attribute("Style")?.Value);
+        Assert.Equal("240", microphoneComboBox.Attribute("MaxDropDownHeight")?.Value);
+        Assert.Equal("DisplayName", microphoneComboBox.Attribute("DisplayMemberPath")?.Value);
+        Assert.Equal(
+            "{Binding VoiceAiMicrophoneDeviceId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            microphoneComboBox.Attribute("SelectedValue")?.Value);
+        Assert.Equal("DeviceId", microphoneComboBox.Attribute("SelectedValuePath")?.Value);
+
+        var maxSizeTextBox = FindElementByName(document, "MaxLogFileSizeMbTextBox");
+        Assert.Equal(
+            "{Binding MaxLogFileSizeMbText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            maxSizeTextBox.Attribute("Text")?.Value);
+        var retentionTextBox = FindElementByName(document, "MaxLogRetentionDaysTextBox");
+        Assert.Equal(
+            "{Binding MaxLogRetentionDaysText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}",
+            retentionTextBox.Attribute("Text")?.Value);
+    }
+
+    /// <summary>
     /// Verifies the settings page lays out the voice AI status rows without visual overlap.
     /// </summary>
     [Fact]
@@ -435,6 +503,12 @@ public sealed class UiSettingsPolishTests
     private static TextBlock FindTextBlock(DependencyObject root, string text)
     {
         return FindDescendants<TextBlock>(root).First(textBlock => textBlock.Text == text);
+    }
+
+    private static XElement FindElementByName(XContainer document, string name)
+    {
+        return document.Descendants()
+            .First(element => element.Attributes().Any(attribute => attribute.Name.LocalName == "Name" && attribute.Value == name));
     }
 
     private static Rect GetBounds(FrameworkElement element, Visual ancestor)
