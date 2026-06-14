@@ -945,11 +945,6 @@ public sealed class UiSettingsPolishTests
         return transform.TransformBounds(new Rect(element.RenderSize));
     }
 
-    private static XElement FindNamedElement(XDocument document, string name)
-    {
-        return document.Descendants().First(element => element.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value == name);
-    }
-
     private static IReadOnlyList<T> FindDescendants<T>(DependencyObject root)
         where T : DependencyObject
     {
