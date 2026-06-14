@@ -1,4 +1,5 @@
 using System.IO;
+using System.Xml.Linq;
 using F1Telemetry.AI.Services;
 using F1Telemetry.Analytics.Laps;
 using F1Telemetry.App.ViewModels;
@@ -57,6 +58,85 @@ public sealed class AiBroadcastConversionTests
         var chartsSlot = ShellNavigationItemViewModel.CreateDefaultItems().Single(item => item.Key == "charts");
 
         Assert.Equal("分析播报", chartsSlot.Name);
+    }
+
+    /// <summary>
+    /// Verifies the shell gives the charts slot its dedicated AI broadcast page view model.
+    /// </summary>
+    [Fact]
+    public void ShellStyles_ChartsTemplate_UsesAiBroadcastPageViewModel()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Styles", "ShellStyles.xaml"));
+        XNamespace xamlNamespace = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
+        XNamespace xNamespace = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var chartsTemplate = document.Descendants(xamlNamespace + "DataTemplate")
+            .Single(element => element.Attribute(xNamespace + "Key")?.Value == "ChartsContentTemplate");
+        var chartsView = chartsTemplate.Descendants().Single(element => element.Name.LocalName == "ChartsView");
+        var dataContextBinding = chartsView.Attribute("DataContext")?.Value;
+
+        Assert.NotNull(dataContextBinding);
+        Assert.Contains("DataContext.AiBroadcast", dataContextBinding, StringComparison.Ordinal);
+        Assert.Contains("AncestorType={x:Type Window}", dataContextBinding, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Verifies the dashboard exposes a dedicated page module for AI broadcast state.
+    /// </summary>
+    [Fact]
+    public void DashboardViewModel_ExposesAiBroadcastPageViewModel()
+    {
+        var property = typeof(DashboardViewModel).GetProperty("AiBroadcast");
+
+        Assert.NotNull(property);
+        Assert.Equal("F1Telemetry.App.ViewModels.AiBroadcastViewModel", property.PropertyType.FullName);
+    }
+
+    /// <summary>
+    /// Verifies the AI broadcast page view model owns the page binding surface.
+    /// </summary>
+    [Fact]
+    public void AiBroadcastViewModel_DefinesPageBindingSurface()
+    {
+        var viewModelType = Type.GetType("F1Telemetry.App.ViewModels.AiBroadcastViewModel, F1Telemetry.App");
+
+        Assert.NotNull(viewModelType);
+
+        string[] propertyNames =
+        [
+            "AiEnabled",
+            "AiApiKeyStatusText",
+            "AiModel",
+            "TtsEnabled",
+            "TtsVoiceName",
+            "TtsVoiceStatusText",
+            "PostRaceAiStatusText",
+            "PostRaceAiCompletionText",
+            "PostRaceAiDataStatusText",
+            "PostRaceAiSummaryCommandTooltipText",
+            "PostRaceAiFailureReason",
+            "PostRaceAiLastAnalysisText",
+            "PostRaceAiHasReport",
+            "PostRaceAiReportSummaryText",
+            "PostRaceAiKeyProblemsText",
+            "PostRaceAiStrategyReviewText",
+            "PostRaceAiTyreReviewText",
+            "PostRaceAiErsFuelReviewText",
+            "PostRaceAiOpponentReviewText",
+            "PostRaceAiImprovementsText",
+            "PostRaceAiCompletionModes",
+            "SelectedPostRaceAiCompletionMode",
+            "AiAnalysisLogs",
+            "AiTtsLogs",
+            "CanGeneratePostRaceAiSummary",
+            "GeneratePostRaceAiSummaryCommand",
+            "RegeneratePostRaceAiSummaryCommand"
+        ];
+
+        foreach (var propertyName in propertyNames)
+        {
+            Assert.NotNull(viewModelType.GetProperty(propertyName));
+        }
     }
 
     /// <summary>

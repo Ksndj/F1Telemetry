@@ -8,7 +8,7 @@
     </DataTemplate>
 
     <DataTemplate x:Key="ChartsContentTemplate">
-        <views:ChartsView DataContext="{Binding DataContext, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
+        <views:ChartsView DataContext="{Binding DataContext.AiBroadcast, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" />
     </DataTemplate>
 
     <DataTemplate x:Key="LapHistoryContentTemplate">
