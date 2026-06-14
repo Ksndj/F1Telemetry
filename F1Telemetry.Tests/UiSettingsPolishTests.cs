@@ -361,6 +361,92 @@ public sealed class UiSettingsPolishTests
     }
 
     /// <summary>
+    /// Verifies the post-race review page adopts the shared baseline card and section styles.
+    /// </summary>
+    [Fact]
+    public void PostRaceReviewView_UsesBaselineGlassCardsAndSectionHeaders()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
+
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "PostRaceHistorySessionCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "PostRaceMetricCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceHistoryPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceSummaryPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceTrendChartsPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceStintSummaryPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceEventTimelineHost").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "PostRaceAiReportHost").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "PostRaceHistoryHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "PostRaceSummaryHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "PostRaceChartsHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "PostRaceAiReportHeader").Attribute("Style")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the post-race review action buttons use shared styles without changing commands.
+    /// </summary>
+    [Fact]
+    public void PostRaceReviewView_ActionButtonsUseSharedStylesAndPreserveCommands()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
+        var refreshButton = FindButtonByCommand(document, "{Binding PostRaceReview.RefreshCommand}");
+        var exportMarkdownButton = FindButtonByCommand(document, "{Binding PostRaceReview.ExportMarkdownCommand}");
+        var exportJsonButton = FindButtonByCommand(document, "{Binding PostRaceReview.ExportJsonCommand}");
+        var historyPreviousButton = FindButtonByCommand(document, "{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.PreviousPageCommand}");
+        var historyNextButton = FindButtonByCommand(document, "{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.NextPageCommand}");
+
+        Assert.Equal("{StaticResource SecondaryButtonStyle}", refreshButton.Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SecondaryButtonStyle}", exportMarkdownButton.Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SecondaryButtonStyle}", exportJsonButton.Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SecondaryButtonStyle}", historyPreviousButton.Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource PrimaryButtonStyle}", historyNextButton.Attribute("Style")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the post-race review page preserves selection, delete, export, paging, and chart bindings.
+    /// </summary>
+    [Fact]
+    public void PostRaceReviewView_PreservesSelectionPagingExportAndChartBindings()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "PostRaceReviewView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var sessionList = FindNamedElement(document, "PostRaceHistorySessionListBox");
+        var historyCard = FindNamedElement(document, "PostRaceHistorySessionCard");
+        var deleteButton = historyCard.Descendants().First(element => element.Name.LocalName == "Button");
+        var timelineHost = FindNamedElement(document, "PostRaceEventTimelineHost");
+        var aiReportHost = FindNamedElement(document, "PostRaceAiReportHost");
+        var chartBindings = document.Descendants()
+            .Where(element => element.Name.LocalName == "TelemetryChartControl")
+            .Select(element => element.Attribute("DataContext")?.Value)
+            .ToArray();
+
+        Assert.Equal("{Binding PostRaceReview.HistoryBrowser.SelectedSession, Mode=TwoWay}", sessionList.Attribute("SelectedItem")?.Value);
+        Assert.Equal("{StaticResource PostRaceHistorySessionItemStyle}", sessionList.Attribute("ItemContainerStyle")?.Value);
+        Assert.Contains("x:Name=\"SessionItemChrome\"", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsSelected\"", source, StringComparison.Ordinal);
+        Assert.Contains("BgListItemSelectedBrush", source, StringComparison.Ordinal);
+        Assert.Contains("Property=\"IsKeyboardFocusWithin\"", source, StringComparison.Ordinal);
+        Assert.Contains("AccentPrimaryFocusBrush", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("FocusVisualStyle", source, StringComparison.Ordinal);
+        Assert.Equal(
+            "{Binding DataContext.PostRaceReview.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}",
+            deleteButton.Attribute("Command")?.Value);
+        Assert.Equal("{Binding}", deleteButton.Attribute("CommandParameter")?.Value);
+        Assert.Equal("{Binding CanDelete}", deleteButton.Attribute("IsEnabled")?.Value);
+        Assert.Equal(
+            "{Binding PostRaceReview.EventTimelinePages}",
+            timelineHost.Attributes().First(attribute => attribute.Name.LocalName == "AdaptivePageSizeBehavior.PagedCollection").Value);
+        Assert.Equal(
+            "{Binding PostRaceReview.AiReportPages}",
+            aiReportHost.Attributes().First(attribute => attribute.Name.LocalName == "AdaptivePageSizeBehavior.PagedCollection").Value);
+        Assert.Contains("{Binding PostRaceReview.LapTimeTrendPanel}", chartBindings);
+        Assert.Contains("{Binding PostRaceReview.SectorTrendPanel}", chartBindings);
+        Assert.Contains("{Binding PostRaceReview.FuelTrendPanel}", chartBindings);
+        Assert.Contains("{Binding PostRaceReview.ErsTrendPanel}", chartBindings);
+        Assert.Contains("{Binding PostRaceReview.TyreWearTrendPanel}", chartBindings);
+    }
+
+    /// <summary>
     /// Verifies the corner analysis selectors keep their display contracts without changing selection bindings.
     /// </summary>
     [Fact]
@@ -623,6 +709,16 @@ public sealed class UiSettingsPolishTests
         return transform.TransformBounds(new Rect(element.RenderSize));
     }
 
+    private static XElement FindNamedElement(XDocument document, string name)
+    {
+        return document.Descendants().First(element => element.Attribute("{http://schemas.microsoft.com/winfx/2006/xaml}Name")?.Value == name);
+    }
+
+    private static XElement FindButtonByCommand(XDocument document, string command)
+    {
+        return document.Descendants().First(element => element.Name.LocalName == "Button" && element.Attribute("Command")?.Value == command);
+    }
+
     private static IReadOnlyList<T> FindDescendants<T>(DependencyObject root)
         where T : DependencyObject
     {
@@ -666,12 +762,6 @@ public sealed class UiSettingsPolishTests
         }
 
         throw new FileNotFoundException($"Could not find repository file: {Path.Combine(pathParts)}");
-    }
-
-    private static XElement FindNamedElement(XDocument document, string name)
-    {
-        return document.Descendants()
-            .First(element => element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == name);
     }
 
     private sealed class PasswordBindingSource : INotifyPropertyChanged

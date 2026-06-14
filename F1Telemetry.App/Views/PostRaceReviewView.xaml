@@ -11,9 +11,44 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
 
+        <Style x:Key="PostRaceHistorySessionItemStyle" TargetType="{x:Type ListBoxItem}">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ListBoxItem}">
+                        <Border x:Name="SessionItemChrome"
+                                Padding="2"
+                                Background="{StaticResource TransparentBrush}"
+                                BorderBrush="{StaticResource TransparentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="Background" Value="{StaticResource BgListItemHoverBrush}" />
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="Background" Value="{StaticResource BgListItemSelectedBrush}" />
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource BorderListItemSelectedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="SessionItemChrome" Property="BorderBrush" Value="{StaticResource AccentPrimaryFocusBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <DataTemplate x:Key="HistorySessionTemplate">
-            <Border Margin="0,0,0,10"
-                    Style="{StaticResource InnerCardStyle}">
+            <Border x:Name="PostRaceHistorySessionCard"
+                    Margin="0,0,0,10"
+                    Style="{StaticResource MetricTileStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -44,15 +79,17 @@
                             Command="{Binding DataContext.PostRaceReview.HistoryBrowser.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
                             CommandParameter="{Binding}"
                             Content="删除"
-                            IsEnabled="{Binding CanDelete}" />
+                            IsEnabled="{Binding CanDelete}"
+                            Style="{StaticResource SecondaryButtonStyle}" />
                 </Grid>
             </Border>
         </DataTemplate>
 
         <DataTemplate x:Key="MetricTemplate">
-            <Border Margin="0,0,10,10"
+            <Border x:Name="PostRaceMetricCard"
+                    Margin="0,0,10,10"
                     Width="150"
-                    Style="{StaticResource InnerCardStyle}">
+                    Style="{StaticResource MetricTileStyle}">
                 <StackPanel>
                     <TextBlock Style="{StaticResource LabelTextStyle}"
                                Text="{Binding Label}" />
@@ -70,7 +107,7 @@
 
         <DataTemplate x:Key="StintTemplate">
             <Border Margin="0,0,0,10"
-                    Style="{StaticResource InnerCardStyle}">
+                    Style="{StaticResource MetricTileStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="120" />
@@ -92,7 +129,7 @@
 
         <DataTemplate x:Key="TimelineTemplate">
             <Border Margin="0,0,0,10"
-                    Style="{StaticResource InnerCardStyle}">
+                    Style="{StaticResource MetricTileStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="84" />
@@ -114,7 +151,7 @@
 
         <DataTemplate x:Key="AiReportTemplate">
             <Border Margin="0,0,0,10"
-                    Style="{StaticResource InnerCardStyle}">
+                    Style="{StaticResource MetricTileStyle}">
                 <StackPanel>
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -154,7 +191,8 @@
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <Border Style="{StaticResource SectionCardStyle}">
+                <Border x:Name="PostRaceHistoryPanel"
+                        Style="{StaticResource GlassCardStyle}">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -168,13 +206,25 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
-                        <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                       Text="历史赛后复盘" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Style="{StaticResource MutedTextStyle}"
-                                       Text="这里查看已保存的历史 udp 会话复盘，不反映当前正在接收的实时 udp 会话。选择历史会话后，右侧内容会切换到对应记录。" />
-                        </StackPanel>
+                        <Grid x:Name="PostRaceHistoryHeader"
+                              Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource IconBadgeStyle}">
+                                <TextBlock Style="{StaticResource IconTextStyle}"
+                                           Text="&#xE7C1;" />
+                            </Border>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                           Text="赛后复盘" />
+                                <TextBlock Margin="0,5,0,0"
+                                           Style="{StaticResource BodyTextStyle}"
+                                           Text="回顾已保存的历史 UDP 会话，分析关键数据与事件，生成复盘报告。" />
+                            </StackPanel>
+                        </Grid>
 
                         <Grid Grid.Row="2">
                             <Grid.ColumnDefinitions>
@@ -189,7 +239,8 @@
                                     Height="34"
                                     HorizontalAlignment="Right"
                                     Command="{Binding PostRaceReview.RefreshCommand}"
-                                    Content="刷新历史" />
+                                    Content="刷新历史"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
                         </Grid>
 
                         <TextBlock Grid.Row="4"
@@ -207,6 +258,7 @@
                                      Background="{StaticResource TransparentBrush}"
                                      BorderThickness="0"
                                      HorizontalContentAlignment="Stretch"
+                                     ItemContainerStyle="{StaticResource PostRaceHistorySessionItemStyle}"
                                      ItemTemplate="{StaticResource HistorySessionTemplate}"
                                      ItemsSource="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.Items}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
@@ -217,18 +269,20 @@
                         <StackPanel Grid.Row="8"
                                     HorizontalAlignment="Right"
                                     Orientation="Horizontal">
-                            <Button Width="64"
-                                    Height="28"
+                            <Button Width="68"
+                                    Height="30"
                                     Command="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.PreviousPageCommand}"
-                                    Content="上一页" />
+                                    Content="上一页"
+                                    Style="{StaticResource SecondaryButtonStyle}" />
                             <TextBlock Margin="10,0"
                                        VerticalAlignment="Center"
                                        Style="{StaticResource MutedTextStyle}"
                                        Text="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.PageText}" />
-                            <Button Width="64"
-                                    Height="28"
+                            <Button Width="68"
+                                    Height="30"
                                     Command="{Binding PostRaceReview.HistoryBrowser.HistorySessionPages.NextPageCommand}"
-                                    Content="下一页" />
+                                    Content="下一页"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -237,33 +291,43 @@
                               HorizontalScrollBarVisibility="Disabled"
                               VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                    <Border Style="{StaticResource SectionCardStyle}">
+                    <Border x:Name="PostRaceSummaryPanel"
+                            Style="{StaticResource GlassCardStyle}">
                         <StackPanel>
-                            <Grid>
+                            <Grid x:Name="PostRaceSummaryHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="280" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource SectionTitleStyle}"
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource IconTextStyle}"
+                                               Text="&#xE9D2;" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}"
                                                Text="Session Summary / metrics" />
                                     <TextBlock Margin="0,6,0,0"
-                                               Style="{StaticResource MutedTextStyle}"
+                                               Style="{StaticResource BodyTextStyle}"
                                                Text="{Binding PostRaceReview.HistoryBrowser.SelectedSession.SummaryText, TargetNullValue=请选择左侧历史会话查看赛后摘要。}" />
                                 </StackPanel>
-                                <StackPanel Grid.Column="1"
+                                <StackPanel Grid.Column="3"
                                             HorizontalAlignment="Right">
                                     <StackPanel HorizontalAlignment="Right"
                                                 Orientation="Horizontal">
                                         <Button Width="118"
                                                 Height="34"
                                                 Command="{Binding PostRaceReview.ExportMarkdownCommand}"
-                                                Content="导出 Markdown" />
+                                                Content="导出 Markdown"
+                                                Style="{StaticResource SecondaryButtonStyle}" />
                                         <Button Width="104"
                                                 Height="34"
                                                 Margin="8,0,0,0"
                                                 Command="{Binding PostRaceReview.ExportJsonCommand}"
-                                                Content="导出 JSON" />
+                                                Content="导出 JSON"
+                                                Style="{StaticResource SecondaryButtonStyle}" />
                                     </StackPanel>
                                     <TextBlock Margin="0,8,0,0"
                                                HorizontalAlignment="Right"
@@ -294,14 +358,29 @@
                         </StackPanel>
                     </Border>
 
-                    <Border Margin="0,16,0,0"
-                            Style="{StaticResource SectionCardStyle}">
+                    <Border x:Name="PostRaceTrendChartsPanel"
+                            Margin="0,16,0,0"
+                            Style="{StaticResource GlassCardStyle}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                       Text="趋势图表" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Style="{StaticResource MutedTextStyle}"
-                                       Text="图表来自所选历史会话，用于赛后复盘，不随当前实时 UDP 数据刷新。" />
+                            <Grid x:Name="PostRaceChartsHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource IconTextStyle}"
+                                               Text="&#xE9D9;" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                               Text="趋势图表" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Style="{StaticResource BodyTextStyle}"
+                                               Text="图表来自所选历史会话，用于赛后复盘，不随当前实时 UDP 数据刷新。" />
+                                </StackPanel>
+                            </Grid>
 
                             <Grid Margin="0,16,0,0">
                                 <Grid.ColumnDefinitions>
@@ -343,10 +422,23 @@
                             <ColumnDefinition Width="1*" />
                         </Grid.ColumnDefinitions>
 
-                        <Border Style="{StaticResource SectionCardStyle}">
+                        <Border x:Name="PostRaceStintSummaryPanel"
+                                Style="{StaticResource GlassCardStyle}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                           Text="轮胎与 stint 摘要" />
+                                <Grid Style="{StaticResource SectionHeaderStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource IconBadgeStyle}">
+                                        <TextBlock Style="{StaticResource IconTextStyle}"
+                                                   Text="&#xE8B7;" />
+                                    </Border>
+                                    <TextBlock Grid.Column="2"
+                                               Style="{StaticResource SectionTitleTextStyle}"
+                                               Text="轮胎与 stint 摘要" />
+                                </Grid>
                                 <ItemsControl Margin="0,14,0,0"
                                               ItemTemplate="{StaticResource StintTemplate}"
                                               ItemsSource="{Binding PostRaceReview.StintSummaries}" />
@@ -360,28 +452,42 @@
                                 attached:AdaptivePageSizeBehavior.ChromeHeight="70"
                                 attached:AdaptivePageSizeBehavior.MinPageSize="3"
                                 attached:AdaptivePageSizeBehavior.MaxPageSize="12"
-                                Style="{StaticResource SectionCardStyle}">
+                                Style="{StaticResource GlassCardStyle}">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                           Text="事件时间线" />
+                                <Grid Style="{StaticResource SectionHeaderStyle}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="12" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Style="{StaticResource IconBadgeStyle}">
+                                        <TextBlock Style="{StaticResource IconTextStyle}"
+                                                   Text="&#xE121;" />
+                                    </Border>
+                                    <TextBlock Grid.Column="2"
+                                               Style="{StaticResource SectionTitleTextStyle}"
+                                               Text="事件时间线" />
+                                </Grid>
                                 <ItemsControl Margin="0,14,0,0"
                                               ItemTemplate="{StaticResource TimelineTemplate}"
                                               ItemsSource="{Binding PostRaceReview.EventTimelinePages.Items}" />
                                 <StackPanel Margin="0,4,0,0"
                                             HorizontalAlignment="Right"
                                             Orientation="Horizontal">
-                                    <Button Width="64"
-                                            Height="28"
+                                    <Button Width="68"
+                                            Height="30"
                                             Command="{Binding PostRaceReview.EventTimelinePages.PreviousPageCommand}"
-                                            Content="上一页" />
+                                            Content="上一页"
+                                            Style="{StaticResource SecondaryButtonStyle}" />
                                     <TextBlock Margin="10,0"
                                                VerticalAlignment="Center"
                                                Style="{StaticResource MutedTextStyle}"
                                                Text="{Binding PostRaceReview.EventTimelinePages.PageText}" />
-                                    <Button Width="64"
-                                            Height="28"
+                                    <Button Width="68"
+                                            Height="30"
                                             Command="{Binding PostRaceReview.EventTimelinePages.NextPageCommand}"
-                                            Content="下一页" />
+                                            Content="下一页"
+                                            Style="{StaticResource PrimaryButtonStyle}" />
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -394,31 +500,47 @@
                             attached:AdaptivePageSizeBehavior.ChromeHeight="76"
                             attached:AdaptivePageSizeBehavior.MinPageSize="2"
                             attached:AdaptivePageSizeBehavior.MaxPageSize="8"
-                            Style="{StaticResource SectionCardStyle}">
+                            Style="{StaticResource GlassCardStyle}">
                         <StackPanel>
-                            <TextBlock Style="{StaticResource SectionTitleStyle}"
-                                       Text="AI reports" />
-                            <TextBlock Margin="0,6,0,0"
-                                       Style="{StaticResource MutedTextStyle}"
-                                       Text="所选历史会话的赛后 AI 报告。" />
+                            <Grid x:Name="PostRaceAiReportHeader"
+                                  Style="{StaticResource SectionHeaderStyle}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource IconBadgeStyle}">
+                                    <TextBlock Style="{StaticResource IconTextStyle}"
+                                               Text="&#xE90F;" />
+                                </Border>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                               Text="AI reports" />
+                                    <TextBlock Margin="0,6,0,0"
+                                               Style="{StaticResource BodyTextStyle}"
+                                               Text="所选历史会话的赛后 AI 报告。" />
+                                </StackPanel>
+                            </Grid>
                             <ItemsControl Margin="0,14,0,0"
                                           ItemTemplate="{StaticResource AiReportTemplate}"
                                           ItemsSource="{Binding PostRaceReview.AiReportPages.Items}" />
                             <StackPanel Margin="0,4,0,0"
                                         HorizontalAlignment="Right"
                                         Orientation="Horizontal">
-                                <Button Width="64"
-                                        Height="28"
+                                <Button Width="68"
+                                        Height="30"
                                         Command="{Binding PostRaceReview.AiReportPages.PreviousPageCommand}"
-                                        Content="上一页" />
+                                        Content="上一页"
+                                        Style="{StaticResource SecondaryButtonStyle}" />
                                 <TextBlock Margin="10,0"
                                            VerticalAlignment="Center"
                                            Style="{StaticResource MutedTextStyle}"
                                            Text="{Binding PostRaceReview.AiReportPages.PageText}" />
-                                <Button Width="64"
-                                        Height="28"
+                                <Button Width="68"
+                                        Height="30"
                                         Command="{Binding PostRaceReview.AiReportPages.NextPageCommand}"
-                                        Content="下一页" />
+                                        Content="下一页"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
                             </StackPanel>
                         </StackPanel>
                     </Border>
