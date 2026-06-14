@@ -356,8 +356,60 @@ public sealed class UiSettingsPolishTests
                 element.Name.LocalName == "ComboBox"
                 && element.Attribute("ItemsSource")?.Value == "{Binding SessionComparison.TrackFilters}");
 
+        Assert.Equal("{StaticResource DarkComboBoxStyle}", comboBox.Attribute("Style")?.Value);
         Assert.Equal("DisplayName", comboBox.Attribute("DisplayMemberPath")?.Value);
         Assert.Equal("{Binding SessionComparison.SelectedTrackFilter, Mode=TwoWay}", comboBox.Attribute("SelectedItem")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the session comparison page adopts the shared baseline card and section styles.
+    /// </summary>
+    [Fact]
+    public void SessionComparisonView_UsesBaselineGlassCardsAndSectionHeaders()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SessionComparisonView.xaml"));
+
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "CandidateSessionCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource MetricTileStyle}", FindNamedElement(document, "SessionComparisonSummaryCard").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "SessionComparisonCandidatePanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "SessionComparisonSummaryPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource GlassCardStyle}", FindNamedElement(document, "SessionComparisonChartsPanel").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "SessionComparisonCandidateHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "SessionComparisonSummaryHeader").Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource SectionHeaderStyle}", FindNamedElement(document, "SessionComparisonChartsHeader").Attribute("Style")?.Value);
+    }
+
+    /// <summary>
+    /// Verifies the session comparison templates preserve selection, delete, paging, and chart bindings.
+    /// </summary>
+    [Fact]
+    public void SessionComparisonView_PreservesSelectionDeletePagingAndChartBindings()
+    {
+        var document = XDocument.Load(FindRepositoryFile("F1Telemetry.App", "Views", "SessionComparisonView.xaml"));
+        var candidateCard = FindNamedElement(document, "CandidateSessionCard");
+        var checkBox = candidateCard.Descendants().First(element => element.Name.LocalName == "CheckBox");
+        var deleteButton = candidateCard.Descendants().First(element => element.Name.LocalName == "Button");
+        var candidateHost = FindNamedElement(document, "CandidateSessionListHost");
+        var candidateItems = FindNamedElement(document, "CandidateSessionItemsControl");
+        var chartBindings = document.Descendants()
+            .Where(element => element.Name.LocalName == "TelemetryChartControl")
+            .Select(element => element.Attribute("DataContext")?.Value)
+            .ToArray();
+
+        Assert.Equal("{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}", checkBox.Attribute("IsChecked")?.Value);
+        Assert.Equal(
+            "{Binding DataContext.SessionComparison.DeleteSessionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}",
+            deleteButton.Attribute("Command")?.Value);
+        Assert.Equal("{Binding}", deleteButton.Attribute("CommandParameter")?.Value);
+        Assert.Equal("{Binding CanDelete}", deleteButton.Attribute("IsEnabled")?.Value);
+        Assert.Equal(
+            "{Binding SessionComparison.CandidateSessionPages}",
+            candidateHost.Attributes().First(attribute => attribute.Name.LocalName == "AdaptivePageSizeBehavior.PagedCollection").Value);
+        Assert.Equal("{Binding SessionComparison.CandidateSessionPages.Items}", candidateItems.Attribute("ItemsSource")?.Value);
+        Assert.Contains("{Binding SessionComparison.LapTimeComparisonPanel}", chartBindings);
+        Assert.Contains("{Binding SessionComparison.FuelComparisonPanel}", chartBindings);
+        Assert.Contains("{Binding SessionComparison.ErsComparisonPanel}", chartBindings);
+        Assert.Contains("{Binding SessionComparison.TyreWearComparisonPanel}", chartBindings);
     }
 
     /// <summary>
