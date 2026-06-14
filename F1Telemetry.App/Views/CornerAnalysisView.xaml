@@ -266,6 +266,18 @@
         </VisualStateGroup>
     </VisualStateManager.VisualStateGroups>
     <UserControl.Resources>
+        <Style x:Key="CornerAnalysisReferencePickerComboBoxStyle"
+               TargetType="{x:Type ComboBox}">
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Foreground" Value="{StaticResource FgPrimaryBrush}" />
+            <Setter Property="Background" Value="{StaticResource BgInputBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderComboBoxBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="MaxDropDownHeight" Value="240" />
+            <Setter Property="ItemContainerStyle" Value="{StaticResource DarkComboBoxItemStyle}" />
+        </Style>
+
         <Style x:Key="CornerListItemStyle" TargetType="{x:Type ListBoxItem}">
             <Setter Property="HorizontalContentAlignment" Value="Left" />
             <Setter Property="Margin" Value="0,0,0,2" />
@@ -487,7 +499,7 @@
                         <TextBlock Style="{StaticResource MetricLabelTextStyle}" Text="对比对象" />
                         <ComboBox Margin="0,6,0,0"
                                   MaxWidth="220"
-                                  Style="{StaticResource DarkComboBoxStyle}"
+                                  Style="{StaticResource CornerAnalysisReferencePickerComboBoxStyle}"
                                   DisplayMemberPath="LapText"
                                   IsEditable="True"
                                   IsReadOnly="True"

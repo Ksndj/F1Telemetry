@@ -320,7 +320,7 @@ public sealed class UiSettingsPolishTests
     }
 
     /// <summary>
-    /// Verifies the corner analysis selectors use shared dark combo chrome without changing selection bindings.
+    /// Verifies the corner analysis selectors keep their display contracts without changing selection bindings.
     /// </summary>
     [Fact]
     public void CornerAnalysisView_FilterComboBoxes_UseSharedDarkStyleAndPreserveSelectionBindings()
@@ -347,12 +347,15 @@ public sealed class UiSettingsPolishTests
         Assert.Equal("LapText", lapComboBox.Attribute("DisplayMemberPath")?.Value);
         Assert.Equal("{Binding CornerAnalysis.SelectedLap, Mode=TwoWay}", lapComboBox.Attribute("SelectedItem")?.Value);
 
-        Assert.Equal("{StaticResource DarkComboBoxStyle}", referenceComboBox.Attribute("Style")?.Value);
+        Assert.Equal("{StaticResource CornerAnalysisReferencePickerComboBoxStyle}", referenceComboBox.Attribute("Style")?.Value);
         Assert.Equal("LapText", referenceComboBox.Attribute("DisplayMemberPath")?.Value);
         Assert.Equal("True", referenceComboBox.Attribute("IsEditable")?.Value);
         Assert.Equal("True", referenceComboBox.Attribute("IsReadOnly")?.Value);
         Assert.Equal("{Binding CornerAnalysis.ReferencePickerText, Mode=OneWay}", referenceComboBox.Attribute("Text")?.Value);
         Assert.Equal("{Binding CornerAnalysis.HasReferenceLapChoices}", referenceComboBox.Attribute("IsEnabled")?.Value);
+
+        var xaml = document.ToString(SaveOptions.DisableFormatting);
+        Assert.DoesNotContain("Style=\"{StaticResource DarkComboBoxStyle}\" DisplayMemberPath=\"LapText\" IsEditable=\"True\"", xaml, StringComparison.Ordinal);
     }
 
     /// <summary>
