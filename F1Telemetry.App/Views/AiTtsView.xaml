@@ -7,195 +7,332 @@
              mc:Ignorable="d"
              d:DesignHeight="720"
              d:DesignWidth="1100">
-    <ScrollViewer HorizontalScrollBarVisibility="Auto"
+    <UserControl.Resources>
+        <Style x:Key="AiTtsFieldLabelStyle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource LabelTextStyle}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+        </Style>
+
+        <Style x:Key="AiTtsValueTextStyle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource ValueTextStyle}">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="AiTtsSubtleTextStyle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource MutedTextStyle}">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+
+        <Style x:Key="AiTtsSectionGlyphStyle" TargetType="{x:Type Border}" BasedOn="{StaticResource IconBadgeLargeStyle}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+        </Style>
+
+        <Style x:Key="TyreInventoryStepButtonStyle" TargetType="{x:Type Button}" BasedOn="{StaticResource SecondaryButtonStyle}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+
+        <Style x:Key="AiTtsLogCategoryPillStyle" TargetType="{x:Type Border}">
+            <Setter Property="HorizontalAlignment" Value="Left" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="MinWidth" Value="78" />
+            <Setter Property="Padding" Value="8,3" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Background" Value="{StaticResource BgPillBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderPillBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer x:Name="AiTtsScrollViewer"
+                  HorizontalScrollBarVisibility="Disabled"
                   VerticalScrollBarVisibility="Auto">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <StackPanel Background="{StaticResource BgDeepBrush}">
+            <Border x:Name="AiTtsHeroPanel"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="40" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
 
-            <Border Padding="20"
-                    CornerRadius="18"
-                    Background="{StaticResource BgPanelBrush}">
-                <StackPanel>
-                    <TextBlock FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource FgPrimaryBrush}"
-                               Text="AI 设置" />
-                    <TextBlock Margin="0,6,0,0"
-                               Foreground="{StaticResource FgSectionBrush}"
-                               Text="DeepSeek 分析配置与连接状态"
-                               TextWrapping="Wrap" />
-
-                    <Grid Margin="0,18,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="100" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="150" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="AI 开关" />
-                        <CheckBox Grid.Column="1"
-                                  VerticalAlignment="Center"
-                                  IsChecked="{Binding AiEnabled}" />
-
-                        <TextBlock Grid.Row="1"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="Base URL" />
-                        <TextBox Grid.Row="1"
-                                 Grid.Column="1"
-                                 Grid.ColumnSpan="2"
-                                 Margin="0,14,0,0"
-                                 Padding="8,5"
-                                 Text="{Binding AiBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <TextBlock Grid.Row="2"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="Model" />
-                        <TextBox Grid.Row="2"
-                                 Grid.Column="1"
-                                 Grid.ColumnSpan="2"
-                                 Margin="0,14,0,0"
-                                 Padding="8,5"
-                                 Text="{Binding AiModel, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <TextBlock Grid.Row="3"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="API Key" />
-                        <PasswordBox Grid.Row="3"
-                                     Grid.Column="1"
-                                     Margin="0,14,10,0"
-                                     Padding="8,5"
-                                     attached:PasswordBoxBinding.BoundPassword="{Binding AiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <StackPanel Grid.Row="3"
-                                    Grid.Column="2"
-                                    Margin="0,14,0,0"
-                                    VerticalAlignment="Center">
-                            <TextBlock Foreground="{StaticResource FgSectionBrush}"
-                                       Text="{Binding AiApiKeyStatusText}" />
-                            <TextBlock Margin="0,3,0,0"
-                                       Foreground="{StaticResource FgLabelBrush}"
-                                       Text="{Binding AiSettingsSaveStatusText}"
-                                       TextWrapping="Wrap" />
-                        </StackPanel>
-
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Column="1"
-                    Margin="16,0,0,0"
-                    Padding="20"
-                    CornerRadius="18"
-                    Background="{StaticResource BgPanelBrush}">
-                <StackPanel>
-                    <TextBlock FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource FgPrimaryBrush}"
-                               Text="TTS 语音播报" />
-                    <TextBlock Margin="0,6,0,0"
-                               Foreground="{StaticResource FgSectionBrush}"
-                               Text="语音播报开关、音色、音量与语速"
-                               TextWrapping="Wrap" />
-
-                    <Grid Margin="0,18,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="100" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="150" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="TTS 开关" />
-                        <CheckBox Grid.Column="1"
-                                  VerticalAlignment="Center"
-                                  IsChecked="{Binding TtsEnabled}" />
-
-                        <TextBlock Grid.Row="1"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="Voice" />
-                        <ComboBox Grid.Row="1"
-                                  Grid.Column="1"
-                                  Margin="0,14,12,0"
-                                  Padding="8,5"
-                                  IsEnabled="{Binding HasAvailableVoices}"
-                                  ItemsSource="{Binding AvailableVoices}"
-                                  SelectedItem="{Binding TtsVoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                        <TextBlock Grid.Row="1"
-                                   Grid.Column="2"
-                                   Margin="0,14,0,0"
+                    <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                        <TextBlock HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
-                                   Foreground="{StaticResource FgSectionBrush}"
-                                   Text="{Binding TtsVoiceStatusText}"
-                                   TextWrapping="Wrap" />
-
-                        <TextBlock Grid.Row="2"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="Volume" />
-                        <Slider Grid.Row="2"
-                                Grid.Column="1"
-                                Margin="0,14,12,0"
-                                Minimum="0"
-                                Maximum="100"
-                                TickFrequency="5"
-                                IsSnapToTickEnabled="True"
-                                Value="{Binding TtsVolume}" />
-                        <TextBlock Grid.Row="2"
-                                   Grid.Column="2"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgSecondaryBrush}"
-                                   Text="{Binding TtsVolume, StringFormat={}{0}%}" />
-
-                        <TextBlock Grid.Row="3"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgLabelBrush}"
-                                   Text="Rate" />
-                        <Slider Grid.Row="3"
-                                Grid.Column="1"
-                                Margin="0,14,12,0"
-                                Minimum="-10"
-                                Maximum="10"
-                                TickFrequency="1"
-                                IsSnapToTickEnabled="True"
-                                Value="{Binding TtsRate}" />
-                        <TextBlock Grid.Row="3"
-                                   Grid.Column="2"
-                                   Margin="0,14,0,0"
-                                   Foreground="{StaticResource FgSecondaryBrush}"
-                                   Text="{Binding TtsRate}" />
-                    </Grid>
-                </StackPanel>
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentPrimaryBrush}"
+                                   Text="AI" />
+                    </Border>
+                    <StackPanel Grid.Column="1"
+                                Margin="12,0,0,0"
+                                VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                   Text="AI / TTS" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Style="{StaticResource AiTtsSubtleTextStyle}"
+                                   Text="语音播报、问工程师、赛前轮胎库存和 AI / TTS 日志统一管理。" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <Border Grid.Row="1"
-                    Grid.ColumnSpan="2"
-                    Margin="0,16,0,0"
-                    Padding="20"
-                    CornerRadius="18"
-                    Background="{StaticResource BgPanelBrush}">
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="AiTtsVoiceSummaryTile"
+                        Margin="0,0,10,0"
+                        Style="{StaticResource MetricTileStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                   Text="语音状态" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Style="{StaticResource ValueTextStyle}"
+                                   Text="{Binding TtsVoiceStatusText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="AiTtsAssistantSummaryTile"
+                        Grid.Column="1"
+                        Margin="0,0,10,0"
+                        Style="{StaticResource MetricTileStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                   Text="问工程师" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Style="{StaticResource ValueTextStyle}"
+                                   Text="{Binding VoiceAssistantStatusText}" />
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="AiTtsTyreSummaryTile"
+                        Grid.Column="2"
+                        Style="{StaticResource MetricTileStyle}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                   Text="轮胎库存" />
+                        <TextBlock Margin="0,4,0,0"
+                                   Style="{StaticResource ValueTextStyle}"
+                                   Text="{Binding RaceWeekendTyrePlanStatusText}" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="AiSettingsPanel"
+                        Margin="0,0,8,0"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}"
+                                           Text="A" />
+                            </Border>
+                            <StackPanel Grid.Column="1"
+                                        Margin="12,0,0,0">
+                                <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                           Text="AI 设置" />
+                                <TextBlock Style="{StaticResource AiTtsSubtleTextStyle}"
+                                           Text="DeepSeek 分析配置与连接状态。" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="104" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="AI 开关" />
+                            <CheckBox Grid.Column="1"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding AiEnabled}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="Base URL" />
+                            <TextBox Grid.Row="1"
+                                     Grid.Column="1"
+                                     Grid.ColumnSpan="2"
+                                     Margin="0,12,0,0"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding AiBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="2"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="Model" />
+                            <TextBox Grid.Row="2"
+                                     Grid.Column="1"
+                                     Grid.ColumnSpan="2"
+                                     Margin="0,12,0,0"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding AiModel, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock Grid.Row="3"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="API Key" />
+                            <PasswordBox Grid.Row="3"
+                                         Grid.Column="1"
+                                         Margin="0,12,10,0"
+                                         Padding="10,6"
+                                         Background="{StaticResource BgInputBrush}"
+                                         BorderBrush="{StaticResource BorderInputBrush}"
+                                         BorderThickness="1"
+                                         Foreground="{StaticResource FgPrimaryBrush}"
+                                         attached:PasswordBoxBinding.BoundPassword="{Binding AiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <StackPanel Grid.Row="3"
+                                        Grid.Column="2"
+                                        Margin="0,12,0,0"
+                                        VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource AiTtsValueTextStyle}"
+                                           Text="{Binding AiApiKeyStatusText}" />
+                                <TextBlock Margin="0,3,0,0"
+                                           Style="{StaticResource AiTtsSubtleTextStyle}"
+                                           Text="{Binding AiSettingsSaveStatusText}" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="TtsSettingsPanel"
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Style="{StaticResource GlassCardStyle}">
+                    <StackPanel>
+                        <Grid Style="{StaticResource SectionHeaderStyle}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                                <TextBlock HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}"
+                                           Text="T" />
+                            </Border>
+                            <StackPanel Grid.Column="1"
+                                        Margin="12,0,0,0">
+                                <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                           Text="TTS 语音播报" />
+                                <TextBlock Style="{StaticResource AiTtsSubtleTextStyle}"
+                                           Text="音色、音量和语速保持可读、可滚动、可选择。" />
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="104" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="TTS 开关" />
+                            <CheckBox Grid.Column="1"
+                                      VerticalAlignment="Center"
+                                      IsChecked="{Binding TtsEnabled}" />
+
+                            <TextBlock Grid.Row="1"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="Voice" />
+                            <ComboBox x:Name="TtsVoiceComboBox"
+                                      Grid.Row="1"
+                                      Grid.Column="1"
+                                      Margin="0,12,12,0"
+                                      MaxDropDownHeight="240"
+                                      Style="{StaticResource DarkComboBoxStyle}"
+                                      IsEnabled="{Binding HasAvailableVoices}"
+                                      ItemsSource="{Binding AvailableVoices}"
+                                      SelectedItem="{Binding TtsVoiceName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <TextBlock Grid.Row="1"
+                                       Grid.Column="2"
+                                       Margin="0,12,0,0"
+                                       Style="{StaticResource AiTtsSubtleTextStyle}"
+                                       Text="{Binding TtsVoiceStatusText}" />
+
+                            <TextBlock Grid.Row="2"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="Volume" />
+                            <Slider Grid.Row="2"
+                                    Grid.Column="1"
+                                    Margin="0,12,12,0"
+                                    Minimum="0"
+                                    Maximum="100"
+                                    TickFrequency="5"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding TtsVolume}" />
+                            <TextBlock Grid.Row="2"
+                                       Grid.Column="2"
+                                       Margin="0,12,0,0"
+                                       Style="{StaticResource AiTtsValueTextStyle}"
+                                       Text="{Binding TtsVolume, StringFormat={}{0}%}" />
+
+                            <TextBlock Grid.Row="3"
+                                       Margin="0,12,12,0"
+                                       Style="{StaticResource AiTtsFieldLabelStyle}"
+                                       Text="Rate" />
+                            <Slider Grid.Row="3"
+                                    Grid.Column="1"
+                                    Margin="0,12,12,0"
+                                    Minimum="-10"
+                                    Maximum="10"
+                                    TickFrequency="1"
+                                    IsSnapToTickEnabled="True"
+                                    Value="{Binding TtsRate}" />
+                            <TextBlock Grid.Row="3"
+                                       Grid.Column="2"
+                                       Margin="0,12,0,0"
+                                       Style="{StaticResource AiTtsValueTextStyle}"
+                                       Text="{Binding TtsRate}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border x:Name="TyreInventoryPanel"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -208,41 +345,46 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource FgPrimaryBrush}"
-                               Text="赛前轮胎库存" />
-                    <TextBlock Grid.Column="1"
-                               HorizontalAlignment="Right"
-                               Foreground="{StaticResource FgLabelBrush}"
-                               Text="{Binding RaceWeekendTyrePlanStatusText}"
-                               TextWrapping="Wrap" />
+                    <Grid Style="{StaticResource SectionHeaderStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"
+                                       Text="TY" />
+                        </Border>
+                        <StackPanel Grid.Column="1"
+                                    Margin="12,0,0,0">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="赛前轮胎库存" />
+                            <TextBlock Style="{StaticResource AiTtsSubtleTextStyle}"
+                                       Text="{Binding RaceWeekendTyreSetsStatusText}" />
+                        </StackPanel>
+                    </Grid>
 
-                    <TextBlock Grid.Row="1"
-                               Margin="0,12,18,0"
-                               VerticalAlignment="Center"
-                               Foreground="{StaticResource FgSectionBrush}"
-                               Text="{Binding RaceWeekendTyreSetsStatusText}"
-                               TextWrapping="Wrap" />
-                    <StackPanel Grid.Row="1"
-                                Grid.Column="1"
-                                Margin="0,12,0,0"
+                    <StackPanel Grid.Column="1"
                                 HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
                                 Orientation="Horizontal">
                         <Button Margin="0,0,8,0"
-                                Padding="12,7"
+                                Style="{StaticResource SecondaryButtonStyle}"
                                 Command="{Binding ReadTyreSetsInventoryCommand}"
                                 Content="自动读取 TyreSets" />
                         <Button Margin="0,0,8,0"
-                                Padding="12,7"
+                                Style="{StaticResource SecondaryButtonStyle}"
                                 Command="{Binding ClearTyreInventoryCommand}"
                                 Content="清零" />
-                        <Button Padding="12,7"
+                        <Button Style="{StaticResource PrimaryButtonStyle}"
                                 Command="{Binding SaveTyreInventoryCommand}"
                                 Content="保存" />
                     </StackPanel>
 
-                    <ItemsControl Grid.Row="2"
+                    <ItemsControl x:Name="RaceWeekendTyreInventoryItems"
+                                  Grid.Row="2"
                                   Grid.ColumnSpan="2"
                                   Margin="0,14,0,0"
                                   ItemsSource="{Binding RaceWeekendTyreInventoryItems}">
@@ -253,18 +395,16 @@
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Width="188"
-                                        MinHeight="112"
+                                <Border x:Name="TyreInventoryCard"
+                                        Width="184"
+                                        MinHeight="116"
                                         Margin="0,0,10,10"
-                                        Padding="14"
-                                        CornerRadius="12"
-                                        Background="{StaticResource BgCardBrush}"
-                                        BorderBrush="{StaticResource BorderPanelBrush}"
-                                        BorderThickness="1">
+                                        Style="{StaticResource MetricTileStyle}">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
                                         <Grid.ColumnDefinitions>
@@ -273,36 +413,41 @@
                                         </Grid.ColumnDefinitions>
 
                                         <Border Width="10"
-                                                Height="34"
+                                                Height="36"
                                                 CornerRadius="5"
                                                 Background="{Binding AccentBrush}" />
                                         <StackPanel Grid.Column="1"
                                                     Margin="10,0,0,0">
-                                            <TextBlock Foreground="{StaticResource FgPrimaryBrush}"
-                                                       FontWeight="SemiBold"
+                                            <TextBlock Style="{StaticResource ValueTextStyle}"
                                                        Text="{Binding DisplayName}" />
                                             <TextBlock Margin="0,3,0,0"
-                                                       Foreground="{StaticResource FgLabelBrush}"
+                                                       Style="{StaticResource AiTtsSubtleTextStyle}"
                                                        Text="{Binding EnglishName}" />
                                         </StackPanel>
 
-                                        <StackPanel Grid.Row="2"
+                                        <StackPanel Grid.Row="3"
                                                     Grid.ColumnSpan="2"
                                                     Margin="0,16,0,0"
+                                                    HorizontalAlignment="Center"
                                                     Orientation="Horizontal">
-                                            <Button Width="30"
-                                                    Height="30"
+                                            <Button x:Name="TyreInventoryDecrementButton"
+                                                    Style="{StaticResource TyreInventoryStepButtonStyle}"
+                                                    HorizontalContentAlignment="Center"
+                                                    VerticalContentAlignment="Center"
                                                     Command="{Binding DecrementCommand}"
                                                     Content="-" />
-                                            <TextBox Width="46"
-                                                     Height="30"
+                                            <TextBox Width="48"
+                                                     Height="34"
                                                      Margin="8,0"
-                                                     Padding="4,3"
+                                                     Style="{StaticResource DarkTextBoxStyle}"
                                                      HorizontalContentAlignment="Center"
+                                                     VerticalContentAlignment="Center"
                                                      MaxLength="2"
                                                      Text="{Binding CountText, UpdateSourceTrigger=PropertyChanged}" />
-                                            <Button Width="30"
-                                                    Height="30"
+                                            <Button x:Name="TyreInventoryIncrementButton"
+                                                    Style="{StaticResource TyreInventoryStepButtonStyle}"
+                                                    HorizontalContentAlignment="Center"
+                                                    VerticalContentAlignment="Center"
                                                     Command="{Binding IncrementCommand}"
                                                     Content="+" />
                                         </StackPanel>
@@ -312,60 +457,69 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
 
-                    <StackPanel Grid.Row="3"
-                                Grid.ColumnSpan="2"
-                                Margin="0,8,0,0">
-                        <TextBlock Foreground="{StaticResource FgLabelBrush}"
+                    <Grid Grid.Row="3"
+                          Grid.ColumnSpan="2"
+                          Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="128" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="56" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource AiTtsFieldLabelStyle}"
                                    Text="推荐磨损上限" />
-                        <Grid Margin="0,10,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="56" />
-                            </Grid.ColumnDefinitions>
-                            <Slider Minimum="0"
-                                    Maximum="100"
-                                    TickFrequency="1"
-                                    IsSnapToTickEnabled="True"
-                                    Value="{Binding RaceWeekendTyreMaxWearPercent}" />
-                            <TextBlock Grid.Column="1"
-                                       Margin="12,0,0,0"
-                                       VerticalAlignment="Center"
-                                       Foreground="{StaticResource FgSecondaryBrush}"
-                                       Text="{Binding RaceWeekendTyreMaxWearPercent, StringFormat={}{0}%}" />
-                        </Grid>
-                    </StackPanel>
+                        <Slider Grid.Column="1"
+                                Minimum="0"
+                                Maximum="100"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                Value="{Binding RaceWeekendTyreMaxWearPercent}" />
+                        <TextBlock Grid.Column="2"
+                                   Margin="12,0,0,0"
+                                   Style="{StaticResource AiTtsValueTextStyle}"
+                                   Text="{Binding RaceWeekendTyreMaxWearPercent, StringFormat={}{0}%}" />
+                    </Grid>
                 </Grid>
             </Border>
 
-            <Border Grid.Row="2"
-                    Grid.ColumnSpan="2"
-                    Margin="0,16,0,0"
-                    Padding="20"
-                    CornerRadius="8"
-                    Background="{StaticResource BgPanelBrush}">
+            <Border x:Name="RaceAssistantPanel"
+                    Margin="0,0,0,12"
+                    Style="{StaticResource GlassCardStyle}">
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="1.2*" />
+                        <ColumnDefinition Width="1.05*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <StackPanel>
-                        <TextBlock FontSize="22"
-                                   FontWeight="SemiBold"
-                                   Foreground="{StaticResource FgPrimaryBrush}"
-                                   Text="问工程师" />
-                        <TextBlock Margin="0,6,0,0"
-                                   Foreground="{StaticResource FgSectionBrush}"
-                                   Text="{Binding VoiceAssistantStatusText}"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
+                    <Grid Style="{StaticResource SectionHeaderStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"
+                                       Text="Q" />
+                        </Border>
+                        <StackPanel Grid.Column="1"
+                                    Margin="12,0,0,0">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="问工程师" />
+                            <TextBlock Style="{StaticResource AiTtsSubtleTextStyle}"
+                                       Text="{Binding VoiceAssistantStatusText}" />
+                        </StackPanel>
+                    </Grid>
+
                     <StackPanel Grid.Column="1"
                                 HorizontalAlignment="Right"
+                                VerticalAlignment="Top"
                                 Orientation="Horizontal">
                         <CheckBox Margin="0,0,16,0"
                                   VerticalAlignment="Center"
@@ -380,206 +534,237 @@
 
                     <Grid Grid.Row="1"
                           Grid.ColumnSpan="2"
-                          Margin="0,18,0,0">
+                          Margin="0,16,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBox MinHeight="38"
-                                 Padding="10,7"
+                        <TextBox x:Name="VoiceAssistantQuestionBox"
+                                 MinHeight="38"
+                                 Style="{StaticResource DarkTextBoxStyle}"
                                  Text="{Binding VoiceAssistantQuestionText, UpdateSourceTrigger=PropertyChanged}" />
                         <Button Grid.Column="1"
-                                MinWidth="96"
+                                MinWidth="88"
                                 Margin="10,0,0,0"
-                                Padding="14,8"
+                                Style="{StaticResource PrimaryButtonStyle}"
                                 Command="{Binding AskRaceAssistantQuestionCommand}"
                                 Content="发送" />
                         <Button Grid.Column="2"
                                 MinWidth="96"
                                 Margin="8,0,0,0"
-                                Padding="14,8"
+                                Style="{StaticResource SecondaryButtonStyle}"
                                 Command="{Binding ToggleRaceAssistantVoiceCommand}"
                                 Content="问工程师" />
                         <Button Grid.Column="3"
-                                MinWidth="80"
+                                MinWidth="76"
                                 Margin="8,0,0,0"
-                                Padding="14,8"
+                                Style="{StaticResource SecondaryButtonStyle}"
                                 Command="{Binding CancelRaceAssistantQuestionCommand}"
                                 Content="取消" />
                     </Grid>
 
-                    <Grid Grid.Row="2"
-                          Grid.ColumnSpan="2"
-                          Margin="0,18,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="1.1*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="2"
+                               Grid.ColumnSpan="2"
+                               Margin="0,14,0,10"
+                               Foreground="{StaticResource StatusWarningBrush}"
+                               Text="{Binding VoiceAssistantTelemetryNoticeText}"
+                               TextWrapping="Wrap" />
 
-                        <TextBlock Grid.ColumnSpan="2"
-                                   Margin="0,0,0,10"
-                                   Foreground="{StaticResource StatusWarningBrush}"
-                                   Text="{Binding VoiceAssistantTelemetryNoticeText}"
-                                   TextWrapping="Wrap" />
-
-                        <Border Grid.Row="1"
-                                Padding="14"
-                                CornerRadius="8"
-                                Background="{StaticResource BgCardBrush}">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="112" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="识别文本" />
-                                <TextBlock Grid.Column="1"
-                                           Foreground="{StaticResource FgSecondaryBrush}"
-                                           Text="{Binding VoiceAssistantRecognizedText}"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="1" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="意图类型" />
-                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding VoiceAssistantIntentText}" />
-                                <TextBlock Grid.Row="2" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="模式" />
-                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding VoiceAssistantModeText}" />
-                                <TextBlock Grid.Row="3" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="策略类型" />
-                                <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Foreground="{StaticResource FgSecondaryBrush}" Text="{Binding VoiceAssistantAdviceTypeText}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="4" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="建议摘要" />
-                                <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding VoiceAssistantSummaryText}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="5" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="建议动作" />
-                                <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Foreground="{StaticResource FgPrimaryBrush}" Text="{Binding VoiceAssistantRecommendedActionText}" TextWrapping="Wrap" />
-                                <TextBlock Grid.Row="6" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="置信度 / 风险" />
-                                <StackPanel Grid.Row="6"
-                                            Grid.Column="1"
-                                            Margin="0,8,0,0"
-                                            Orientation="Horizontal">
-                                    <TextBlock Foreground="{StaticResource FgSecondaryBrush}"
-                                               Text="{Binding VoiceAssistantConfidenceText}" />
-                                    <TextBlock Foreground="{StaticResource FgLabelBrush}"
-                                               Text=" / " />
-                                    <TextBlock Foreground="{StaticResource FgSecondaryBrush}"
-                                               Text="{Binding VoiceAssistantRiskLevelText}" />
-                                </StackPanel>
-                                <TextBlock Grid.Row="7" Margin="0,8,0,0" Foreground="{StaticResource FgLabelBrush}" Text="缺失数据" />
-                                <TextBlock Grid.Row="7"
-                                           Grid.Column="1"
-                                           Margin="0,8,0,0"
-                                           Foreground="{StaticResource FgSecondaryBrush}"
-                                           Text="{Binding VoiceAssistantMissingDataText}"
-                                           TextWrapping="Wrap"
-                                           ToolTip="{Binding VoiceAssistantMissingDataDetailText}" />
-                            </Grid>
-                        </Border>
-
-                        <Border Grid.Row="1"
-                                Grid.Column="1"
-                                Margin="16,0,0,0"
-                                Padding="14"
-                                CornerRadius="8"
-                                Background="{StaticResource BgCardBrush}">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+                    <Border Grid.Row="3"
+                            Style="{StaticResource MetricTileStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="112" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource AiTtsFieldLabelStyle}" Text="识别文本" />
+                            <TextBlock Grid.Column="1"
+                                       Style="{StaticResource AiTtsValueTextStyle}"
+                                       Text="{Binding VoiceAssistantRecognizedText}" />
+                            <TextBlock Grid.Row="1" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="意图类型" />
+                            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,8,0,0" Style="{StaticResource AiTtsValueTextStyle}" Text="{Binding VoiceAssistantIntentText}" />
+                            <TextBlock Grid.Row="2" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="模式" />
+                            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Style="{StaticResource AiTtsValueTextStyle}" Text="{Binding VoiceAssistantModeText}" />
+                            <TextBlock Grid.Row="3" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="策略类型" />
+                            <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,8,0,0" Style="{StaticResource AiTtsValueTextStyle}" Text="{Binding VoiceAssistantAdviceTypeText}" />
+                            <TextBlock Grid.Row="4" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="建议摘要" />
+                            <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,8,0,0" Style="{StaticResource AiTtsValueTextStyle}" Text="{Binding VoiceAssistantSummaryText}" />
+                            <TextBlock Grid.Row="5" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="建议动作" />
+                            <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,8,0,0" Style="{StaticResource AiTtsValueTextStyle}" Text="{Binding VoiceAssistantRecommendedActionText}" />
+                            <TextBlock Grid.Row="6" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="置信度 / 风险" />
+                            <StackPanel Grid.Row="6"
+                                        Grid.Column="1"
+                                        Margin="0,8,0,0"
+                                        Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource AiTtsValueTextStyle}"
+                                           Text="{Binding VoiceAssistantConfidenceText}" />
                                 <TextBlock Foreground="{StaticResource FgLabelBrush}"
-                                           Text="原因" />
-                                <TextBlock Grid.Row="1"
-                                           Margin="0,8,0,0"
-                                           Foreground="{StaticResource FgSecondaryBrush}"
-                                           Text="{Binding VoiceAssistantReasonText}"
-                                           TextWrapping="Wrap" />
-                                <ItemsControl Grid.Row="2"
-                                              Margin="0,16,0,0"
-                                              ItemsSource="{Binding RaceAssistantHistory}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate>
-                                            <Border Margin="0,0,0,8"
-                                                    Padding="10"
-                                                    CornerRadius="8"
-                                                    Background="{StaticResource BgPanelBrush}">
-                                                <StackPanel>
-                                                    <TextBlock Foreground="{StaticResource FgLabelBrush}"
-                                                               Text="{Binding Intent}" />
-                                                    <TextBlock Margin="0,4,0,0"
-                                                               Foreground="{StaticResource FgPrimaryBrush}"
-                                                               Text="{Binding Question}"
-                                                               TextWrapping="Wrap" />
-                                                    <TextBlock Margin="0,4,0,0"
-                                                               Foreground="{StaticResource FgSecondaryBrush}"
-                                                               Text="{Binding Answer}"
-                                                               TextWrapping="Wrap" />
-                                                </StackPanel>
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Grid>
-                        </Border>
-                    </Grid>
+                                           Text=" / " />
+                                <TextBlock Style="{StaticResource AiTtsValueTextStyle}"
+                                           Text="{Binding VoiceAssistantRiskLevelText}" />
+                            </StackPanel>
+                            <TextBlock Grid.Row="7" Margin="0,8,12,0" Style="{StaticResource AiTtsFieldLabelStyle}" Text="缺失数据" />
+                            <TextBlock Grid.Row="7"
+                                       Grid.Column="1"
+                                       Margin="0,8,0,0"
+                                       Style="{StaticResource AiTtsValueTextStyle}"
+                                       Text="{Binding VoiceAssistantMissingDataText}"
+                                       ToolTip="{Binding VoiceAssistantMissingDataDetailText}" />
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="3"
+                            Grid.Column="1"
+                            Margin="12,0,0,0"
+                            Style="{StaticResource MetricTileStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                       Text="原因与历史" />
+                            <TextBlock Grid.Row="1"
+                                       Margin="0,8,0,0"
+                                       Style="{StaticResource AiTtsValueTextStyle}"
+                                       Text="{Binding VoiceAssistantReasonText}" />
+                            <ItemsControl x:Name="RaceAssistantHistoryItems"
+                                          Grid.Row="2"
+                                          Margin="0,14,0,0"
+                                          ItemsSource="{Binding RaceAssistantHistory}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8"
+                                                Padding="10"
+                                                CornerRadius="8"
+                                                Background="{StaticResource BgCardInnerBrush}"
+                                                BorderBrush="{StaticResource BorderCardBrush}"
+                                                BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                                           Text="{Binding Intent}" />
+                                                <TextBlock Margin="0,4,0,0"
+                                                           Style="{StaticResource AiTtsValueTextStyle}"
+                                                           Text="{Binding Question}" />
+                                                <TextBlock Margin="0,4,0,0"
+                                                           Style="{StaticResource AiTtsSubtleTextStyle}"
+                                                           Text="{Binding Answer}" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
-            <Border Grid.Row="3"
-                    Grid.ColumnSpan="2"
-                    Margin="0,16,0,0"
-                    Padding="20"
-                    CornerRadius="18"
-                    Background="{StaticResource BgPanelBrush}">
+            <Border x:Name="AiTtsLogsPanel"
+                    Style="{StaticResource GlassCardStyle}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock FontSize="22"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource FgPrimaryBrush}"
-                               Text="AI / TTS 日志" />
-                    <ItemsControl Grid.Row="1"
-                                  Margin="0,16,0,0"
-                                  ItemsSource="{Binding AiTtsLogs}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="0,0,0,8"
-                                        Padding="12"
-                                        CornerRadius="12"
-                                        Background="{StaticResource BgCardBrush}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="82" />
-                                            <ColumnDefinition Width="70" />
-                                            <ColumnDefinition Width="*" />
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Foreground="{StaticResource FgLabelBrush}" Text="{Binding Timestamp}" />
-                                        <TextBlock Grid.Column="1"
-                                                   Foreground="{StaticResource FgSecondaryBrush}"
-                                                   Text="{Binding Category}" />
-                                        <TextBlock Grid.Column="2"
-                                                   Foreground="{StaticResource FgPrimaryBrush}"
-                                                   Text="{Binding Message}"
-                                                   TextWrapping="Wrap" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+
+                    <Grid Style="{StaticResource SectionHeaderStyle}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="34" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource AiTtsSectionGlyphStyle}">
+                            <TextBlock HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentPrimaryBrush}"
+                                       Text="L" />
+                        </Border>
+                        <StackPanel Grid.Column="1"
+                                    Margin="12,0,0,0">
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}"
+                                       Text="AI / TTS 日志" />
+                            <TextBlock Style="{StaticResource AiTtsSubtleTextStyle}"
+                                       Text="保留时间、分类和摘要，长消息悬停查看完整内容。" />
+                        </StackPanel>
+                    </Grid>
+
+                    <ScrollViewer x:Name="AiTtsLogsScrollViewer"
+                                  Grid.Row="1"
+                                  Margin="0,14,0,0"
+                                  HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled">
+                        <StackPanel MinWidth="760">
+                            <Grid Margin="12,0,12,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="96" />
+                                    <ColumnDefinition Width="112" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="时间" />
+                                <TextBlock Grid.Column="1"
+                                           Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="分类" />
+                                <TextBlock Grid.Column="2"
+                                           Style="{StaticResource MetricLabelTextStyle}"
+                                           Text="摘要" />
+                            </Grid>
+
+                            <ItemsControl x:Name="AiTtsLogsItems"
+                                          ItemsSource="{Binding AiTtsLogs}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,0,8"
+                                                Style="{StaticResource MetricTileStyle}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="96" />
+                                                    <ColumnDefinition Width="112" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Style="{StaticResource TableCellTextStyle}"
+                                                           Foreground="{StaticResource FgLabelBrush}"
+                                                           Text="{Binding Timestamp}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding Timestamp}" />
+                                                <Border Grid.Column="1"
+                                                        Style="{StaticResource AiTtsLogCategoryPillStyle}"
+                                                        ToolTip="{Binding Category}">
+                                                    <TextBlock HorizontalAlignment="Center"
+                                                               Style="{StaticResource TableCellTextStyle}"
+                                                               FontWeight="SemiBold"
+                                                               Text="{Binding Category}"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </Border>
+                                                <TextBlock x:Name="AiTtsLogMessageText"
+                                                           Grid.Column="2"
+                                                           Style="{StaticResource TableCellTextStyle}"
+                                                           Foreground="{StaticResource FgPrimaryBrush}"
+                                                           Text="{Binding Message}"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip="{Binding Message}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
             </Border>
-        </Grid>
+        </StackPanel>
     </ScrollViewer>
 </UserControl>
