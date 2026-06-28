@@ -133,6 +133,10 @@ public sealed class WindowsTtsService : ITtsService, IDisposable
         }
         catch (Exception ex)
         {
+            // 标记队列不再接受新项，使后续 SpeakAsync 的 Add 抛 InvalidOperationException
+            // （SpeakAsync 已有 catch 将其转为失败的 Task），避免 TCS 永不完成导致调用方永久挂起。
+            _workItems.CompleteAdding();
+
             while (_workItems.TryTake(out var workItem))
             {
                 workItem.TrySetException(new InvalidOperationException("Windows speech synthesis is unavailable.", ex));
