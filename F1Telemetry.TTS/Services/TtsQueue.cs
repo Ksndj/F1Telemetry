@@ -120,14 +120,26 @@ public sealed class TtsQueue : IDisposable
                     return false;
                 }
 
-                if (TryDequeueOldestLowPriorityUnsafe(out var droppedLowPriorityMessage))
+                // 先尝试驱逐 Low 优先级消息
+                if (TryDequeueOldestLowPriorityUnsafe(out var droppedMessage))
                 {
-                    ReleaseDedupKeyUnsafe(droppedLowPriorityMessage);
+                    ReleaseDedupKeyUnsafe(droppedMessage);
                     AddRecordUnsafe(
                         CreateRecord(
-                            droppedLowPriorityMessage,
+                            droppedMessage,
                             TtsPlaybackOutcome.Dropped,
-                            $"队列已满，已让出低优先级播报：{droppedLowPriorityMessage.Text}"));
+                            $"队列已满，已让出低优先级播报：{droppedMessage.Text}"));
+                }
+                // 无 Low 消息时，High 优先级消息可以驱逐 Normal 消息
+                else if (normalizedMessage.Priority == TtsPriority.High &&
+                         TryDequeueOldestNormalPriorityUnsafe(out droppedMessage))
+                {
+                    ReleaseDedupKeyUnsafe(droppedMessage);
+                    AddRecordUnsafe(
+                        CreateRecord(
+                            droppedMessage,
+                            TtsPlaybackOutcome.Dropped,
+                            $"队列已满，已让出普通优先级播报：{droppedMessage.Text}"));
                 }
                 else
                 {
@@ -146,10 +158,10 @@ public sealed class TtsQueue : IDisposable
             {
                 _activeDedupKeys.Add(normalizedMessage.DedupKey);
             }
-        }
 
-        _queueSignal.Release();
-        return true;
+            _queueSignal.Release();
+            return true;
+        }
     }
 
     /// <summary>
@@ -317,6 +329,21 @@ public sealed class TtsQueue : IDisposable
         if (_lowPriorityMessages.Count > 0)
         {
             droppedMessage = _lowPriorityMessages.Dequeue();
+            return true;
+        }
+
+        droppedMessage = default!;
+        return false;
+    }
+
+    /// <summary>
+    /// 尝试从 Normal 优先级队列中驱逐最旧的一条消息（队列满时供 High 消息腾出空间）。
+    /// </summary>
+    private bool TryDequeueOldestNormalPriorityUnsafe(out TtsMessage droppedMessage)
+    {
+        if (_normalPriorityMessages.Count > 0)
+        {
+            droppedMessage = _normalPriorityMessages.Dequeue();
             return true;
         }
 

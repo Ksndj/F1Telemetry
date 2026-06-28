@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -3876,7 +3877,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 BuildVoiceAiQueryRequest(recording),
                 requestCts.Token);
 
-            if (requestVersion != _voiceAiQueryVersion)
+            if (requestVersion != Volatile.Read(ref _voiceAiQueryVersion))
             {
                 return;
             }
@@ -3889,7 +3890,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
         catch (OperationCanceledException)
         {
-            if (requestVersion == _voiceAiQueryVersion)
+            if (requestVersion == Volatile.Read(ref _voiceAiQueryVersion))
             {
                 VoiceAiStatusText = "语音问答已取消";
                 VoiceAssistantStatusText = "未录音";
@@ -3934,7 +3935,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 BuildVoiceAiQueryRequest(question, context),
                 requestCts.Token);
 
-            if (requestVersion != _voiceAiQueryVersion)
+            if (requestVersion != Volatile.Read(ref _voiceAiQueryVersion))
             {
                 return;
             }
@@ -3943,7 +3944,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
         catch (OperationCanceledException)
         {
-            if (requestVersion == _voiceAiQueryVersion)
+            if (requestVersion == Volatile.Read(ref _voiceAiQueryVersion))
             {
                 VoiceAssistantStatusText = "未录音";
                 VoiceAiStatusText = "语音问答已取消";
@@ -4030,7 +4031,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         CancelActiveVoiceAssistantQuery("已取消上一个未完成问答。", logAsCanceled: true);
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifecycleCts.Token);
         _voiceAiQueryCts = cts;
-        var version = ++_voiceAiQueryVersion;
+        var version = Interlocked.Increment(ref _voiceAiQueryVersion);
         IsVoiceAiQueryRunning = true;
         VoiceAssistantStatusText = statusText;
         return (version, cts);
@@ -4038,7 +4039,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void CompleteVoiceAssistantQuery(int requestVersion, CancellationTokenSource requestCts)
     {
-        if (requestVersion == _voiceAiQueryVersion)
+        if (requestVersion == Volatile.Read(ref _voiceAiQueryVersion))
         {
             IsVoiceAiQueryRunning = false;
             if (ReferenceEquals(_voiceAiQueryCts, requestCts))
@@ -4064,7 +4065,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        _voiceAiQueryVersion++;
+        Interlocked.Increment(ref _voiceAiQueryVersion);
         _voiceAiQueryCts = null;
         try
         {

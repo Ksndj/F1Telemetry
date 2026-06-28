@@ -50,7 +50,29 @@ public sealed class DeepSeekClient
                 using var response = await _httpClient.SendAsync(requestMessage, timeoutCts.Token);
                 if (IsTransientStatusCode(response.StatusCode) && attempt < MaxRequestAttempts)
                 {
-                    await Task.Delay(RetryDelay, cancellationToken);
+                    // 优先读取 Retry-After 头（DeepSeek 429 响应通常携带此头）
+                    var retryAfter = RetryDelay; // 默认 250ms
+                    if (response.Headers.TryGetValues("Retry-After", out var retryAfterValues))
+                    {
+                        var retryAfterValue = retryAfterValues.FirstOrDefault();
+                        if (retryAfterValue is not null)
+                        {
+                            if (int.TryParse(retryAfterValue, out var retryAfterSeconds))
+                            {
+                                // 上限 60 秒，避免等待太久
+                                retryAfter = TimeSpan.FromSeconds(Math.Min(retryAfterSeconds, 60));
+                            }
+                            else if (DateTimeOffset.TryParse(retryAfterValue, out var retryAfterDate))
+                            {
+                                var delay = retryAfterDate - DateTimeOffset.UtcNow;
+                                if (delay > TimeSpan.Zero && delay <= TimeSpan.FromSeconds(60))
+                                {
+                                    retryAfter = delay;
+                                }
+                            }
+                        }
+                    }
+                    await Task.Delay(retryAfter, cancellationToken);
                     continue;
                 }
 
