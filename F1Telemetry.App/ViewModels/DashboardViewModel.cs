@@ -281,6 +281,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private string? _lastStagedPostRaceAiKey;
     private readonly Dictionary<string, int> _persistedLapQualityByKey = new(StringComparer.Ordinal);
     private readonly HashSet<string> _completedLapSideEffectKeys = new(StringComparer.Ordinal);
+    private readonly object _lapPersistenceGate = new();
     private int? _lastTrendRefreshLapNumber;
     private readonly object _shutdownGate = new();
     private Task? _shutdownTask;
@@ -2693,7 +2694,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     /// </summary>
     public void Dispose()
     {
-        ShutdownAsync().GetAwaiter().GetResult();
+        // 在线程池线程上执行 shutdown，避免 sync-over-async 死锁：
+        // ShutdownCoreAsync 的 await 链缺 ConfigureAwait(false)，continuation 会尝试回到 UI 线程，
+        // 若 UI 线程被 GetAwaiter().GetResult() 阻塞则死锁。Task.Run 让 continuation 在线程池完成。
+        Task.Run(ShutdownAsync).GetAwaiter().GetResult();
     }
 
     private async Task ShutdownCoreAsync()
@@ -3407,8 +3411,11 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastStagedPostRaceAiKey = null;
         ResetPostRaceAiReportDetails();
         _realtimeCornerAdviceService.Reset();
-        _persistedLapQualityByKey.Clear();
-        _completedLapSideEffectKeys.Clear();
+        lock (_lapPersistenceGate)
+        {
+            _persistedLapQualityByKey.Clear();
+            _completedLapSideEffectKeys.Clear();
+        }
         _lastTrendRefreshLapNumber = null;
         _lastEventCode = null;
         _raceEventInsightBuffer.Reset();
@@ -3740,16 +3747,32 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         {
             var lapKey = BuildSessionLapKey(lap.LapNumber);
             var quality = CalculateLapPersistenceQuality(lap);
-            if (_persistedLapQualityByKey.TryGetValue(lapKey, out var persistedQuality)
-                && persistedQuality >= quality)
+            bool shouldPersist;
+            bool shouldPersistSamples;
+            lock (_lapPersistenceGate)
+            {
+                if (_persistedLapQualityByKey.TryGetValue(lapKey, out var persistedQuality)
+                    && persistedQuality >= quality)
+                {
+                    shouldPersist = false;
+                    shouldPersistSamples = false;
+                }
+                else
+                {
+                    _persistedLapQualityByKey[lapKey] = quality;
+                    shouldPersist = true;
+                    shouldPersistSamples = _completedLapSideEffectKeys.Add(lapKey);
+                }
+            }
+
+            if (!shouldPersist)
             {
                 continue;
             }
 
-            _persistedLapQualityByKey[lapKey] = quality;
             _storagePersistenceService.EnqueueLapSummary(lap);
             var lapSamples = _lapAnalyzer.CaptureCompletedLapSamples(lap.LapNumber);
-            if (lapSamples.Count > 0 && _completedLapSideEffectKeys.Add(lapKey))
+            if (shouldPersistSamples && lapSamples.Count > 0)
             {
                 _storagePersistenceService.EnqueueLapSamples(lap.LapNumber, lapSamples);
                 RecordTrackMapTrajectory(lap.LapNumber, lapSamples);
