@@ -100,8 +100,8 @@ public sealed class EventRepository : IEventRepository
                         {
                             Id = reader.GetInt64(0),
                             SessionId = reader.GetString(1),
-                            EventType = Enum.Parse<EventType>(reader.GetString(2)),
-                            Severity = Enum.Parse<EventSeverity>(reader.GetString(3)),
+                            EventType = Enum.TryParse<EventType>(reader.GetString(2), true, out var eventType) ? eventType : EventType.DataQualityWarning,
+                            Severity = Enum.TryParse<EventSeverity>(reader.GetString(3), true, out var severity) ? severity : EventSeverity.Information,
                             LapNumber = reader.IsDBNull(4) ? null : reader.GetInt32(4),
                             VehicleIdx = reader.IsDBNull(5) ? null : reader.GetInt32(5),
                             DriverName = reader.IsDBNull(6) ? null : reader.GetString(6),

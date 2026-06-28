@@ -33,6 +33,9 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
     private readonly Task _workerTask;
     private long _nextCommandSequence;
     private bool _disposed;
+    private int _droppedCommandCount;
+    private readonly List<StorageCommand> _pendingNoSessionCommands = new();
+    private const int MaxPendingNoSessionCommands = 32;
 
     /// <summary>
     /// Initializes a new persistence coordinator.
@@ -94,6 +97,11 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
 
     /// <inheritdoc />
     public event EventHandler<string>? LogEmitted;
+
+    /// <summary>
+    /// 获取自服务启动以来因队列满而被丢弃的命令总数。
+    /// </summary>
+    public int DroppedCommandCount => Volatile.Read(ref _droppedCommandCount);
 
     /// <inheritdoc />
     public void ObserveParsedPacket(ParsedPacket parsedPacket)
@@ -169,7 +177,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                 new CompleteActiveSessionCommand(DateTimeOffset.UtcNow, completion),
                 "SQLite 队列已满，停止会话请求可能延迟。"))
         {
-            completion.TrySetResult();
+            completion.TrySetException(new InvalidOperationException("SQLite 关键队列已满，会话结束请求未执行。"));
         }
 
         using var registration = cancellationToken.Register(() => completion.TrySetCanceled(cancellationToken));
@@ -242,6 +250,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                 if (_criticalCommands.Count >= _maxCriticalCommands)
                 {
                     logMessage = "SQLite 关键队列已满，已跳过一次会话生命周期请求。";
+                    Interlocked.Increment(ref _droppedCommandCount);
                 }
                 else
                 {
@@ -253,6 +262,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             else if (_bufferedCommands.Count >= _maxBufferedCommands)
             {
                 logMessage = dropMessage;
+                Interlocked.Increment(ref _droppedCommandCount);
             }
             else
             {
@@ -266,7 +276,7 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
         {
             if (command is CompleteActiveSessionCommand completeSession)
             {
-                completeSession.Completion.TrySetResult();
+                completeSession.Completion.TrySetException(new InvalidOperationException("SQLite 关键队列已满，会话结束请求未执行。"));
             }
 
             if (!string.IsNullOrWhiteSpace(logMessage))
@@ -333,12 +343,36 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                             observeSession,
                             activeSessionId,
                             activeSessionUid);
+                        if (activeSessionId is not null && _pendingNoSessionCommands.Count > 0)
+                        {
+                            var pendingCount = _pendingNoSessionCommands.Count;
+                            EmitLog($"活动会话已创建，正在处理 {pendingCount} 条暂存的持久化请求。");
+                            var pendingCommands = _pendingNoSessionCommands.ToArray();
+                            _pendingNoSessionCommands.Clear();
+                            foreach (var pendingCmd in pendingCommands)
+                            {
+                                if (activeSessionId is null)
+                                {
+                                    EmitLog("活动会话已消失，已丢弃暂存的持久化请求。");
+                                    break;
+                                }
+                                EnqueueCommand(pendingCmd);
+                            }
+                        }
                         break;
 
                     case PersistLapCommand persistLap:
                         if (activeSessionId is null)
                         {
-                            EmitLog("未发现活动会话，已跳过圈摘要持久化。");
+                            if (_pendingNoSessionCommands.Count < MaxPendingNoSessionCommands)
+                            {
+                                _pendingNoSessionCommands.Add(persistLap);
+                                EmitLog("未发现活动会话，已暂存持久化请求等待会话创建。");
+                            }
+                            else
+                            {
+                                EmitLog("未发现活动会话，已跳过圈摘要持久化。");
+                            }
                             break;
                         }
 
@@ -346,9 +380,22 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                         break;
 
                     case PersistLapSamplesCommand persistLapSamples:
-                        if (activeSessionId is null || _lapSampleRepository is null)
+                        if (activeSessionId is null)
                         {
-                            EmitLog("未发现活动会话，已跳过圈采样持久化。");
+                            if (_lapSampleRepository is not null && _pendingNoSessionCommands.Count < MaxPendingNoSessionCommands)
+                            {
+                                _pendingNoSessionCommands.Add(persistLapSamples);
+                                EmitLog("未发现活动会话，已暂存持久化请求等待会话创建。");
+                            }
+                            else
+                            {
+                                EmitLog("未发现活动会话，已跳过圈采样持久化。");
+                            }
+                            break;
+                        }
+
+                        if (_lapSampleRepository is null)
+                        {
                             break;
                         }
 
@@ -360,7 +407,15 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                     case PersistEventCommand persistEvent:
                         if (activeSessionId is null)
                         {
-                            EmitLog("未发现活动会话，已跳过事件持久化。");
+                            if (_pendingNoSessionCommands.Count < MaxPendingNoSessionCommands)
+                            {
+                                _pendingNoSessionCommands.Add(persistEvent);
+                                EmitLog("未发现活动会话，已暂存持久化请求等待会话创建。");
+                            }
+                            else
+                            {
+                                EmitLog("未发现活动会话，已跳过事件持久化。");
+                            }
                             break;
                         }
 
@@ -370,7 +425,15 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                     case PersistAiReportCommand persistAiReport:
                         if (activeSessionId is null)
                         {
-                            EmitLog("未发现活动会话，已跳过 AI 分析持久化。");
+                            if (_pendingNoSessionCommands.Count < MaxPendingNoSessionCommands)
+                            {
+                                _pendingNoSessionCommands.Add(persistAiReport);
+                                EmitLog("未发现活动会话，已暂存持久化请求等待会话创建。");
+                            }
+                            else
+                            {
+                                EmitLog("未发现活动会话，已跳过 AI 分析持久化。");
+                            }
                             break;
                         }
 
@@ -500,8 +563,8 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                     LapNumber = lapNumber,
                     LapDistance = sample.LapDistance,
                     TotalDistance = sample.TotalDistance,
-                    CurrentLapTimeInMs = sample.CurrentLapTimeInMs is null ? null : checked((int)sample.CurrentLapTimeInMs.Value),
-                    LastLapTimeInMs = sample.LastLapTimeInMs is null ? null : checked((int)sample.LastLapTimeInMs.Value),
+                    CurrentLapTimeInMs = sample.CurrentLapTimeInMs is null ? null : ClampToInt32(sample.CurrentLapTimeInMs.Value),
+                    LastLapTimeInMs = sample.LastLapTimeInMs is null ? null : ClampToInt32(sample.LastLapTimeInMs.Value),
                     SpeedKph = sample.SpeedKph,
                     Throttle = sample.Throttle,
                     Brake = sample.Brake,
@@ -525,6 +588,11 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
                     CreatedAt = sample.SampledAt
                 })
             .ToArray();
+    }
+
+    private static int ClampToInt32(uint value)
+    {
+        return value > int.MaxValue ? int.MaxValue : (int)value;
     }
 
     private abstract record StorageCommand(bool IsCritical)

@@ -87,17 +87,20 @@ public sealed class StrategyRuleConflictResolver
         }
 
         if (ContainsAny(ruleAction, "省电", "保留") &&
-            ContainsAny(aiAction, "用电", "释放", "push", "推进"))
+            ContainsAny(aiAction, "用电", "释放", "push", "推进") &&
+            !ContainsAny(aiAction, "不用电", "不释放", "不push", "不推进"))
         {
             return true;
         }
 
-        if (ContainsAny(ruleAction, "防守") && ContainsAny(aiAction, "进攻", "追击"))
+        if (ContainsAny(ruleAction, "防守") && ContainsAny(aiAction, "进攻", "追击") &&
+            !ContainsAny(aiAction, "不进攻", "不追击"))
         {
             return true;
         }
 
-        if (ContainsAny(ruleAction, "保胎", "保守") && ContainsAny(aiAction, "继续推", "全力推"))
+        if (ContainsAny(ruleAction, "保胎", "保守") && ContainsAny(aiAction, "继续推", "全力推") &&
+            !ContainsAny(aiAction, "不继续推", "不全力推"))
         {
             return true;
         }

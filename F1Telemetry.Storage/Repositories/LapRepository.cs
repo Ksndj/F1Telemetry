@@ -68,7 +68,7 @@ public sealed class LapRepository : ILapRepository
                             WHEN @end_tyre IS NOT NULL AND trim(@end_tyre) <> '' AND trim(@end_tyre) <> '-' THEN @end_tyre
                             ELSE end_tyre
                         END,
-                        created_at = @created_at
+                        created_at = CASE WHEN created_at IS NULL THEN @created_at ELSE created_at END
                     WHERE session_id = @session_id
                       AND lap_number = @lap_number;
                     """;
@@ -182,10 +182,10 @@ public sealed class LapRepository : ILapRepository
     {
         command.Parameters.AddWithValue("@session_id", sessionId);
         command.Parameters.AddWithValue("@lap_number", lapSummary.LapNumber);
-        command.Parameters.AddWithValue("@lap_time_ms", (object?)lapSummary.LapTimeInMs is null ? DBNull.Value : (int)lapSummary.LapTimeInMs.Value);
-        command.Parameters.AddWithValue("@sector1_ms", (object?)lapSummary.Sector1TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector1TimeInMs.Value);
-        command.Parameters.AddWithValue("@sector2_ms", (object?)lapSummary.Sector2TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector2TimeInMs.Value);
-        command.Parameters.AddWithValue("@sector3_ms", (object?)lapSummary.Sector3TimeInMs is null ? DBNull.Value : (int)lapSummary.Sector3TimeInMs.Value);
+        command.Parameters.AddWithValue("@lap_time_ms", (object?)lapSummary.LapTimeInMs is null ? DBNull.Value : ClampToInt32(lapSummary.LapTimeInMs.Value));
+        command.Parameters.AddWithValue("@sector1_ms", (object?)lapSummary.Sector1TimeInMs is null ? DBNull.Value : ClampToInt32(lapSummary.Sector1TimeInMs.Value));
+        command.Parameters.AddWithValue("@sector2_ms", (object?)lapSummary.Sector2TimeInMs is null ? DBNull.Value : ClampToInt32(lapSummary.Sector2TimeInMs.Value));
+        command.Parameters.AddWithValue("@sector3_ms", (object?)lapSummary.Sector3TimeInMs is null ? DBNull.Value : ClampToInt32(lapSummary.Sector3TimeInMs.Value));
         command.Parameters.AddWithValue("@is_valid", lapSummary.IsValid ? 1 : 0);
         command.Parameters.AddWithValue("@avg_speed_kph", (object?)lapSummary.AverageSpeedKph ?? DBNull.Value);
         command.Parameters.AddWithValue("@fuel_used_litres", (object?)lapSummary.FuelUsedLitres ?? DBNull.Value);
@@ -193,5 +193,13 @@ public sealed class LapRepository : ILapRepository
         command.Parameters.AddWithValue("@start_tyre", lapSummary.StartTyre);
         command.Parameters.AddWithValue("@end_tyre", lapSummary.EndTyre);
         command.Parameters.AddWithValue("@created_at", SqliteStorageConverters.ToStorageTimestamp(lapSummary.ClosedAt));
+    }
+
+    /// <summary>
+    /// 将 uint 值钳制到 int 范围内，防止隐式截断导致负值存入数据库。
+    /// </summary>
+    private static int ClampToInt32(uint value)
+    {
+        return value > int.MaxValue ? int.MaxValue : (int)value;
     }
 }

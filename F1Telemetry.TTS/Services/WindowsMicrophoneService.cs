@@ -43,7 +43,15 @@ public sealed class WindowsMicrophoneService : IMicrophoneService
             BufferMilliseconds = 80
         };
 
-        return new NAudioVoiceRecordingSession(waveIn);
+        try
+        {
+            return new NAudioVoiceRecordingSession(waveIn);
+        }
+        catch
+        {
+            waveIn.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc />
