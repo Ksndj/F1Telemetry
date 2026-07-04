@@ -28,90 +28,103 @@ public sealed class LapRepository : ILapRepository
         return _databaseService.ExecuteAsync(
             async (connection, innerCancellationToken) =>
             {
-                using var command = connection.CreateCommand();
-                command.CommandText = """
-                    UPDATE laps
-                    SET lap_time_ms = CASE
-                            WHEN @lap_time_ms IS NOT NULL AND @lap_time_ms > 0 THEN @lap_time_ms
-                            ELSE lap_time_ms
-                        END,
-                        sector1_ms = CASE
-                            WHEN @sector1_ms IS NOT NULL AND @sector1_ms > 0 THEN @sector1_ms
-                            ELSE sector1_ms
-                        END,
-                        sector2_ms = CASE
-                            WHEN @sector2_ms IS NOT NULL AND @sector2_ms > 0 THEN @sector2_ms
-                            ELSE sector2_ms
-                        END,
-                        sector3_ms = CASE
-                            WHEN @sector3_ms IS NOT NULL AND @sector3_ms > 0 THEN @sector3_ms
-                            ELSE sector3_ms
-                        END,
-                        is_valid = @is_valid,
-                        avg_speed_kph = CASE
-                            WHEN @avg_speed_kph IS NOT NULL AND @avg_speed_kph > 0 THEN @avg_speed_kph
-                            ELSE avg_speed_kph
-                        END,
-                        fuel_used_litres = CASE
-                            WHEN @fuel_used_litres IS NOT NULL AND @fuel_used_litres >= 0 THEN @fuel_used_litres
-                            ELSE fuel_used_litres
-                        END,
-                        ers_used = CASE
-                            WHEN @ers_used IS NOT NULL AND @ers_used >= 0 THEN @ers_used
-                            ELSE ers_used
-                        END,
-                        start_tyre = CASE
-                            WHEN @start_tyre IS NOT NULL AND trim(@start_tyre) <> '' AND trim(@start_tyre) <> '-' THEN @start_tyre
-                            ELSE start_tyre
-                        END,
-                        end_tyre = CASE
-                            WHEN @end_tyre IS NOT NULL AND trim(@end_tyre) <> '' AND trim(@end_tyre) <> '-' THEN @end_tyre
-                            ELSE end_tyre
-                        END,
-                        created_at = CASE WHEN created_at IS NULL THEN @created_at ELSE created_at END
-                    WHERE session_id = @session_id
-                      AND lap_number = @lap_number;
-                    """;
-                BindLapParameters(command, sessionId, lapSummary);
-                var updatedRows = await command.ExecuteNonQueryAsync(innerCancellationToken);
-                if (updatedRows > 0)
+                using var transaction = connection.BeginTransaction();
+                try
                 {
-                    return;
-                }
+                    using var command = connection.CreateCommand();
+                    command.Transaction = transaction;
+                    command.CommandText = """
+                        UPDATE laps
+                        SET lap_time_ms = CASE
+                                WHEN @lap_time_ms IS NOT NULL AND @lap_time_ms > 0 THEN @lap_time_ms
+                                ELSE lap_time_ms
+                            END,
+                            sector1_ms = CASE
+                                WHEN @sector1_ms IS NOT NULL AND @sector1_ms > 0 THEN @sector1_ms
+                                ELSE sector1_ms
+                            END,
+                            sector2_ms = CASE
+                                WHEN @sector2_ms IS NOT NULL AND @sector2_ms > 0 THEN @sector2_ms
+                                ELSE sector2_ms
+                            END,
+                            sector3_ms = CASE
+                                WHEN @sector3_ms IS NOT NULL AND @sector3_ms > 0 THEN @sector3_ms
+                                ELSE sector3_ms
+                            END,
+                            is_valid = @is_valid,
+                            avg_speed_kph = CASE
+                                WHEN @avg_speed_kph IS NOT NULL AND @avg_speed_kph > 0 THEN @avg_speed_kph
+                                ELSE avg_speed_kph
+                            END,
+                            fuel_used_litres = CASE
+                                WHEN @fuel_used_litres IS NOT NULL AND @fuel_used_litres >= 0 THEN @fuel_used_litres
+                                ELSE fuel_used_litres
+                            END,
+                            ers_used = CASE
+                                WHEN @ers_used IS NOT NULL AND @ers_used >= 0 THEN @ers_used
+                                ELSE ers_used
+                            END,
+                            start_tyre = CASE
+                                WHEN @start_tyre IS NOT NULL AND trim(@start_tyre) <> '' AND trim(@start_tyre) <> '-' THEN @start_tyre
+                                ELSE start_tyre
+                            END,
+                            end_tyre = CASE
+                                WHEN @end_tyre IS NOT NULL AND trim(@end_tyre) <> '' AND trim(@end_tyre) <> '-' THEN @end_tyre
+                                ELSE end_tyre
+                            END,
+                            created_at = CASE WHEN created_at IS NULL THEN @created_at ELSE created_at END
+                        WHERE session_id = @session_id
+                          AND lap_number = @lap_number;
+                        """;
+                    BindLapParameters(command, sessionId, lapSummary);
+                    var updatedRows = await command.ExecuteNonQueryAsync(innerCancellationToken);
+                    if (updatedRows > 0)
+                    {
+                        transaction.Commit();
+                        return;
+                    }
 
-                using var insertCommand = connection.CreateCommand();
-                insertCommand.CommandText = """
-                    INSERT INTO laps (
-                        session_id,
-                        lap_number,
-                        lap_time_ms,
-                        sector1_ms,
-                        sector2_ms,
-                        sector3_ms,
-                        is_valid,
-                        avg_speed_kph,
-                        fuel_used_litres,
-                        ers_used,
-                        start_tyre,
-                        end_tyre,
-                        created_at)
-                    VALUES (
-                        @session_id,
-                        @lap_number,
-                        @lap_time_ms,
-                        @sector1_ms,
-                        @sector2_ms,
-                        @sector3_ms,
-                        @is_valid,
-                        @avg_speed_kph,
-                        @fuel_used_litres,
-                        @ers_used,
-                        @start_tyre,
-                        @end_tyre,
-                        @created_at);
-                    """;
-                BindLapParameters(insertCommand, sessionId, lapSummary);
-                await insertCommand.ExecuteNonQueryAsync(innerCancellationToken);
+                    using var insertCommand = connection.CreateCommand();
+                    insertCommand.Transaction = transaction;
+                    insertCommand.CommandText = """
+                        INSERT INTO laps (
+                            session_id,
+                            lap_number,
+                            lap_time_ms,
+                            sector1_ms,
+                            sector2_ms,
+                            sector3_ms,
+                            is_valid,
+                            avg_speed_kph,
+                            fuel_used_litres,
+                            ers_used,
+                            start_tyre,
+                            end_tyre,
+                            created_at)
+                        VALUES (
+                            @session_id,
+                            @lap_number,
+                            @lap_time_ms,
+                            @sector1_ms,
+                            @sector2_ms,
+                            @sector3_ms,
+                            @is_valid,
+                            @avg_speed_kph,
+                            @fuel_used_litres,
+                            @ers_used,
+                            @start_tyre,
+                            @end_tyre,
+                            @created_at);
+                        """;
+                    BindLapParameters(insertCommand, sessionId, lapSummary);
+                    await insertCommand.ExecuteNonQueryAsync(innerCancellationToken);
+                    transaction.Commit();
+                }
+                catch
+                {
+                    transaction.Rollback();
+                    throw;
+                }
             },
             cancellationToken);
     }

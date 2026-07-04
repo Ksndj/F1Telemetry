@@ -156,7 +156,8 @@ public sealed class SqliteDatabaseService : IDatabaseService
                 ers_used REAL NULL,
                 start_tyre TEXT NOT NULL,
                 end_tyre TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                UNIQUE(session_id, lap_number)
             );
 
             CREATE TABLE IF NOT EXISTS events (
@@ -327,6 +328,8 @@ public sealed class SqliteDatabaseService : IDatabaseService
             "weekend_structure",
             "ALTER TABLE sessions ADD COLUMN weekend_structure TEXT NULL;",
             cancellationToken);
+
+        await EnsureLapsUniqueConstraintAsync(connection, cancellationToken);
     }
 
     private static async Task EnsureColumnAsync(
@@ -352,6 +355,38 @@ public sealed class SqliteDatabaseService : IDatabaseService
         using var alterCommand = connection.CreateCommand();
         alterCommand.CommandText = alterTableSql;
         await alterCommand.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// 确保 laps 表中 (session_id, lap_number) 唯一。
+    /// 删除重复行（保留最新的 created_at），并创建唯一索引以约束现有数据库。
+    /// </summary>
+    private static async Task EnsureLapsUniqueConstraintAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        // 删除重复行，保留每组 (session_id, lap_number) 中 created_at 最新的行
+        using var dedupCommand = connection.CreateCommand();
+        dedupCommand.CommandText = """
+            DELETE FROM laps WHERE id IN (
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY session_id, lap_number
+                        ORDER BY created_at DESC, id DESC
+                    ) AS rn
+                    FROM laps
+                ) WHERE rn > 1
+            );
+            """;
+        await dedupCommand.ExecuteNonQueryAsync(cancellationToken);
+
+        // 创建唯一索引作为现有数据库的约束
+        using var indexCommand = connection.CreateCommand();
+        indexCommand.CommandText = """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_laps_session_lap
+                ON laps (session_id, lap_number);
+            """;
+        await indexCommand.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private void ThrowIfDisposed()
