@@ -192,9 +192,15 @@ public sealed class StoragePersistenceService : IStoragePersistenceService
             return;
         }
 
+        // 给 CompleteActiveSessionAsync 加 10 秒超时，防止永久挂起
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try
         {
-            await CompleteActiveSessionAsync();
+            await CompleteActiveSessionAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // 超时则放弃等待，强制关闭
         }
         catch
         {

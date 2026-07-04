@@ -152,12 +152,24 @@ public sealed class WindowsMicrophoneService : IMicrophoneService
                 catch
                 {
                 }
+
+                // 等待 RecordingStopped 事件（带超时），避免 NAudio 内部线程在释放后访问已释放资源
+                try
+                {
+                    _stopped.Task.WaitAsync(TimeSpan.FromSeconds(2)).Wait();
+                }
+                catch
+                {
+                }
             }
 
             _waveIn.DataAvailable -= WaveIn_DataAvailable;
             _waveIn.RecordingStopped -= WaveIn_RecordingStopped;
             _waveIn.Dispose();
-            _audioStream.Dispose();
+            lock (_syncRoot)
+            {
+                _audioStream.Dispose();
+            }
         }
 
         private void WaveIn_DataAvailable(object? sender, WaveInEventArgs e)

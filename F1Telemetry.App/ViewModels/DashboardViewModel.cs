@@ -277,7 +277,16 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     private int _lastValidUdpListenPort = UdpSettings.DefaultListenPort;
     private int _lastSavedUdpListenPort = UdpSettings.DefaultListenPort;
     private int _udpSettingsSaveVersion;
-    private ulong? _activeSessionUid;
+    private ulong? _sessionUidBackingField;
+    private readonly object _sessionUidLock = new();
+
+    // 线程安全的 activeSessionUid 访问属性（lock 保护）
+    private ulong? ActiveSessionUidAccessor
+    {
+        get { lock (_sessionUidLock) return _sessionUidBackingField; }
+        set { lock (_sessionUidLock) _sessionUidBackingField = value; }
+    }
+
     private string? _lastPostRaceAiSummaryKey;
     private string? _lastStagedPostRaceAiKey;
     private readonly Dictionary<string, int> _persistedLapQualityByKey = new(StringComparer.Ordinal);
@@ -3226,6 +3235,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private async Task FlushLoggersAsync()
     {
+        // 防止在 DisposeAsync 后仍调用 FlushAsync（竞态保护）
+        if (_disposed)
+        {
+            return;
+        }
+
         try
         {
             await Task.WhenAll(
@@ -3296,9 +3311,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             if (IsListening)
             {
                 CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
-                _activeSessionUid = null;
+                ActiveSessionUidAccessor = null;
                 _lastPostRaceAiSummaryKey = null;
-                _lastStagedPostRaceAiKey = null;
+                Volatile.Write(ref _lastStagedPostRaceAiKey, (string?)null);
                 ResetPostRaceAiReportDetails();
                 _realtimeCornerAdviceService.Reset();
                 _persistedLapQualityByKey.Clear();
@@ -3344,9 +3359,9 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             PacketsPerSecond = 0;
             MarkIncompleteRaceAsStaged(_sessionStateStore.CaptureState(), "UDP 监听已停止，未收到最终分类。");
             CancelActiveVoiceAssistantQuery("会话已变化，已忽略旧回答", logAsCanceled: true);
-            _activeSessionUid = null;
+            ActiveSessionUidAccessor = null;
             _lastPostRaceAiSummaryKey = null;
-            _lastStagedPostRaceAiKey = null;
+            Volatile.Write(ref _lastStagedPostRaceAiKey, (string?)null);
             ResetPostRaceAiReportDetails();
             _realtimeCornerAdviceService.Reset();
             _persistedLapQualityByKey.Clear();
@@ -3397,7 +3412,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var incomingSessionUid = dispatchResult.Packet.SessionUid;
-        if (_activeSessionUid == incomingSessionUid)
+        if (ActiveSessionUidAccessor == incomingSessionUid)
         {
             return;
         }
@@ -3409,7 +3424,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _eventDetectionService.Reset();
         _lapAnalyzer.ResetForSession(incomingSessionUid);
         _lastPostRaceAiSummaryKey = null;
-        _lastStagedPostRaceAiKey = null;
+        Volatile.Write(ref _lastStagedPostRaceAiKey, (string?)null);
         ResetPostRaceAiReportDetails();
         _realtimeCornerAdviceService.Reset();
         lock (_lapPersistenceGate)
@@ -3421,7 +3436,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastEventCode = null;
         _raceEventInsightBuffer.Reset();
         _ttsMessageFactory.Reset();
-        _activeSessionUid = incomingSessionUid;
+        ActiveSessionUidAccessor = incomingSessionUid;
         ResetChartPanels();
         EnqueueEventLog("会话", $"检测到会话切换：SessionUid={incomingSessionUid}");
         EnqueueAiTtsLog("System", $"已切换到新会话（UID {incomingSessionUid}），圈历史已清空。");
@@ -3434,6 +3449,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void OnUiTimerTick(object? sender, EventArgs e)
     {
+        // 防止在 _disposed=true 后仍执行排队的 Tick 回调
+        if (_disposed)
+        {
+            return;
+        }
+
         DrainDetectedRaceEvents();
         DrainTtsPlaybackRecords();
         DrainPendingEventLogs();
@@ -3793,7 +3814,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         var request = new RealtimeCornerAdviceRequest
         {
             SessionState = sessionState,
-            ActiveSessionUid = _activeSessionUid,
+            ActiveSessionUid = ActiveSessionUidAccessor,
             CompletedLap = lap,
             LapSamples = lapSamples,
             RecentCompletedLaps = _lapAnalyzer.CaptureRecentLaps(8),
@@ -4011,7 +4032,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
                 return BuildStrategyQuestionContext(question);
             },
-            CaptureCurrentSessionUid = () => _activeSessionUid,
+            CaptureCurrentSessionUid = () => ActiveSessionUidAccessor,
             EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
             MaxAnswerLength = VoiceAssistantMaxAnswerLength
         };
@@ -4034,7 +4055,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             SessionType = SessionModeFormatter.FormatDisplayName(ResolveSessionMode(sessionState)),
             UdpRawLogFile = _udpRawLogWriter.Status.CurrentFilePath,
             StrategyQuestionContext = strategyContext,
-            CaptureCurrentSessionUid = () => _activeSessionUid,
+            CaptureCurrentSessionUid = () => ActiveSessionUidAccessor,
             EnableTtsAnswer = VoiceAssistantEnableTtsAnswer,
             MaxAnswerLength = VoiceAssistantMaxAnswerLength
         };
@@ -4042,7 +4063,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private string BuildVoiceAiAdviceKey(string question, VoiceQuestionIntent intent)
     {
-        var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        var sessionToken = ActiveSessionUidAccessor?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
         var normalizedQuestion = NormalizeVoiceAssistantQuestion(question);
         var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedQuestion));
         var hash = Convert.ToHexString(hashBytes)[..12];
@@ -4053,7 +4074,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         CancelActiveVoiceAssistantQuery("已取消上一个未完成问答。", logAsCanceled: true);
         var cts = CancellationTokenSource.CreateLinkedTokenSource(_lifecycleCts.Token);
-        _voiceAiQueryCts = cts;
+        Volatile.Write(ref _voiceAiQueryCts, cts);
         var version = Interlocked.Increment(ref _voiceAiQueryVersion);
         IsVoiceAiQueryRunning = true;
         VoiceAssistantStatusText = statusText;
@@ -4065,9 +4086,10 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         if (requestVersion == Volatile.Read(ref _voiceAiQueryVersion))
         {
             IsVoiceAiQueryRunning = false;
-            if (ReferenceEquals(_voiceAiQueryCts, requestCts))
+            var currentCts = Volatile.Read(ref _voiceAiQueryCts);
+            if (ReferenceEquals(currentCts, requestCts))
             {
-                _voiceAiQueryCts = null;
+                Volatile.Write(ref _voiceAiQueryCts, (CancellationTokenSource?)null);
             }
         }
 
@@ -4082,14 +4104,14 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void CancelActiveVoiceAssistantQuery(string statusText, bool logAsCanceled)
     {
-        var cts = _voiceAiQueryCts;
+        var cts = Volatile.Read(ref _voiceAiQueryCts);
         if (cts is null && !IsVoiceAiQueryRunning)
         {
             return;
         }
 
         Interlocked.Increment(ref _voiceAiQueryVersion);
-        _voiceAiQueryCts = null;
+        Volatile.Write(ref _voiceAiQueryCts, (CancellationTokenSource?)null);
         try
         {
             cts?.Cancel();
@@ -4120,7 +4142,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
     {
         var sessionState = _sessionStateStore.CaptureState();
         var snapshot = _raceAssistantSnapshotBuilder.Build(
-            _activeSessionUid,
+            ActiveSessionUidAccessor,
             sessionState,
             _lapAnalyzer.CaptureRecentLaps(5),
             _raceEventInsightBuffer.CaptureMessages(),
@@ -4622,14 +4644,15 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private void RecordTrackMapTrajectory(int lapNumber, IReadOnlyList<LapSample> lapSamples)
     {
-        if (_trackMapTrajectoryStore is null || _activeSessionUid is null || lapSamples.Count == 0)
+        var sessionUid = ActiveSessionUidAccessor;
+        if (_trackMapTrajectoryStore is null || sessionUid is null || lapSamples.Count == 0)
         {
             return;
         }
 
         var state = _sessionStateStore.CaptureState();
         _trackMapTrajectoryStore.RecordCompletedLap(
-            _activeSessionUid.Value.ToString(CultureInfo.InvariantCulture),
+            sessionUid.Value.ToString(CultureInfo.InvariantCulture),
             state.TrackId,
             lapNumber,
             lapSamples);
@@ -4658,7 +4681,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             return;
         }
 
-        var warningKey = $"{_activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}:{sessionState.SessionType?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{sessionState.TotalLaps?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{trackName}";
+        var warningKey = $"{ActiveSessionUidAccessor?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}:{sessionState.SessionType?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{sessionState.TotalLaps?.ToString(CultureInfo.InvariantCulture) ?? "null"}:{trackName}";
         if (string.Equals(warningKey, _lastSessionTypeWarningKey, StringComparison.Ordinal))
         {
             return;
@@ -4671,7 +4694,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
             + $" displaySessionType={displaySessionType}"
             + $" totalLaps={FormatNullableByte(sessionState.TotalLaps)}"
             + $" trackName={trackName}";
-        EnqueueEventLog("System", message, "Warning", sessionUid: _activeSessionUid);
+        EnqueueEventLog("System", message, "Warning", sessionUid: ActiveSessionUidAccessor);
     }
 
     private void EnqueueEventLog(
@@ -5520,7 +5543,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         _lastPostRaceAiSummaryKey = summaryKey;
         _isAiAnalysisRunning = true;
         RaisePostRaceAiSummaryCommandStateChanged();
-        var analysisSessionUid = _activeSessionUid;
+        var analysisSessionUid = ActiveSessionUidAccessor;
         PostRaceAiStatusText = completion.IsManual
             ? "用户已标记完赛，正在生成赛后 AI 总结..."
             : "已收到 UDP 最终分类，正在生成赛后 AI 总结...";
@@ -5533,7 +5556,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 BuildAiSettings(),
                 _lifecycleCts.Token);
 
-            if (_activeSessionUid != analysisSessionUid ||
+            if (ActiveSessionUidAccessor != analysisSessionUid ||
                 !string.Equals(_lastPostRaceAiSummaryKey, summaryKey, StringComparison.Ordinal))
             {
                 EnqueueAiAnalysisLog("System", $"已忽略过期赛后 AI 总结结果：Lap {lastLap.LapNumber}。");
@@ -5829,12 +5852,12 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
         }
 
         var key = BuildPostRaceSessionKey(sessionState);
-        if (string.Equals(_lastStagedPostRaceAiKey, key, StringComparison.Ordinal))
+        if (string.Equals(Volatile.Read(ref _lastStagedPostRaceAiKey), key, StringComparison.Ordinal))
         {
             return;
         }
 
-        _lastStagedPostRaceAiKey = key;
+        Volatile.Write(ref _lastStagedPostRaceAiKey, key);
         PostRaceAiStatusText = $"正赛未完整结束，本次运行已暂存：{reason}";
         EnqueueAiAnalysisLog("AI", PostRaceAiStatusText);
         EnqueueEventLog("AI", "正赛 AI 总结已在本次运行暂存，等待完赛后再生成。");
@@ -5859,7 +5882,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
                 sessionState.SessionLinkIdentifier);
         }
 
-        return _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        return ActiveSessionUidAccessor?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
     }
 
     private sealed record PostRaceAiCompletionEvaluation(
@@ -6301,7 +6324,7 @@ public sealed class DashboardViewModel : ViewModelBase, IApplicationShutdownCoor
 
     private string BuildSessionLapKey(int lapNumber)
     {
-        var sessionToken = _activeSessionUid?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
+        var sessionToken = ActiveSessionUidAccessor?.ToString(CultureInfo.InvariantCulture) ?? "unknown";
         return $"{sessionToken}:{lapNumber}";
     }
 

@@ -146,8 +146,23 @@ public sealed class AppSettingsStore : IAppSettingsStore
                 Udp = ReadUdpSettings(root)
             };
         }
-        catch
+        catch (FileNotFoundException)
         {
+            // 首次运行或文件被删除，返回默认值（安全路径，无需警告）
+            return new AppSettingsDocument();
+        }
+        catch (JsonException ex)
+        {
+            // 设置文件损坏（非法 JSON），返回默认值并记录警告
+            System.Diagnostics.Trace.WriteLine(
+                $"[F1Telemetry] 设置文件损坏，已重置为默认值: {ex.Message}");
+            return new AppSettingsDocument();
+        }
+        catch (IOException ex)
+        {
+            // 设置文件被锁定或读取 I/O 错误，返回默认值并记录警告
+            System.Diagnostics.Trace.WriteLine(
+                $"[F1Telemetry] 设置文件读取失败，已重置为默认值: {ex.Message}");
             return new AppSettingsDocument();
         }
     }

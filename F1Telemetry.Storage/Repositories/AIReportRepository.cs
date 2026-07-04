@@ -60,13 +60,13 @@ public sealed class AIReportRepository : IAIReportRepository
                     """;
                 command.Parameters.AddWithValue("@session_id", sessionId);
                 command.Parameters.AddWithValue("@lap_number", lapNumber);
-                command.Parameters.AddWithValue("@summary", analysisResult.Summary);
-                command.Parameters.AddWithValue("@tyre_advice", analysisResult.TyreAdvice);
-                command.Parameters.AddWithValue("@fuel_advice", analysisResult.FuelAdvice);
-                command.Parameters.AddWithValue("@traffic_advice", analysisResult.TrafficAdvice);
-                command.Parameters.AddWithValue("@tts_text", analysisResult.TtsText);
+                command.Parameters.AddWithValue("@summary", analysisResult.Summary ?? "-");
+                command.Parameters.AddWithValue("@tyre_advice", analysisResult.TyreAdvice ?? "-");
+                command.Parameters.AddWithValue("@fuel_advice", analysisResult.FuelAdvice ?? "-");
+                command.Parameters.AddWithValue("@traffic_advice", analysisResult.TrafficAdvice ?? "-");
+                command.Parameters.AddWithValue("@tts_text", analysisResult.TtsText ?? "-");
                 command.Parameters.AddWithValue("@is_success", analysisResult.IsSuccess ? 1 : 0);
-                command.Parameters.AddWithValue("@error_message", analysisResult.ErrorMessage);
+                command.Parameters.AddWithValue("@error_message", analysisResult.ErrorMessage ?? "-");
                 command.Parameters.AddWithValue("@created_at", SqliteStorageConverters.ToStorageTimestamp(createdAt ?? DateTimeOffset.UtcNow));
                 await command.ExecuteNonQueryAsync(innerCancellationToken);
             },
