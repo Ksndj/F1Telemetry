@@ -5,11 +5,11 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class TyreSetsPacketParser : FixedSizePacketParser<TyreSetsPacket>
 {
     public TyreSetsPacketParser()
-        : base(nameof(TyreSetsPacket), UdpPacketConstants.TyreSetsBodySize)
+        : base(nameof(TyreSetsPacket), UdpPacketConstants.TyreSetsBodySizeByFormat)
     {
     }
 
-    protected override TyreSetsPacket Parse(ref PacketBufferReader reader)
+    protected override TyreSetsPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
         var tyreSets = new TyreSetData[UdpPacketConstants.MaxTyreSets];
         var carIndex = reader.ReadByte();

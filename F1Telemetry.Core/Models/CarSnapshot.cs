@@ -43,7 +43,7 @@ public sealed record CarSnapshot
     /// <summary>
     /// Gets the raw team identifier from the UDP packet.
     /// </summary>
-    public byte? TeamId { get; init; }
+    public ushort? TeamId { get; init; }
 
     /// <summary>
     /// Gets the raw nationality identifier from the UDP packet.

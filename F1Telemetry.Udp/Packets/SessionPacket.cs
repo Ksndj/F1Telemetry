@@ -77,11 +77,35 @@ public sealed record SessionPacket(
     byte NumSessionsInWeekend,
     byte[] WeekendStructure,
     float Sector2LapDistanceStart,
-    float Sector3LapDistanceStart) : IUdpPacket;
+    float Sector3LapDistanceStart,
+    // 以下为 F1 26 新增字段（m_formula = 13）；F1 25 不包含，解析时填默认值。
+    byte ActiveAeroTrackStatus = 0,
+    byte NumActiveAeroZonesFull = 0,
+    ActiveAeroZone[]? ActiveAeroZonesFull = null,
+    byte NumActiveAeroZonesPartial = 0,
+    ActiveAeroZone[]? ActiveAeroZonesPartial = null,
+    byte NumDrsZones = 0,
+    DRSZone[]? DrsZones = null,
+    float StartReactionTime = 0,
+    byte AntiLockBrakesAssist = 0,
+    byte TractionControlAssist = 0,
+    byte DynamicRacingLineHiVis = 0,
+    byte DynamicRacingLineColourBlind = 0,
+    byte RecurringRewindPrompt = 0) : IUdpPacket;
 
 public sealed record MarshalZoneData(
     float ZoneStart,
     sbyte ZoneFlag);
+
+/// <summary>F1 26 主动空气动力学（Active Aero）激活区段（zoneStart/zoneEnd，单位米）。</summary>
+public sealed record ActiveAeroZone(
+    float ZoneStart,
+    float ZoneEnd);
+
+/// <summary>F1 26 DRS 区段（zoneStart/zoneEnd，单位米）。</summary>
+public sealed record DRSZone(
+    float ZoneStart,
+    float ZoneEnd);
 
 public sealed record WeatherForecastSampleData(
     byte SessionType,

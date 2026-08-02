@@ -5,11 +5,11 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class MotionExPacketParser : FixedSizePacketParser<MotionExPacket>
 {
     public MotionExPacketParser()
-        : base(nameof(MotionExPacket), UdpPacketConstants.MotionExBodySize)
+        : base(nameof(MotionExPacket), UdpPacketConstants.MotionExBodySizeByFormat)
     {
     }
 
-    protected override MotionExPacket Parse(ref PacketBufferReader reader)
+    protected override MotionExPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
         return new MotionExPacket(
             SuspensionPosition: PacketParserHelpers.ReadWheelSingles(ref reader),

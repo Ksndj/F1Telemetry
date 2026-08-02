@@ -8,6 +8,7 @@ internal delegate void PacketBodyWriter(Span<byte> body);
 internal static class ProtocolTestData
 {
     public const ushort PacketFormat = 2025;
+    public const ushort PacketFormat26 = 2026;
     public const byte GameYear = 25;
     public const byte GameMajorVersion = 1;
     public const byte GameMinorVersion = 0;
@@ -19,24 +20,24 @@ internal static class ProtocolTestData
     public const byte PlayerCarIndex = 7;
     public const byte SecondaryPlayerCarIndex = 255;
 
-    public static byte[] BuildPacket(PacketId packetId, int bodySize, PacketBodyWriter writeBody)
+    public static byte[] BuildPacket(PacketId packetId, int bodySize, PacketBodyWriter writeBody, ushort packetFormat = PacketFormat)
     {
         var payload = new byte[PacketHeader.Size + bodySize];
-        WriteHeader(payload.AsSpan(0, PacketHeader.Size), packetId);
+        WriteHeader(payload.AsSpan(0, PacketHeader.Size), packetId, packetFormat);
         writeBody(payload.AsSpan(PacketHeader.Size, bodySize));
         return payload;
     }
 
-    public static byte[] BuildHeaderOnlyPacket(PacketId packetId)
+    public static byte[] BuildHeaderOnlyPacket(PacketId packetId, ushort packetFormat = PacketFormat)
     {
         var payload = new byte[PacketHeader.Size];
-        WriteHeader(payload.AsSpan(), packetId);
+        WriteHeader(payload.AsSpan(), packetId, packetFormat);
         return payload;
     }
 
-    public static void WriteHeader(Span<byte> destination, PacketId packetId)
+    public static void WriteHeader(Span<byte> destination, PacketId packetId, ushort packetFormat = PacketFormat)
     {
-        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(0, sizeof(ushort)), PacketFormat);
+        BinaryPrimitives.WriteUInt16LittleEndian(destination.Slice(0, sizeof(ushort)), packetFormat);
         destination[2] = GameYear;
         destination[3] = GameMajorVersion;
         destination[4] = GameMinorVersion;

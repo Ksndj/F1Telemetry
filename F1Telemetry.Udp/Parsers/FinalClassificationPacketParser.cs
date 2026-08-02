@@ -5,13 +5,14 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class FinalClassificationPacketParser : FixedSizePacketParser<FinalClassificationPacket>
 {
     public FinalClassificationPacketParser()
-        : base(nameof(FinalClassificationPacket), UdpPacketConstants.FinalClassificationBodySize)
+        : base(nameof(FinalClassificationPacket), UdpPacketConstants.FinalClassificationBodySizeByFormat)
     {
     }
 
-    protected override FinalClassificationPacket Parse(ref PacketBufferReader reader)
+    protected override FinalClassificationPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
-        var cars = new FinalClassificationData[UdpPacketConstants.MaxCarsInSession];
+        var carCount = UdpPacketConstants.GetMaxCarsInSession(packetFormat);
+        var cars = new FinalClassificationData[carCount];
         var numCars = reader.ReadByte();
 
         for (var index = 0; index < cars.Length; index++)

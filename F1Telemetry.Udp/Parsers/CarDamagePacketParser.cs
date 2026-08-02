@@ -5,13 +5,14 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class CarDamagePacketParser : FixedSizePacketParser<CarDamagePacket>
 {
     public CarDamagePacketParser()
-        : base(nameof(CarDamagePacket), UdpPacketConstants.CarDamageBodySize)
+        : base(nameof(CarDamagePacket), UdpPacketConstants.CarDamageBodySizeByFormat)
     {
     }
 
-    protected override CarDamagePacket Parse(ref PacketBufferReader reader)
+    protected override CarDamagePacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
-        var cars = new CarDamageData[UdpPacketConstants.MaxCarsInSession];
+        var carCount = UdpPacketConstants.GetMaxCarsInSession(packetFormat);
+        var cars = new CarDamageData[carCount];
 
         for (var index = 0; index < cars.Length; index++)
         {

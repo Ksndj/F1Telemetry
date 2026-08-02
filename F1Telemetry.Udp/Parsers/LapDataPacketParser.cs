@@ -5,13 +5,14 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class LapDataPacketParser : FixedSizePacketParser<LapDataPacket>
 {
     public LapDataPacketParser()
-        : base(nameof(LapDataPacket), UdpPacketConstants.LapDataBodySize)
+        : base(nameof(LapDataPacket), UdpPacketConstants.LapDataBodySizeByFormat)
     {
     }
 
-    protected override LapDataPacket Parse(ref PacketBufferReader reader)
+    protected override LapDataPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
-        var cars = new LapDataEntry[UdpPacketConstants.MaxCarsInSession];
+        var carCount = UdpPacketConstants.GetMaxCarsInSession(packetFormat);
+        var cars = new LapDataEntry[carCount];
 
         for (var index = 0; index < cars.Length; index++)
         {

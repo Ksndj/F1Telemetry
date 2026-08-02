@@ -1103,7 +1103,9 @@ public sealed class RawLogAnalyzerTests
                     continue;
                 }
 
-                var targetOffset = offset + (lapIndex * UdpPacketConstants.MaxCarsInSession) + position.CarIndex;
+                // 测试构造的是 F1 25 格式数据（每行 22 字节），行宽必须按 2025 格式计算，
+                // 不能使用 MaxCarsInSession（已提升为 24 的上限常量）。
+                var targetOffset = offset + (lapIndex * UdpPacketConstants.GetMaxCarsInSession(UdpPacketConstants.Format2025)) + position.CarIndex;
                 body[targetOffset] = position.Position;
             }
         });

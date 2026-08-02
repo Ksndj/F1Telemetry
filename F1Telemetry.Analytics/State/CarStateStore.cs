@@ -1,5 +1,6 @@
 using System.Threading;
 using F1Telemetry.Core.Models;
+using F1Telemetry.Udp.Packets;
 
 namespace F1Telemetry.Analytics.State;
 
@@ -8,8 +9,8 @@ namespace F1Telemetry.Analytics.State;
 /// </summary>
 public sealed class CarStateStore
 {
-    private readonly CarSnapshot?[] _cars = new CarSnapshot?[22];
-    private readonly bool[] _participantTelemetryRestricted = new bool[22];
+    private readonly CarSnapshot?[] _cars = new CarSnapshot?[UdpPacketConstants.MaxCarsInSession];
+    private readonly bool[] _participantTelemetryRestricted = new bool[UdpPacketConstants.MaxCarsInSession];
     private int _playerCarIndex = -1;
 
     /// <summary>
@@ -47,7 +48,7 @@ public sealed class CarStateStore
     public CarSnapshot? CapturePlayerCar()
     {
         var playerCarIndex = Volatile.Read(ref _playerCarIndex);
-        return playerCarIndex is >= 0 and < 22
+        return playerCarIndex is >= 0 and < UdpPacketConstants.MaxCarsInSession
             ? Volatile.Read(ref _cars[playerCarIndex])
             : null;
     }
@@ -108,7 +109,7 @@ public sealed class CarStateStore
             return;
         }
 
-        if (previousPlayerCarIndex is >= 0 and < 22)
+        if (previousPlayerCarIndex is >= 0 and < UdpPacketConstants.MaxCarsInSession)
         {
             UpdateCar(
                 previousPlayerCarIndex,
@@ -223,9 +224,12 @@ public sealed class CarStateStore
 
     private static void ValidateCarIndex(int carIndex)
     {
-        if (carIndex is < 0 or >= 22)
+        if (carIndex is < 0 or >= UdpPacketConstants.MaxCarsInSession)
         {
-            throw new ArgumentOutOfRangeException(nameof(carIndex), carIndex, "Car index must be between 0 and 21.");
+            throw new ArgumentOutOfRangeException(
+                nameof(carIndex),
+                carIndex,
+                $"Car index must be between 0 and {UdpPacketConstants.MaxCarsInSession - 1}.");
         }
     }
 }

@@ -49,6 +49,17 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
             return false;
         }
 
+        // 未知协议格式直接拒绝分派（不做破坏性操作，仅记录日志）。
+        if (!IsSupportedPacketFormat(header.PacketFormat))
+        {
+            EmitLog(
+                datagram.ReceivedAt,
+                null,
+                $"Unsupported protocol format {header.PacketFormat} received on frame {header.FrameIdentifier}.");
+            error = $"Unsupported protocol format {header.PacketFormat}.";
+            return false;
+        }
+
         var packetId = header.PacketId;
         var dispatchResult = new PacketDispatchResult<PacketId, PacketHeader>(packetId, header, datagram);
 
@@ -97,7 +108,7 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
         }
 
         var payload = datagram.Payload.AsMemory(PacketHeader.Size);
-        if (parser.TryParse(payload, out var packet, out var error))
+        if (parser.TryParse(payload, header, out var packet, out var error))
         {
             PacketParsed?.Invoke(this, new ParsedPacket(header.PacketId, header, packet!, datagram));
             return;
@@ -111,6 +122,14 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
     private void EmitLog(DateTimeOffset timestamp, PacketId? packetId, string message)
     {
         LogEmitted?.Invoke(this, new PacketDispatcherLogEntry(timestamp, packetId, message));
+    }
+
+    // 注意：F1 24（2024）虽与 2025 头部相同，但 6 个包尺寸/布局不同，
+    // 当前解析器仅支持 2025/2026 布局，故不列入支持格式。
+    private static bool IsSupportedPacketFormat(ushort packetFormat)
+    {
+        return packetFormat == UdpPacketConstants.Format2025
+            || packetFormat == UdpPacketConstants.Format2026;
     }
 
     private static Dictionary<PacketId, IParserAdapter> CreatePacketParsers()
@@ -129,28 +148,29 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
             [PacketId.SessionHistory] = new ParserAdapter<SessionHistoryPacket>(new SessionHistoryPacketParser()),
             [PacketId.TyreSets] = new ParserAdapter<TyreSetsPacket>(new TyreSetsPacketParser()),
             [PacketId.MotionEx] = new ParserAdapter<MotionExPacket>(new MotionExPacketParser()),
-            [PacketId.LapPositions] = new ParserAdapter<LapPositionsPacket>(new LapPositionsPacketParser())
+            [PacketId.LapPositions] = new ParserAdapter<LapPositionsPacket>(new LapPositionsPacketParser()),
+            [PacketId.CarTelemetry2] = new ParserAdapter<CarTelemetry2Packet>(new CarTelemetry2PacketParser())
         };
     }
 
     private interface IParserAdapter
     {
-        bool TryParse(ReadOnlyMemory<byte> payload, out IUdpPacket? packet, out string? error);
+        bool TryParse(ReadOnlyMemory<byte> payload, PacketHeader header, out IUdpPacket? packet, out string? error);
     }
 
     private sealed class ParserAdapter<TPacket> : IParserAdapter
         where TPacket : class, IUdpPacket
     {
-        private readonly IPacketParser<TPacket> _parser;
+        private readonly FixedSizePacketParser<TPacket> _parser;
 
-        public ParserAdapter(IPacketParser<TPacket> parser)
+        public ParserAdapter(FixedSizePacketParser<TPacket> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public bool TryParse(ReadOnlyMemory<byte> payload, out IUdpPacket? packet, out string? error)
+        public bool TryParse(ReadOnlyMemory<byte> payload, PacketHeader header, out IUdpPacket? packet, out string? error)
         {
-            if (_parser.TryParse(payload, out var typedPacket, out error))
+            if (_parser.TryParse(payload, header.PacketFormat, out var typedPacket, out error))
             {
                 packet = typedPacket;
                 return true;

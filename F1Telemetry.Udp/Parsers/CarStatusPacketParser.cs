@@ -5,13 +5,14 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class CarStatusPacketParser : FixedSizePacketParser<CarStatusPacket>
 {
     public CarStatusPacketParser()
-        : base(nameof(CarStatusPacket), UdpPacketConstants.CarStatusBodySize)
+        : base(nameof(CarStatusPacket), UdpPacketConstants.CarStatusBodySizeByFormat)
     {
     }
 
-    protected override CarStatusPacket Parse(ref PacketBufferReader reader)
+    protected override CarStatusPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
-        var cars = new CarStatusData[UdpPacketConstants.MaxCarsInSession];
+        var carCount = UdpPacketConstants.GetMaxCarsInSession(packetFormat);
+        var cars = new CarStatusData[carCount];
 
         for (var index = 0; index < cars.Length; index++)
         {
@@ -39,6 +40,8 @@ public sealed class CarStatusPacketParser : FixedSizePacketParser<CarStatusPacke
                 ErsDeployMode: reader.ReadByte(),
                 ErsHarvestedThisLapMguk: reader.ReadSingle(),
                 ErsHarvestedThisLapMguh: reader.ReadSingle(),
+                // F1 26 在 ersHarvestedThisLapMGUH 之后追加该字段，F1 25 恒为 0。
+                ErsHarvestedLimitPerLap: packetFormat == UdpPacketConstants.Format2026 ? reader.ReadSingle() : 0f,
                 ErsDeployedThisLap: reader.ReadSingle(),
                 NetworkPaused: reader.ReadBooleanByte());
         }
