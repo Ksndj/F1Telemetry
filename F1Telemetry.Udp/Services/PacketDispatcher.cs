@@ -164,6 +164,9 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
     private sealed class ParserAdapter<TPacket> : IParserAdapter
         where TPacket : class, IUdpPacket
     {
+        // 设计约束：解析器需按 header.PacketFormat 选择布局与尺寸校验，
+        // 因此此处约束为 FixedSizePacketParser 而非 IPacketParser 接口。
+        // 未来若引入变长包，需将 TryParse(payload, packetFormat, ...) 提升为接口方法。
         private readonly FixedSizePacketParser<TPacket> _parser;
 
         public ParserAdapter(FixedSizePacketParser<TPacket> parser)
