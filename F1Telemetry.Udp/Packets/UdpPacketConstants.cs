@@ -57,78 +57,97 @@ public static class UdpPacketConstants
     public const int CarTelemetry2BodySize = CarTelemetry2TotalSize - PacketHeaderSize;
 
     // 版本化总尺寸表（含 29 字节头）。注意：静态初始化按声明顺序执行，Body 表依赖 Total 表。
+    // F1 24（2024）：除 Participants/FinalClassification/CarDamage/MotionEx 四包尺寸不同外，其余与 2025 相同；
+    // LapPositions 为 2025 新增包、CarTelemetry2 为 2026 新增包，均不注册 2024 尺寸。
     public static IReadOnlyDictionary<ushort, int> MotionTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 1349,
         [Format2025] = 1349,
         [Format2026] = 1325,
     };
 
     public static IReadOnlyDictionary<ushort, int> SessionTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 753,
         [Format2025] = 753,
         [Format2026] = 926,
     };
 
     public static IReadOnlyDictionary<ushort, int> LapDataTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 1285,
         [Format2025] = 1285,
         [Format2026] = 1399,
     };
 
     public static IReadOnlyDictionary<ushort, int> EventTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 45,
         [Format2025] = 45,
         [Format2026] = 45,
     };
 
     public static IReadOnlyDictionary<ushort, int> ParticipantsTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        // F1 24 每车 60 字节（name[48]、无 livery），F1 25 每车 57 字节（name[32] + livery）。
+        [Format2024] = 1350,
         [Format2025] = 1284,
         [Format2026] = 1470,
     };
 
     public static IReadOnlyDictionary<ushort, int> CarTelemetryTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 1352,
         [Format2025] = 1352,
         [Format2026] = 1448,
     };
 
     public static IReadOnlyDictionary<ushort, int> CarStatusTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 1239,
         [Format2025] = 1239,
         [Format2026] = 1445,
     };
 
     public static IReadOnlyDictionary<ushort, int> FinalClassificationTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        // F1 24 每车 45 字节（无 resultReason），F1 25 起每车 46 字节（含 resultReason）。
+        [Format2024] = 1020,
         [Format2025] = 1042,
         [Format2026] = 1134,
     };
 
     public static IReadOnlyDictionary<ushort, int> CarDamageTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        // F1 24 每车 42 字节（无 tyreBlisters），F1 25 起每车 46 字节（含 tyreBlisters[4]）。
+        [Format2024] = 953,
         [Format2025] = 1041,
         [Format2026] = 1133,
     };
 
     public static IReadOnlyDictionary<ushort, int> SessionHistoryTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 1460,
         [Format2025] = 1460,
         [Format2026] = 1460,
     };
 
     public static IReadOnlyDictionary<ushort, int> TyreSetsTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        [Format2024] = 231,
         [Format2025] = 231,
         [Format2026] = 231,
     };
 
     public static IReadOnlyDictionary<ushort, int> MotionExTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
+        // F1 24 包体 208 字节（读到 chassisYaw 止），F1 25 起追加 chassisPitch/wheelCamber/wheelCamberGain（+36）。
+        [Format2024] = 237,
         [Format2025] = 273,
         [Format2026] = 273,
     };
 
+    // F1 25 新增包，2024 格式不存在，尺寸表不含 2024。
     public static IReadOnlyDictionary<ushort, int> LapPositionsTotalSizeByFormat { get; } = new Dictionary<ushort, int>
     {
         [Format2025] = 1131,

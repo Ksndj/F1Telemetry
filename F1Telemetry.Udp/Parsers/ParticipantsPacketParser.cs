@@ -20,26 +20,39 @@ public sealed class ParticipantsPacketParser : FixedSizePacketParser<Participant
             var liveryColours = new LiveryColourData[4];
 
             var isAiControlled = reader.ReadBooleanByte();
-            // F1 26 将 DriverId/NetworkId/TeamId 加宽为 uint16，F1 25 仍为 byte。
+            // F1 26 将 DriverId/NetworkId/TeamId 加宽为 uint16，F1 24/25 仍为 byte。
             var driverId = packetFormat == UdpPacketConstants.Format2026 ? reader.ReadUInt16() : reader.ReadByte();
             var networkId = packetFormat == UdpPacketConstants.Format2026 ? reader.ReadUInt16() : reader.ReadByte();
             var teamId = packetFormat == UdpPacketConstants.Format2026 ? reader.ReadUInt16() : reader.ReadByte();
             var isMyTeam = reader.ReadBooleanByte();
             var raceNumber = reader.ReadByte();
             var nationality = reader.ReadByte();
-            var name = reader.ReadFixedString(32);
+            // F1 24 车手名字段为 48 字节，F1 25 起为 32 字节。
+            var nameLength = packetFormat == UdpPacketConstants.Format2024 ? 48 : 32;
+            var name = reader.ReadFixedString(nameLength);
             var yourTelemetry = reader.ReadBooleanByte();
             var showOnlineNames = reader.ReadBooleanByte();
             var techLevel = reader.ReadUInt16();
             var platform = reader.ReadByte();
-            var numColours = reader.ReadByte();
 
-            for (var colourIndex = 0; colourIndex < liveryColours.Length; colourIndex++)
+            // F1 24 无 livery 字段（numColours/liveryColours），模型字段保持默认值。
+            var numColours = (byte)0;
+            if (packetFormat >= UdpPacketConstants.Format2025)
             {
-                liveryColours[colourIndex] = new LiveryColourData(
-                    Red: reader.ReadByte(),
-                    Green: reader.ReadByte(),
-                    Blue: reader.ReadByte());
+                numColours = reader.ReadByte();
+
+                for (var colourIndex = 0; colourIndex < liveryColours.Length; colourIndex++)
+                {
+                    liveryColours[colourIndex] = new LiveryColourData(
+                        Red: reader.ReadByte(),
+                        Green: reader.ReadByte(),
+                        Blue: reader.ReadByte());
+                }
+            }
+            else
+            {
+                // 填充默认元素，避免下游迭代 liveryColours 数组时遇到空引用。
+                Array.Fill(liveryColours, new LiveryColourData(0, 0, 0));
             }
 
             participants[index] = new ParticipantData(

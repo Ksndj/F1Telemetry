@@ -124,11 +124,14 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
         LogEmitted?.Invoke(this, new PacketDispatcherLogEntry(timestamp, packetId, message));
     }
 
-    // 注意：F1 24（2024）虽与 2025 头部相同，但 6 个包尺寸/布局不同，
-    // 当前解析器仅支持 2025/2026 布局，故不列入支持格式。
+    // 支持 F1 24/25/26 三种协议格式。2024 布局与 2025 相同的包直接复用；
+    // 差异包（Participants/FinalClassification/CarDamage/MotionEx）由解析器按格式分支处理。
+    // LapPositions（2025 新增）与 CarTelemetry2（2026 新增）在 2024 不存在属正常，
+    // 尺寸表缺 2024 条目会走解析器拒绝路径（"no registered payload size"）。
     private static bool IsSupportedPacketFormat(ushort packetFormat)
     {
-        return packetFormat == UdpPacketConstants.Format2025
+        return packetFormat == UdpPacketConstants.Format2024
+            || packetFormat == UdpPacketConstants.Format2025
             || packetFormat == UdpPacketConstants.Format2026;
     }
 

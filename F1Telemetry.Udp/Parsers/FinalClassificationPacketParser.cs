@@ -24,7 +24,8 @@ public sealed class FinalClassificationPacketParser : FixedSizePacketParser<Fina
                 Points: reader.ReadByte(),
                 NumPitStops: reader.ReadByte(),
                 ResultStatus: reader.ReadByte(),
-                ResultReason: reader.ReadByte(),
+                // F1 24 无 resultReason 字段（resultStatus 后直接 bestLapTimeInMS），模型保持默认值 0。
+                ResultReason: packetFormat >= UdpPacketConstants.Format2025 ? reader.ReadByte() : (byte)0,
                 BestLapTimeInMs: reader.ReadUInt32(),
                 TotalRaceTime: reader.ReadDouble(),
                 PenaltiesTime: reader.ReadByte(),

@@ -8,6 +8,7 @@ internal delegate void PacketBodyWriter(Span<byte> body);
 internal static class ProtocolTestData
 {
     public const ushort PacketFormat = 2025;
+    public const ushort PacketFormat24 = 2024;
     public const ushort PacketFormat26 = 2026;
     public const byte GameYear = 25;
     public const byte GameMajorVersion = 1;

@@ -11,6 +11,10 @@ public sealed class MotionExPacketParser : FixedSizePacketParser<MotionExPacket>
 
     protected override MotionExPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
+        // F1 24 包体到 chassisYaw 为止；F1 25 起在末尾追加 chassisPitch/wheelCamber/wheelCamberGain。
+        // 2024 分支不读取追加字段，模型对应字段保持默认值。
+        var isFormat2024 = packetFormat == UdpPacketConstants.Format2024;
+
         return new MotionExPacket(
             SuspensionPosition: PacketParserHelpers.ReadWheelSingles(ref reader),
             SuspensionVelocity: PacketParserHelpers.ReadWheelSingles(ref reader),
@@ -37,8 +41,8 @@ public sealed class MotionExPacketParser : FixedSizePacketParser<MotionExPacket>
             FrontRollAngle: reader.ReadSingle(),
             RearRollAngle: reader.ReadSingle(),
             ChassisYaw: reader.ReadSingle(),
-            ChassisPitch: reader.ReadSingle(),
-            WheelCamber: PacketParserHelpers.ReadWheelSingles(ref reader),
-            WheelCamberGain: PacketParserHelpers.ReadWheelSingles(ref reader));
+            ChassisPitch: isFormat2024 ? 0f : reader.ReadSingle(),
+            WheelCamber: isFormat2024 ? new WheelSet<float>(0f, 0f, 0f, 0f) : PacketParserHelpers.ReadWheelSingles(ref reader),
+            WheelCamberGain: isFormat2024 ? new WheelSet<float>(0f, 0f, 0f, 0f) : PacketParserHelpers.ReadWheelSingles(ref reader));
     }
 }
