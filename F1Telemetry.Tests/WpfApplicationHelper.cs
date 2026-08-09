@@ -4,6 +4,7 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Markup;
+using System.Windows.Threading;
 
 namespace F1Telemetry.Tests;
 
@@ -54,7 +55,26 @@ internal static class WpfApplicationHelper
             try
             {
                 EnsureApplication();
-                action();
+                // 在共享 STA 线程上泵 Dispatcher 队列后再执行用户 action：
+                // 生产代码（如 DashboardViewModel.Dispose）会在后台线程上同步
+                // Dispatcher.Invoke 做清理，若不泵队列则会与该线程互等死锁。
+                var frame = new DispatcherFrame();
+                Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        capturedException = ex;
+                    }
+                    finally
+                    {
+                        frame.Continue = false;
+                    }
+                });
+                Dispatcher.PushFrame(frame);
             }
             catch (Exception ex)
             {

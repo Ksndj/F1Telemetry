@@ -78,15 +78,22 @@ public sealed class DashboardPostRaceReviewTests
                 lapRepository,
                 eventRepository,
                 aiReportRepository);
-            using var viewModel = CreateDashboardViewModel(udpListener, historyBrowser, postRaceReview);
-            var reviewItem = viewModel.ShellNavigationItems.Single(item => item.Key == "post-race-review");
+            var viewModel = CreateDashboardViewModel(udpListener, historyBrowser, postRaceReview);
+            try
+            {
+                var reviewItem = viewModel.ShellNavigationItems.Single(item => item.Key == "post-race-review");
 
-            viewModel.SelectedShellNavigationItem = reviewItem;
+                viewModel.SelectedShellNavigationItem = reviewItem;
 
-            WaitUntil(() => eventRepository.GetRecentCallCount == 1 && aiReportRepository.GetRecentCallCount == 1);
-            Assert.False(udpListener.IsListening);
-            Assert.Equal("session-a", viewModel.PostRaceReview.SelectedSession?.SessionId);
-            Assert.True(viewModel.PostRaceReview.LapTimeTrendPanel.HasData);
+                WaitUntil(() => eventRepository.GetRecentCallCount == 1 && aiReportRepository.GetRecentCallCount == 1);
+                Assert.False(udpListener.IsListening);
+                Assert.Equal("session-a", viewModel.PostRaceReview.SelectedSession?.SessionId);
+                Assert.True(viewModel.PostRaceReview.LapTimeTrendPanel.HasData);
+            }
+            finally
+            {
+                DisposeDashboardViewModel(viewModel);
+            }
         });
     }
 
@@ -120,7 +127,26 @@ public sealed class DashboardPostRaceReviewTests
         {
             try
             {
-                action();
+                // 在 STA 线程上泵 Dispatcher 队列后再执行用户 action：
+                // 生产代码（如 DashboardViewModel.Dispose）会在后台线程上同步
+                // Dispatcher.Invoke 做清理，若不泵队列则会与该线程互等死锁。
+                var frame = new DispatcherFrame();
+                Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        capturedException = ex;
+                    }
+                    finally
+                    {
+                        frame.Continue = false;
+                    }
+                });
+                Dispatcher.PushFrame(frame);
             }
             catch (Exception ex)
             {
@@ -140,6 +166,52 @@ public sealed class DashboardPostRaceReviewTests
         {
             ExceptionDispatchInfo.Capture(capturedException).Throw();
         }
+    }
+
+    /// <summary>
+    /// Disposes the dashboard view model while pumping the test dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// DashboardViewModel.Dispose runs its shutdown on a thread-pool task that calls
+    /// synchronous Dispatcher.Invoke for timer cleanup. The STA test thread is blocked
+    /// in GetResult while the shutdown task waits for those Invoke calls to be serviced;
+    /// pumping the dispatcher until the dispose task completes breaks the wait.
+    /// </remarks>
+    /// <param name="viewModel">The dashboard view model to dispose.</param>
+    private static void DisposeDashboardViewModel(DashboardViewModel viewModel)
+    {
+        var disposeTask = Task.Run(viewModel.Dispose);
+        PumpDispatcherUntil(() => disposeTask.IsCompleted);
+        disposeTask.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Pumps the current thread's dispatcher until the given condition becomes true.
+    /// </summary>
+    /// <remarks>
+    /// A polling DispatcherTimer keeps the frame awake so the pump never sleeps while
+    /// waiting for the background dispose task.
+    /// </remarks>
+    /// <param name="isDone">The completion condition.</param>
+    private static void PumpDispatcherUntil(Func<bool> isDone)
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var frame = new DispatcherFrame();
+        var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(10)
+        };
+        timer.Tick += (_, _) =>
+        {
+            if (isDone())
+            {
+                timer.Stop();
+                frame.Continue = false;
+            }
+        };
+        timer.Start();
+        Dispatcher.PushFrame(frame);
+        timer.Stop();
     }
 
     private static void WaitUntil(Func<bool> predicate)
