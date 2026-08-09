@@ -101,6 +101,11 @@ public sealed record CarSnapshot
     public TelemetrySnapshot? Telemetry { get; init; }
 
     /// <summary>
+    /// Gets the latest F1 26 active-aero and overtake-assist telemetry when visible.
+    /// </summary>
+    public ActiveAeroTelemetrySnapshot? ActiveAeroTelemetry { get; init; }
+
+    /// <summary>
     /// Gets the current steering input when visible.
     /// </summary>
     public float? SteeringInput { get; init; }
@@ -134,6 +139,11 @@ public sealed record CarSnapshot
     /// Gets the stored ERS energy in joules when visible.
     /// </summary>
     public float? ErsStoreEnergy { get; init; }
+
+    /// <summary>
+    /// Gets the F1 26 per-lap ERS harvested energy limit when visible.
+    /// </summary>
+    public float? ErsHarvestedLimitPerLap { get; init; }
 
     /// <summary>
     /// Gets the raw actual tyre compound identifier when visible.

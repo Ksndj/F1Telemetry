@@ -185,6 +185,7 @@ public sealed class CarStateStore
             snapshot => snapshot with
             {
                 Telemetry = null,
+                ActiveAeroTelemetry = null,
                 SteeringInput = null,
                 Gear = null,
                 EngineRpm = null,
@@ -192,6 +193,7 @@ public sealed class CarStateStore
                 FuelInTank = null,
                 FuelRemainingLaps = null,
                 ErsStoreEnergy = null,
+                ErsHarvestedLimitPerLap = null,
                 ActualTyreCompound = null,
                 VisualTyreCompound = null,
                 TyresAgeLaps = null,

@@ -81,6 +81,9 @@ public sealed class StateAggregator : IStateAggregator
             case CarTelemetryPacket packet:
                 ApplyCarTelemetry(packet, receivedAt);
                 break;
+            case CarTelemetry2Packet packet:
+                ApplyCarTelemetry2(packet, receivedAt);
+                break;
             case CarStatusPacket packet:
                 ApplyCarStatus(packet, receivedAt);
                 break;
@@ -248,6 +251,38 @@ public sealed class StateAggregator : IStateAggregator
         }
     }
 
+    private void ApplyCarTelemetry2(CarTelemetry2Packet packet, DateTimeOffset receivedAt)
+    {
+        for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
+        {
+            if (!SessionStateStore.CarStateStore.HasTelemetryAccess(carIndex))
+            {
+                SessionStateStore.CarStateStore.ClearRestrictedTelemetry(carIndex, receivedAt);
+                continue;
+            }
+
+            var car = packet.Cars[carIndex];
+            SessionStateStore.CarStateStore.UpdateCar(
+                carIndex,
+                snapshot => snapshot with
+                {
+                    ActiveAeroTelemetry = new ActiveAeroTelemetrySnapshot
+                    {
+                        ActiveAeroMode = car.ActiveAeroMode,
+                        IsActiveAeroAvailable = car.ActiveAeroAvailable != 0,
+                        ActiveAeroActivationDistanceMetres = car.ActiveAeroActivationDistance,
+                        IsOvertakeAvailable = car.OvertakeAvailable != 0,
+                        IsOvertakeActive = car.OvertakeActive != 0,
+                        OvertakeActivationDistanceMetres = car.OvertakeActivationDistance,
+                        Regulations2026 = car.Regulations2026,
+                        IsDrivingWrongWay = car.DrivingWrongWay != 0,
+                        CapturedAt = receivedAt
+                    }
+                },
+                receivedAt);
+        }
+    }
+
     private void ApplyCarStatus(CarStatusPacket packet, DateTimeOffset receivedAt)
     {
         for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
@@ -266,6 +301,7 @@ public sealed class StateAggregator : IStateAggregator
                     FuelInTank = car.FuelInTank,
                     FuelRemainingLaps = car.FuelRemainingLaps,
                     ErsStoreEnergy = car.ErsStoreEnergy,
+                    ErsHarvestedLimitPerLap = car.ErsHarvestedLimitPerLap,
                     ActualTyreCompound = car.ActualTyreCompound,
                     VisualTyreCompound = car.VisualTyreCompound,
                     TyresAgeLaps = car.TyresAgeLaps

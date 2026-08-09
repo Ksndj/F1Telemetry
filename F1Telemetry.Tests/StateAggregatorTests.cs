@@ -195,11 +195,133 @@ public sealed class StateAggregatorTests
         Assert.Equal((uint)1, state.SessionLinkIdentifier);
     }
 
-    private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
+    /// <summary>
+    /// Verifies that F1 26 active-aero telemetry is retained for the 24th player car.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarTelemetry2_StoresAllActiveAeroFieldsForCarIndex23()
+    {
+        var aggregator = new StateAggregator();
+        var receivedAt = new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 23,
+            packetFormat: 2026,
+            gameYear: 26,
+            receivedAt: receivedAt));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        var activeAero = Assert.IsType<ActiveAeroTelemetrySnapshot>(player.ActiveAeroTelemetry);
+
+        Assert.Equal(23, player.CarIndex);
+        Assert.Equal((byte)7, activeAero.ActiveAeroMode);
+        Assert.True(activeAero.IsActiveAeroAvailable);
+        Assert.Equal((ushort)345, activeAero.ActiveAeroActivationDistanceMetres);
+        Assert.True(activeAero.IsOvertakeAvailable);
+        Assert.True(activeAero.IsOvertakeActive);
+        Assert.Equal((ushort)789, activeAero.OvertakeActivationDistanceMetres);
+        Assert.Equal((byte)9, activeAero.Regulations2026);
+        Assert.True(activeAero.IsDrivingWrongWay);
+        Assert.Equal(receivedAt, activeAero.CapturedAt);
+    }
+
+    /// <summary>
+    /// Verifies that active-aero telemetry is cleared after an opponent becomes telemetry restricted.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarTelemetry2_ClearsSnapshotWhenOpponentBecomesRestricted()
+    {
+        var aggregator = new StateAggregator();
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: -1)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var publicOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.NotNull(publicOpponent.ActiveAeroTelemetry);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var restrictedOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.True(restrictedOpponent.IsTelemetryRestricted);
+        Assert.Null(restrictedOpponent.ActiveAeroTelemetry);
+    }
+
+    /// <summary>
+    /// Verifies that the F1 26 per-lap ERS harvested limit is projected into player car state.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarStatus_StoresErsHarvestedLimitPerLap()
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[3] = statusCars[3] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        Assert.Equal(2500f, player.ErsHarvestedLimitPerLap);
+    }
+
+    /// <summary>
+    /// Verifies that a previously visible per-lap ERS limit is cleared when an opponent is restricted.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_RestrictedOpponent_ClearsErsHarvestedLimitPerLap()
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[4] = statusCars[4] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: -1)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+
+        var publicOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.Equal(2500f, publicOpponent.ErsHarvestedLimitPerLap);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+
+        var restrictedOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.True(restrictedOpponent.IsTelemetryRestricted);
+        Assert.Null(restrictedOpponent.ErsHarvestedLimitPerLap);
+    }
+
+    private static ParsedPacket CreateParsedPacket(
+        IUdpPacket packet,
+        byte playerCarIndex,
+        ushort packetFormat = 2025,
+        byte gameYear = 25,
+        DateTimeOffset? receivedAt = null)
     {
         var header = new PacketHeader(
-            PacketFormat: 2025,
-            GameYear: 25,
+            PacketFormat: packetFormat,
+            GameYear: gameYear,
             GameMajorVersion: 1,
             GameMinorVersion: 0,
             PacketVersion: 1,
@@ -211,7 +333,10 @@ public sealed class StateAggregatorTests
             PlayerCarIndex: playerCarIndex,
             SecondaryPlayerCarIndex: 255);
 
-        var datagram = new UdpDatagram(Array.Empty<byte>(), new IPEndPoint(IPAddress.Loopback, 20777), DateTimeOffset.UtcNow);
+        var datagram = new UdpDatagram(
+            Array.Empty<byte>(),
+            new IPEndPoint(IPAddress.Loopback, 20777),
+            receivedAt ?? DateTimeOffset.UtcNow);
         return new ParsedPacket((PacketId)header.RawPacketId, header, packet, datagram);
     }
 
@@ -224,6 +349,7 @@ public sealed class StateAggregatorTests
             LapDataPacket => (byte)PacketId.LapData,
             SessionHistoryPacket => (byte)PacketId.SessionHistory,
             CarTelemetryPacket => (byte)PacketId.CarTelemetry,
+            CarTelemetry2Packet => (byte)PacketId.CarTelemetry2,
             CarStatusPacket => (byte)PacketId.CarStatus,
             CarDamagePacket => (byte)PacketId.CarDamage,
             FinalClassificationPacket => (byte)PacketId.FinalClassification,
@@ -444,6 +570,36 @@ public sealed class StateAggregatorTests
                 TyresPressure: new WheelSet<float>(22f, 22f, 22f, 22f),
                 SurfaceType: new WheelSet<byte>(0, 0, 0, 0));
         }
+
+        return cars;
+    }
+
+    private static CarTelemetry2Data[] BuildCarTelemetry2Cars()
+    {
+        var cars = new CarTelemetry2Data[24];
+
+        for (var index = 0; index < cars.Length; index++)
+        {
+            cars[index] = new CarTelemetry2Data(
+                ActiveAeroMode: 1,
+                ActiveAeroAvailable: 1,
+                ActiveAeroActivationDistance: 100,
+                OvertakeAvailable: 1,
+                OvertakeActive: 0,
+                OvertakeActivationDistance: 200,
+                Regulations2026: 1,
+                DrivingWrongWay: 0);
+        }
+
+        cars[23] = new CarTelemetry2Data(
+            ActiveAeroMode: 7,
+            ActiveAeroAvailable: 2,
+            ActiveAeroActivationDistance: 345,
+            OvertakeAvailable: 255,
+            OvertakeActive: 1,
+            OvertakeActivationDistance: 789,
+            Regulations2026: 9,
+            DrivingWrongWay: 3);
 
         return cars;
     }
