@@ -54,8 +54,10 @@ public sealed class SessionStateStore
             WeatherForecastSamples = metadata.WeatherForecastSamples.ToArray(),
             SafetyCarStatus = metadata.SafetyCarStatus,
             MarshalZoneFlags = new Dictionary<int, sbyte>(metadata.MarshalZoneFlags),
+            Regulations2026 = CloneRegulations2026(metadata.Regulations2026),
             ActiveCarCount = metadata.ActiveCarCount,
             LastEventCode = metadata.LastEventCode,
+            LastCollision = metadata.LastCollision,
             HasFinalClassification = metadata.HasFinalClassification,
             FinalClassificationReceivedAt = metadata.FinalClassificationReceivedAt,
             PlayerFinalClassificationPosition = metadata.PlayerFinalClassificationPosition,
@@ -109,6 +111,7 @@ public sealed class SessionStateStore
         byte numSessionsInWeekend,
         IReadOnlyList<byte> weekendStructure,
         IReadOnlyDictionary<int, sbyte> marshalZoneFlags,
+        SessionRegulations2026Snapshot? regulations2026,
         DateTimeOffset updatedAt)
     {
         UpdateMetadata(metadata => metadata with
@@ -133,6 +136,7 @@ public sealed class SessionStateStore
             NumSessionsInWeekend = numSessionsInWeekend,
             WeekendStructure = weekendStructure.ToArray(),
             MarshalZoneFlags = new Dictionary<int, sbyte>(marshalZoneFlags),
+            Regulations2026 = CloneRegulations2026(regulations2026),
             UpdatedAt = updatedAt
         });
     }
@@ -166,6 +170,17 @@ public sealed class SessionStateStore
         });
     }
 
+    internal void SetLastCollision(CollisionSnapshot collision, DateTimeOffset updatedAt)
+    {
+        ArgumentNullException.ThrowIfNull(collision);
+
+        UpdateMetadata(metadata => metadata with
+        {
+            LastCollision = collision,
+            UpdatedAt = updatedAt
+        });
+    }
+
     internal void SetFinalClassification(
         byte? playerPosition,
         byte? playerLaps,
@@ -188,6 +203,18 @@ public sealed class SessionStateStore
         var current = Volatile.Read(ref _metadata);
         var updated = updater(current);
         Volatile.Write(ref _metadata, updated);
+    }
+
+    private static SessionRegulations2026Snapshot? CloneRegulations2026(SessionRegulations2026Snapshot? regulations)
+    {
+        return regulations is null
+            ? null
+            : regulations with
+            {
+                FullActiveAeroZones = regulations.FullActiveAeroZones.ToArray(),
+                PartialActiveAeroZones = regulations.PartialActiveAeroZones.ToArray(),
+                DrsZones = regulations.DrsZones.ToArray()
+            };
     }
 
     private sealed record SessionMetadataState
@@ -234,9 +261,13 @@ public sealed class SessionStateStore
 
         public IReadOnlyDictionary<int, sbyte> MarshalZoneFlags { get; init; } = new Dictionary<int, sbyte>();
 
+        public SessionRegulations2026Snapshot? Regulations2026 { get; init; }
+
         public byte? ActiveCarCount { get; init; }
 
         public string? LastEventCode { get; init; }
+
+        public CollisionSnapshot? LastCollision { get; init; }
 
         public bool HasFinalClassification { get; init; }
 
