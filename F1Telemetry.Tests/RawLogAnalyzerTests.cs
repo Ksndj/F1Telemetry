@@ -915,6 +915,7 @@ public sealed class RawLogAnalyzerTests
         Assert.False(File.Exists(outputPath));
     }
 
+    /// <summary>Verifies parsed F1 26 CarTelemetry2 packets are counted without analysis output.</summary>
     [Fact]
     public async Task AnalyzeAsync_TracksParsedF126CarTelemetry2AsCountOnly()
     {

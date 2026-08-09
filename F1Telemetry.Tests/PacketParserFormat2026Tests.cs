@@ -201,6 +201,7 @@ public sealed class PacketParserFormat2026Tests
         AssertWrongLengthFails(PacketId.CarStatus, new CarStatusPacketParser(), UdpPacketConstants.CarStatusBodySizeByFormat[Format26]);
     }
 
+    /// <summary>Verifies the legacy positional constructor defaults the F1 26 field.</summary>
     [Fact]
     public void CarStatusData_OldPositionalConstructor_DefaultsF126Field()
     {
