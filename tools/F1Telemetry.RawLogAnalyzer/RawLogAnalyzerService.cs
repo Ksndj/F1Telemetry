@@ -14,22 +14,26 @@ namespace F1Telemetry.RawLogAnalyzer;
 public sealed class RawLogAnalyzerService
 {
     private const int MaxExampleLines = 5;
-    private static readonly HashSet<PacketId> SupportedTypedPacketIds =
+    private static readonly HashSet<PacketId> DeepProcessingPacketIds =
     [
-        PacketId.Motion,
         PacketId.Session,
         PacketId.LapData,
         PacketId.Event,
-        PacketId.Participants,
         PacketId.CarTelemetry,
-        PacketId.CarTelemetry2,
         PacketId.CarStatus,
         PacketId.FinalClassification,
         PacketId.CarDamage,
         PacketId.SessionHistory,
         PacketId.TyreSets,
-        PacketId.MotionEx,
         PacketId.LapPositions
+    ];
+
+    private static readonly HashSet<PacketId> CountOnlyPacketIds =
+    [
+        PacketId.Motion,
+        PacketId.Participants,
+        PacketId.CarTelemetry2,
+        PacketId.MotionEx
     ];
 
     private readonly PacketHeaderParser _headerParser = new();
@@ -157,7 +161,8 @@ public sealed class RawLogAnalyzerService
             else
             {
                 Increment(result.PacketIdCounts, header.PacketId);
-                if (!SupportedTypedPacketIds.Contains(header.PacketId))
+                if (!DeepProcessingPacketIds.Contains(header.PacketId) &&
+                    !CountOnlyPacketIds.Contains(header.PacketId))
                 {
                     result.UnsupportedPacketIdCount++;
                     Increment(result.UnsupportedPacketIdCounts, header.PacketId);
@@ -234,6 +239,14 @@ public sealed class RawLogAnalyzerService
         var session = result.GetOrCreateSession(parsedPacket.Header.SessionUid);
         Increment(session.PacketCounts, parsedPacket.PacketId);
 
+        if (CountOnlyPacketIds.Contains(parsedPacket.PacketId))
+        {
+            result.CountOnlyPacketIdCount++;
+            Increment(result.CountOnlyPacketIdCounts, parsedPacket.PacketId);
+            session.CountOnlyPacketIdCount++;
+            return;
+        }
+
         switch (parsedPacket.Packet)
         {
             case SessionPacket packet:
@@ -244,10 +257,6 @@ public sealed class RawLogAnalyzerService
                 break;
             case CarTelemetryPacket packet:
                 session.ApplyCarTelemetryPacket(packet, parsedPacket.Header);
-                break;
-            case CarTelemetry2Packet carTelemetry2:
-                // F1 2026 adds CarTelemetry2 (PacketId=16). It is only counted here (see the
-                // Increment above); no deep processing to avoid coupling to the new packet layout.
                 break;
             case CarStatusPacket packet:
                 session.ApplyCarStatusPacket(packet, parsedPacket.Header);

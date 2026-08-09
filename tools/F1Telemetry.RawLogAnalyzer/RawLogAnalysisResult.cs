@@ -40,6 +40,11 @@ public sealed class RawLogAnalysisResult
 
     public long UnsupportedPacketIdCount { get; internal set; }
 
+    /// <summary>
+    /// Gets the number of successfully parsed packet ids retained for count-only analysis.
+    /// </summary>
+    public long CountOnlyPacketIdCount { get; internal set; }
+
     public long PacketParseFailureCount { get; internal set; }
 
     public long DispatchFailureCount { get; internal set; }
@@ -49,6 +54,11 @@ public sealed class RawLogAnalysisResult
     public SortedDictionary<byte, long> UnknownPacketIdCounts { get; } = new();
 
     public SortedDictionary<PacketId, long> UnsupportedPacketIdCounts { get; } = new();
+
+    /// <summary>
+    /// Gets successfully parsed count-only packet totals grouped by packet id.
+    /// </summary>
+    public SortedDictionary<PacketId, long> CountOnlyPacketIdCounts { get; } = new();
 
     public SortedDictionary<ulong, RawLogSessionSummary> Sessions { get; } = new();
 

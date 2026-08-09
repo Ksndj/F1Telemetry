@@ -68,6 +68,11 @@ public sealed class RawLogSessionSummary
 
     public long UnsupportedPacketIdCount { get; internal set; }
 
+    /// <summary>
+    /// Gets the number of successfully parsed packet ids retained as count-only for this session.
+    /// </summary>
+    public long CountOnlyPacketIdCount { get; internal set; }
+
     public Dictionary<PacketId, long> PacketCounts { get; } = new();
 
     public SortedDictionary<string, long> EventCodeCounts { get; } = new(StringComparer.Ordinal);
