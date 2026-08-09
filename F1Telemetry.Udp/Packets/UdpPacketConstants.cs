@@ -23,6 +23,12 @@ public static class UdpPacketConstants
     public const int MaxFinalClassificationTyreStints = 8;
     public const int MaxLapPositionsLaps = 50;
 
+    /// <summary>F1 26 会话包中完整与部分主动空气动力学区段的最大数量。</summary>
+    public const int MaxActiveAeroZones = 8;
+
+    /// <summary>F1 26 会话包中 DRS 区段的最大数量。</summary>
+    public const int MaxDrsZones = 4;
+
     public const int PacketHeaderSize = PacketHeader.Size;
 
     // F1 25 单值尺寸常量（保持兼容，供仍按单赛季假设的下游使用）。
