@@ -28,4 +28,6 @@ public sealed record CarStatusData(
     float ErsHarvestedThisLapMguk,
     float ErsHarvestedThisLapMguh,
     float ErsDeployedThisLap,
-    bool NetworkPaused);
+    bool NetworkPaused,
+    // F1 26 新增（读于 ersHarvestedThisLapMGUH 之后）；F1 25 恒为 0。
+    float ErsHarvestedLimitPerLap = 0);

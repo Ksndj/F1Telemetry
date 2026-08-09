@@ -75,7 +75,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -125,7 +125,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -157,7 +157,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -210,7 +210,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -238,7 +238,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -274,7 +274,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -321,7 +321,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -382,7 +382,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -418,7 +418,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -460,7 +460,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -510,7 +510,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -558,7 +558,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -588,7 +588,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -618,7 +618,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -655,7 +655,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -705,7 +705,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -760,7 +760,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -798,7 +798,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -830,7 +830,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -882,7 +882,7 @@ public sealed class DashboardChartStateTests
             }
             finally
             {
-                viewModel.Dispose();
+                DisposeDashboardViewModel(viewModel);
             }
         });
     }
@@ -1030,7 +1030,7 @@ public sealed class DashboardChartStateTests
         }
         finally
         {
-            viewModel.Dispose();
+            DisposeDashboardViewModel(viewModel);
         }
     }
 
@@ -1247,6 +1247,53 @@ public sealed class DashboardChartStateTests
                     ]
                 }
             ]);
+    }
+
+    /// <summary>
+    /// Disposes the dashboard view model while pumping the test dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// DashboardViewModel.Dispose runs its shutdown on a thread-pool task that calls
+    /// synchronous Dispatcher.Invoke for timer cleanup. The test dispatcher is never
+    /// pumped by default (no Dispatcher.Run), so those Invoke calls would block forever
+    /// while the STA thread waits in GetResult. Pumping the dispatcher until the dispose
+    /// task completes lets the Invoke calls be serviced.
+    /// </remarks>
+    /// <param name="viewModel">The dashboard view model to dispose.</param>
+    private static void DisposeDashboardViewModel(DashboardViewModel viewModel)
+    {
+        var disposeTask = Task.Run(viewModel.Dispose);
+        PumpDispatcherUntil(() => disposeTask.IsCompleted);
+        disposeTask.GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// Pumps the current thread's dispatcher until the given condition becomes true.
+    /// </summary>
+    /// <remarks>
+    /// A polling DispatcherTimer keeps the frame awake so the pump never sleeps while
+    /// waiting for the background dispose task.
+    /// </remarks>
+    /// <param name="isDone">The completion condition.</param>
+    private static void PumpDispatcherUntil(Func<bool> isDone)
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var frame = new DispatcherFrame();
+        var timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(10)
+        };
+        timer.Tick += (_, _) =>
+        {
+            if (isDone())
+            {
+                timer.Stop();
+                frame.Continue = false;
+            }
+        };
+        timer.Start();
+        Dispatcher.PushFrame(frame);
+        timer.Stop();
     }
 
     private static void RunOnStaThread(Action action)

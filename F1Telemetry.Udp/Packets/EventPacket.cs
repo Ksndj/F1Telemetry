@@ -97,6 +97,10 @@ public sealed record SafetyCarEventDetail(
     byte SafetyCarType,
     byte EventType) : EventDetail;
 
+/// <summary>
+/// 碰撞事件明细。F1 26 新增 Severity（严重程度）字段，F1 25 中恒为 0。
+/// </summary>
 public sealed record CollisionEventDetail(
     byte Vehicle1Index,
-    byte Vehicle2Index) : EventDetail;
+    byte Vehicle2Index,
+    byte Severity = 0) : EventDetail;

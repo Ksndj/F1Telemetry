@@ -5,11 +5,11 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class SessionPacketParser : FixedSizePacketParser<SessionPacket>
 {
     public SessionPacketParser()
-        : base(nameof(SessionPacket), UdpPacketConstants.SessionBodySize)
+        : base(nameof(SessionPacket), UdpPacketConstants.SessionBodySizeByFormat)
     {
     }
 
-    protected override SessionPacket Parse(ref PacketBufferReader reader)
+    protected override SessionPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
         var marshalZones = new MarshalZoneData[UdpPacketConstants.MaxMarshalZones];
         var weatherForecastSamples = new WeatherForecastSampleData[UdpPacketConstants.MaxWeatherForecastSamples];
@@ -112,6 +112,53 @@ public sealed class SessionPacketParser : FixedSizePacketParser<SessionPacket>
         var sector2LapDistanceStart = reader.ReadSingle();
         var sector3LapDistanceStart = reader.ReadSingle();
 
+        // F1 26 追加：主动空气动力学 / DRS / 辅助驾驶相关字段；F1 25 保持默认值。
+        var activeAeroTrackStatus = (byte)0;
+        var numActiveAeroZonesFull = (byte)0;
+        var activeAeroZonesFull = Array.Empty<ActiveAeroZone>();
+        var numActiveAeroZonesPartial = (byte)0;
+        var activeAeroZonesPartial = Array.Empty<ActiveAeroZone>();
+        var numDrsZones = (byte)0;
+        var drsZones = Array.Empty<DRSZone>();
+        var startReactionTime = 0f;
+        var antiLockBrakesAssist = (byte)0;
+        var tractionControlAssist = (byte)0;
+        var dynamicRacingLineHiVis = (byte)0;
+        var dynamicRacingLineColourBlind = (byte)0;
+        var recurringRewindPrompt = (byte)0;
+
+        if (packetFormat == UdpPacketConstants.Format2026)
+        {
+            activeAeroTrackStatus = reader.ReadByte();
+            numActiveAeroZonesFull = reader.ReadByte();
+            activeAeroZonesFull = new ActiveAeroZone[8];
+            for (var index = 0; index < activeAeroZonesFull.Length; index++)
+            {
+                activeAeroZonesFull[index] = new ActiveAeroZone(reader.ReadSingle(), reader.ReadSingle());
+            }
+
+            numActiveAeroZonesPartial = reader.ReadByte();
+            activeAeroZonesPartial = new ActiveAeroZone[8];
+            for (var index = 0; index < activeAeroZonesPartial.Length; index++)
+            {
+                activeAeroZonesPartial[index] = new ActiveAeroZone(reader.ReadSingle(), reader.ReadSingle());
+            }
+
+            numDrsZones = reader.ReadByte();
+            drsZones = new DRSZone[4];
+            for (var index = 0; index < drsZones.Length; index++)
+            {
+                drsZones[index] = new DRSZone(reader.ReadSingle(), reader.ReadSingle());
+            }
+
+            startReactionTime = reader.ReadSingle();
+            antiLockBrakesAssist = reader.ReadByte();
+            tractionControlAssist = reader.ReadByte();
+            dynamicRacingLineHiVis = reader.ReadByte();
+            dynamicRacingLineColourBlind = reader.ReadByte();
+            recurringRewindPrompt = reader.ReadByte();
+        }
+
         return new SessionPacket(
             Weather: weather,
             TrackTemperature: trackTemperature,
@@ -189,6 +236,19 @@ public sealed class SessionPacketParser : FixedSizePacketParser<SessionPacket>
             NumSessionsInWeekend: numSessionsInWeekend,
             WeekendStructure: weekendStructure,
             Sector2LapDistanceStart: sector2LapDistanceStart,
-            Sector3LapDistanceStart: sector3LapDistanceStart);
+            Sector3LapDistanceStart: sector3LapDistanceStart,
+            ActiveAeroTrackStatus: activeAeroTrackStatus,
+            NumActiveAeroZonesFull: numActiveAeroZonesFull,
+            ActiveAeroZonesFull: activeAeroZonesFull,
+            NumActiveAeroZonesPartial: numActiveAeroZonesPartial,
+            ActiveAeroZonesPartial: activeAeroZonesPartial,
+            NumDrsZones: numDrsZones,
+            DrsZones: drsZones,
+            StartReactionTime: startReactionTime,
+            AntiLockBrakesAssist: antiLockBrakesAssist,
+            TractionControlAssist: tractionControlAssist,
+            DynamicRacingLineHiVis: dynamicRacingLineHiVis,
+            DynamicRacingLineColourBlind: dynamicRacingLineColourBlind,
+            RecurringRewindPrompt: recurringRewindPrompt);
     }
 }

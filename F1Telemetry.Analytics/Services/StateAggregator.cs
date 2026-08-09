@@ -404,7 +404,7 @@ public sealed class StateAggregator : IStateAggregator
     private void ApplyTyreSets(TyreSetsPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
     {
         var carIndex = packet.CarIndex;
-        if (carIndex >= 22 || !SessionStateStore.CarStateStore.HasTelemetryAccess(carIndex))
+        if (carIndex >= UdpPacketConstants.MaxCarsInSession || !SessionStateStore.CarStateStore.HasTelemetryAccess(carIndex))
         {
             return;
         }

@@ -48,7 +48,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -78,7 +78,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -114,7 +114,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -143,7 +143,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -229,7 +229,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -256,7 +256,7 @@ public sealed class DashboardUdpPortSettingsTests
             }
             finally
             {
-                harness.ViewModel.Dispose();
+                DisposeDashboardViewModel(harness.ViewModel);
             }
         });
     }
@@ -328,7 +328,26 @@ public sealed class DashboardUdpPortSettingsTests
                 new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
             try
             {
-                action();
+                // 在 STA 线程上泵 Dispatcher 队列后再执行用户 action：
+                // 生产代码（如 DashboardViewModel.Dispose）会在后台线程上同步
+                // Dispatcher.Invoke 做清理，若不泵队列则会与该线程互等死锁。
+                var frame = new DispatcherFrame();
+                Dispatcher.CurrentDispatcher.BeginInvoke(() =>
+                {
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        capturedException = ex;
+                    }
+                    finally
+                    {
+                        frame.Continue = false;
+                    }
+                });
+                Dispatcher.PushFrame(frame);
             }
             catch (Exception ex)
             {
@@ -348,6 +367,23 @@ public sealed class DashboardUdpPortSettingsTests
         {
             ExceptionDispatchInfo.Capture(capturedException).Throw();
         }
+    }
+
+    /// <summary>
+    /// Disposes the dashboard view model while pumping the test dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// DashboardViewModel.Dispose runs its shutdown on a thread-pool task that calls
+    /// synchronous Dispatcher.Invoke for timer cleanup. The STA test thread is blocked
+    /// in GetResult while the shutdown task waits for those Invoke calls to be serviced;
+    /// pumping the dispatcher until the dispose task completes breaks the wait.
+    /// </remarks>
+    /// <param name="viewModel">The dashboard view model to dispose.</param>
+    private static void DisposeDashboardViewModel(DashboardViewModel viewModel)
+    {
+        var disposeTask = Task.Run(viewModel.Dispose);
+        PumpDispatcherUntil(() => disposeTask.IsCompleted, TimeSpan.FromSeconds(30));
+        disposeTask.GetAwaiter().GetResult();
     }
 
     private sealed record DashboardViewModelHarness(
