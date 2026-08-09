@@ -274,10 +274,36 @@ public sealed class StateAggregatorTests
         var statusCars = BuildStatusCars();
         statusCars[3] = statusCars[3] with { ErsHarvestedLimitPerLap = 2500f };
 
-        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
 
         var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
         Assert.Equal(2500f, player.ErsHarvestedLimitPerLap);
+    }
+
+    /// <summary>
+    /// Verifies that F1 24 and F1 25 status packets do not expose the F1 26 ERS limit field.
+    /// </summary>
+    [Theory]
+    [InlineData(2024, 24)]
+    [InlineData(2025, 25)]
+    public void ApplyPacket_Pre2026CarStatus_LeavesErsHarvestedLimitPerLapNull(int packetFormat, int gameYear)
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[3] = statusCars[3] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: (ushort)packetFormat,
+            gameYear: (byte)gameYear));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        Assert.Null(player.ErsHarvestedLimitPerLap);
     }
 
     /// <summary>
@@ -293,7 +319,11 @@ public sealed class StateAggregatorTests
         aggregator.ApplyPacket(CreateParsedPacket(
             new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: -1)),
             playerCarIndex: 3));
-        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
 
         var publicOpponent = Assert.Single(
             aggregator.SessionStateStore.CaptureState().Opponents,
@@ -303,7 +333,11 @@ public sealed class StateAggregatorTests
         aggregator.ApplyPacket(CreateParsedPacket(
             new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
             playerCarIndex: 3));
-        aggregator.ApplyPacket(CreateParsedPacket(new CarStatusPacket(statusCars), playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
 
         var restrictedOpponent = Assert.Single(
             aggregator.SessionStateStore.CaptureState().Opponents,

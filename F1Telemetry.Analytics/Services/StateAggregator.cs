@@ -85,7 +85,7 @@ public sealed class StateAggregator : IStateAggregator
                 ApplyCarTelemetry2(packet, receivedAt);
                 break;
             case CarStatusPacket packet:
-                ApplyCarStatus(packet, receivedAt);
+                ApplyCarStatus(packet, parsedPacket.Header.PacketFormat, receivedAt);
                 break;
             case CarDamagePacket packet:
                 ApplyCarDamage(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
@@ -283,7 +283,7 @@ public sealed class StateAggregator : IStateAggregator
         }
     }
 
-    private void ApplyCarStatus(CarStatusPacket packet, DateTimeOffset receivedAt)
+    private void ApplyCarStatus(CarStatusPacket packet, ushort packetFormat, DateTimeOffset receivedAt)
     {
         for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
         {
@@ -301,7 +301,9 @@ public sealed class StateAggregator : IStateAggregator
                     FuelInTank = car.FuelInTank,
                     FuelRemainingLaps = car.FuelRemainingLaps,
                     ErsStoreEnergy = car.ErsStoreEnergy,
-                    ErsHarvestedLimitPerLap = car.ErsHarvestedLimitPerLap,
+                    ErsHarvestedLimitPerLap = packetFormat == UdpPacketConstants.Format2026
+                        ? car.ErsHarvestedLimitPerLap
+                        : null,
                     ActualTyreCompound = car.ActualTyreCompound,
                     VisualTyreCompound = car.VisualTyreCompound,
                     TyresAgeLaps = car.TyresAgeLaps
