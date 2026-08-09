@@ -466,6 +466,75 @@ public sealed class StateAggregatorTests
     }
 
     /// <summary>
+    /// Verifies that F1 26 regulation zone counts are clamped to shorter source arrays.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_ClampsZoneCountsToSourceArrayLengths()
+    {
+        var aggregator = new StateAggregator();
+        var fullZones = new[] { new ActiveAeroZone(0.1f, 0.2f), new ActiveAeroZone(0.3f, 0.4f) };
+        var partialZones = new[] { new ActiveAeroZone(0.5f, 0.6f) };
+        var drsZones = new[] { new DRSZone(0.7f, 0.8f), new DRSZone(0.9f, 1f) };
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = byte.MaxValue,
+            ActiveAeroZonesFull = fullZones,
+            NumActiveAeroZonesPartial = byte.MaxValue,
+            ActiveAeroZonesPartial = partialZones,
+            NumDrsZones = byte.MaxValue,
+            DrsZones = drsZones
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Equal(2, regulations.FullActiveAeroZones.Count);
+        Assert.Equal(0.3f, regulations.FullActiveAeroZones[1].StartLapFraction);
+        Assert.Equal(0.4f, regulations.FullActiveAeroZones[1].EndLapFraction);
+        Assert.Single(regulations.PartialActiveAeroZones);
+        Assert.Equal(0.5f, regulations.PartialActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.6f, regulations.PartialActiveAeroZones[0].EndLapFraction);
+        Assert.Equal(2, regulations.DrsZones.Count);
+        Assert.Equal(0.9f, regulations.DrsZones[1].StartLapFraction);
+        Assert.Equal(1f, regulations.DrsZones[1].EndLapFraction);
+    }
+
+    /// <summary>
+    /// Verifies that absent F1 26 optional regulation arrays produce empty zone lists.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_NullZoneArraysProduceEmptyLists()
+    {
+        var aggregator = new StateAggregator();
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = byte.MaxValue,
+            ActiveAeroZonesFull = null,
+            NumActiveAeroZonesPartial = byte.MaxValue,
+            ActiveAeroZonesPartial = null,
+            NumDrsZones = byte.MaxValue,
+            DrsZones = null
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Empty(regulations.FullActiveAeroZones);
+        Assert.Empty(regulations.PartialActiveAeroZones);
+        Assert.Empty(regulations.DrsZones);
+    }
+
+    /// <summary>
     /// Verifies that pre-F1 26 session packets do not expose their DTO tail values.
     /// </summary>
     [Fact]
