@@ -5,11 +5,11 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class SessionHistoryPacketParser : FixedSizePacketParser<SessionHistoryPacket>
 {
     public SessionHistoryPacketParser()
-        : base(nameof(SessionHistoryPacket), UdpPacketConstants.SessionHistoryBodySize)
+        : base(nameof(SessionHistoryPacket), UdpPacketConstants.SessionHistoryBodySizeByFormat)
     {
     }
 
-    protected override SessionHistoryPacket Parse(ref PacketBufferReader reader)
+    protected override SessionHistoryPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
         var lapHistory = new LapHistoryData[UdpPacketConstants.MaxSessionHistoryLaps];
         var tyreStints = new TyreStintHistoryData[UdpPacketConstants.MaxSessionHistoryTyreStints];

@@ -22,6 +22,7 @@ public sealed class RawLogAnalyzerService
         PacketId.Event,
         PacketId.Participants,
         PacketId.CarTelemetry,
+        PacketId.CarTelemetry2,
         PacketId.CarStatus,
         PacketId.FinalClassification,
         PacketId.CarDamage,
@@ -243,6 +244,10 @@ public sealed class RawLogAnalyzerService
                 break;
             case CarTelemetryPacket packet:
                 session.ApplyCarTelemetryPacket(packet, parsedPacket.Header);
+                break;
+            case CarTelemetry2Packet carTelemetry2:
+                // F1 2026 adds CarTelemetry2 (PacketId=16). It is only counted here (see the
+                // Increment above); no deep processing to avoid coupling to the new packet layout.
                 break;
             case CarStatusPacket packet:
                 session.ApplyCarStatusPacket(packet, parsedPacket.Header);

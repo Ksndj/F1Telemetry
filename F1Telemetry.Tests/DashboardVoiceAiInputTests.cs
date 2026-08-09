@@ -46,7 +46,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -68,7 +68,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -89,7 +89,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -116,7 +116,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -143,7 +143,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -166,7 +166,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -194,7 +194,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -218,7 +218,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -252,7 +252,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -284,7 +284,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -307,7 +307,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -337,7 +337,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -364,7 +364,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -395,7 +395,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -437,7 +437,7 @@ public sealed class DashboardVoiceAiInputTests
         }
         finally
         {
-            harness.ViewModel.Dispose();
+            DisposeDashboardViewModel(harness.ViewModel);
         }
     }
 
@@ -506,6 +506,24 @@ public sealed class DashboardVoiceAiInputTests
             ChangedBitCount = changedBitCount,
             ReceivedAt = receivedAt ?? DateTimeOffset.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Disposes the dashboard view model while pumping the test dispatcher.
+    /// </summary>
+    /// <remarks>
+    /// DashboardViewModel.Dispose runs its shutdown on a thread-pool task that calls
+    /// synchronous Dispatcher.Invoke for timer cleanup. The xunit worker thread never
+    /// pumps the dispatcher (no Dispatcher.Run), so those Invoke calls would block
+    /// forever while this thread waits in GetResult. Pumping the dispatcher until the
+    /// dispose task completes lets the Invoke calls be serviced.
+    /// </remarks>
+    /// <param name="viewModel">The dashboard view model to dispose.</param>
+    private static void DisposeDashboardViewModel(DashboardViewModel viewModel)
+    {
+        var disposeTask = Task.Run(viewModel.Dispose);
+        PumpDispatcherUntil(() => disposeTask.IsCompleted, TimeSpan.FromSeconds(30));
+        disposeTask.GetAwaiter().GetResult();
     }
 
     private static void PumpDispatcherUntil(Func<bool> condition, TimeSpan timeout)

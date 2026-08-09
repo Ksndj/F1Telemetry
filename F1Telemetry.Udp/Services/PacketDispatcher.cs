@@ -49,6 +49,17 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
             return false;
         }
 
+        // 未知协议格式直接拒绝分派（不做破坏性操作，仅记录日志）。
+        if (!IsSupportedPacketFormat(header.PacketFormat))
+        {
+            EmitLog(
+                datagram.ReceivedAt,
+                null,
+                $"Unsupported protocol format {header.PacketFormat} received on frame {header.FrameIdentifier}.");
+            error = $"Unsupported protocol format {header.PacketFormat}.";
+            return false;
+        }
+
         var packetId = header.PacketId;
         var dispatchResult = new PacketDispatchResult<PacketId, PacketHeader>(packetId, header, datagram);
 
@@ -97,7 +108,7 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
         }
 
         var payload = datagram.Payload.AsMemory(PacketHeader.Size);
-        if (parser.TryParse(payload, out var packet, out var error))
+        if (parser.TryParse(payload, header, out var packet, out var error))
         {
             PacketParsed?.Invoke(this, new ParsedPacket(header.PacketId, header, packet!, datagram));
             return;
@@ -111,6 +122,17 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
     private void EmitLog(DateTimeOffset timestamp, PacketId? packetId, string message)
     {
         LogEmitted?.Invoke(this, new PacketDispatcherLogEntry(timestamp, packetId, message));
+    }
+
+    // 支持 F1 24/25/26 三种协议格式。2024 布局与 2025 相同的包直接复用；
+    // 差异包（Participants/FinalClassification/CarDamage/MotionEx）由解析器按格式分支处理。
+    // LapPositions（2025 新增）与 CarTelemetry2（2026 新增）在 2024 不存在属正常，
+    // 尺寸表缺 2024 条目会走解析器拒绝路径（"no registered payload size"）。
+    private static bool IsSupportedPacketFormat(ushort packetFormat)
+    {
+        return packetFormat == UdpPacketConstants.Format2024
+            || packetFormat == UdpPacketConstants.Format2025
+            || packetFormat == UdpPacketConstants.Format2026;
     }
 
     private static Dictionary<PacketId, IParserAdapter> CreatePacketParsers()
@@ -129,28 +151,32 @@ public sealed class PacketDispatcher : IPacketDispatcher<PacketId, PacketHeader>
             [PacketId.SessionHistory] = new ParserAdapter<SessionHistoryPacket>(new SessionHistoryPacketParser()),
             [PacketId.TyreSets] = new ParserAdapter<TyreSetsPacket>(new TyreSetsPacketParser()),
             [PacketId.MotionEx] = new ParserAdapter<MotionExPacket>(new MotionExPacketParser()),
-            [PacketId.LapPositions] = new ParserAdapter<LapPositionsPacket>(new LapPositionsPacketParser())
+            [PacketId.LapPositions] = new ParserAdapter<LapPositionsPacket>(new LapPositionsPacketParser()),
+            [PacketId.CarTelemetry2] = new ParserAdapter<CarTelemetry2Packet>(new CarTelemetry2PacketParser())
         };
     }
 
     private interface IParserAdapter
     {
-        bool TryParse(ReadOnlyMemory<byte> payload, out IUdpPacket? packet, out string? error);
+        bool TryParse(ReadOnlyMemory<byte> payload, PacketHeader header, out IUdpPacket? packet, out string? error);
     }
 
     private sealed class ParserAdapter<TPacket> : IParserAdapter
         where TPacket : class, IUdpPacket
     {
-        private readonly IPacketParser<TPacket> _parser;
+        // 设计约束：解析器需按 header.PacketFormat 选择布局与尺寸校验，
+        // 因此此处约束为 FixedSizePacketParser 而非 IPacketParser 接口。
+        // 未来若引入变长包，需将 TryParse(payload, packetFormat, ...) 提升为接口方法。
+        private readonly FixedSizePacketParser<TPacket> _parser;
 
-        public ParserAdapter(IPacketParser<TPacket> parser)
+        public ParserAdapter(FixedSizePacketParser<TPacket> parser)
         {
             _parser = parser ?? throw new ArgumentNullException(nameof(parser));
         }
 
-        public bool TryParse(ReadOnlyMemory<byte> payload, out IUdpPacket? packet, out string? error)
+        public bool TryParse(ReadOnlyMemory<byte> payload, PacketHeader header, out IUdpPacket? packet, out string? error)
         {
-            if (_parser.TryParse(payload, out var typedPacket, out error))
+            if (_parser.TryParse(payload, header.PacketFormat, out var typedPacket, out error))
             {
                 packet = typedPacket;
                 return true;

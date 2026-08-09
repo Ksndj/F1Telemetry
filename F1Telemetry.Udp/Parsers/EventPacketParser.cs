@@ -6,11 +6,11 @@ namespace F1Telemetry.Udp.Parsers;
 public sealed class EventPacketParser : FixedSizePacketParser<EventPacket>
 {
     public EventPacketParser()
-        : base(nameof(EventPacket), UdpPacketConstants.EventBodySize)
+        : base(nameof(EventPacket), UdpPacketConstants.EventBodySizeByFormat)
     {
     }
 
-    protected override EventPacket Parse(ref PacketBufferReader reader)
+    protected override EventPacket Parse(ref PacketBufferReader reader, ushort packetFormat)
     {
         var rawCodeBytes = reader.ReadBytes(4);
         var rawCode = Encoding.ASCII.GetString(rawCodeBytes);
@@ -106,12 +106,20 @@ public sealed class EventPacketParser : FixedSizePacketParser<EventPacket>
                 new SafetyCarEventDetail(
                     SafetyCarType: detailReader.ReadByte(),
                     EventType: detailReader.ReadByte())),
-            "COLL" => new EventPacket(
-                rawCode,
-                EventCode.Collision,
-                new CollisionEventDetail(
-                    Vehicle1Index: detailReader.ReadByte(),
-                    Vehicle2Index: detailReader.ReadByte())),
+            "COLL" => packetFormat == UdpPacketConstants.Format2026
+                ? new EventPacket(
+                    rawCode,
+                    EventCode.Collision,
+                    new CollisionEventDetail(
+                        Vehicle1Index: detailReader.ReadByte(),
+                        Vehicle2Index: detailReader.ReadByte(),
+                        Severity: detailReader.ReadByte()))
+                : new EventPacket(
+                    rawCode,
+                    EventCode.Collision,
+                    new CollisionEventDetail(
+                        Vehicle1Index: detailReader.ReadByte(),
+                        Vehicle2Index: detailReader.ReadByte())),
             _ => new EventPacket(rawCode, EventCode.Unknown, new UnknownEventDetail(detailBytes))
         };
     }
