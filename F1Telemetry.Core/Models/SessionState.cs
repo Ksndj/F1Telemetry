@@ -111,6 +111,11 @@ public sealed record SessionState
     public IReadOnlyDictionary<int, sbyte> MarshalZoneFlags { get; init; } = new Dictionary<int, sbyte>();
 
     /// <summary>
+    /// Gets the F1 26-only session regulations when reported by a 2026 packet.
+    /// </summary>
+    public SessionRegulations2026Snapshot? Regulations2026 { get; init; }
+
+    /// <summary>
     /// Gets the number of active cars when known.
     /// </summary>
     public byte? ActiveCarCount { get; init; }
@@ -119,6 +124,11 @@ public sealed record SessionState
     /// Gets the most recent event code when known.
     /// </summary>
     public string? LastEventCode { get; init; }
+
+    /// <summary>
+    /// Gets the most recently received collision event when known.
+    /// </summary>
+    public CollisionSnapshot? LastCollision { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether a final classification packet was observed for this session.

@@ -76,19 +76,19 @@ public sealed class PacketParserFormat2026Tests
         // 26 尾部新增字段。
         Assert.Equal((byte)3, packet.ActiveAeroTrackStatus);
         Assert.Equal((byte)2, packet.NumActiveAeroZonesFull);
-        Assert.Equal(8, packet.ActiveAeroZonesFull!.Length);
-        Assert.Equal(100f, packet.ActiveAeroZonesFull[0].ZoneStart, precision: 3);
-        Assert.Equal(150f, packet.ActiveAeroZonesFull[0].ZoneEnd, precision: 3);
-        Assert.Equal(200f, packet.ActiveAeroZonesFull[1].ZoneStart, precision: 3);
-        Assert.Equal(250f, packet.ActiveAeroZonesFull[1].ZoneEnd, precision: 3);
+        Assert.Equal(UdpPacketConstants.MaxActiveAeroZones, packet.ActiveAeroZonesFull!.Length);
+        Assert.Equal(0.10f, packet.ActiveAeroZonesFull[0].ZoneStart, precision: 3);
+        Assert.Equal(0.15f, packet.ActiveAeroZonesFull[0].ZoneEnd, precision: 3);
+        Assert.Equal(0.20f, packet.ActiveAeroZonesFull[1].ZoneStart, precision: 3);
+        Assert.Equal(0.25f, packet.ActiveAeroZonesFull[1].ZoneEnd, precision: 3);
         Assert.Equal((byte)4, packet.NumActiveAeroZonesPartial);
-        Assert.Equal(8, packet.ActiveAeroZonesPartial!.Length);
-        Assert.Equal(300f, packet.ActiveAeroZonesPartial[0].ZoneStart, precision: 3);
-        Assert.Equal(350f, packet.ActiveAeroZonesPartial[0].ZoneEnd, precision: 3);
+        Assert.Equal(UdpPacketConstants.MaxActiveAeroZones, packet.ActiveAeroZonesPartial!.Length);
+        Assert.Equal(0.30f, packet.ActiveAeroZonesPartial[0].ZoneStart, precision: 3);
+        Assert.Equal(0.35f, packet.ActiveAeroZonesPartial[0].ZoneEnd, precision: 3);
         Assert.Equal((byte)2, packet.NumDrsZones);
-        Assert.Equal(4, packet.DrsZones!.Length);
-        Assert.Equal(400f, packet.DrsZones[0].ZoneStart, precision: 3);
-        Assert.Equal(450f, packet.DrsZones[0].ZoneEnd, precision: 3);
+        Assert.Equal(UdpPacketConstants.MaxDrsZones, packet.DrsZones!.Length);
+        Assert.Equal(0.40f, packet.DrsZones[0].ZoneStart, precision: 3);
+        Assert.Equal(0.45f, packet.DrsZones[0].ZoneEnd, precision: 3);
         Assert.Equal(0.75f, packet.StartReactionTime, precision: 3);
         Assert.Equal((byte)1, packet.AntiLockBrakesAssist);
         Assert.Equal((byte)2, packet.TractionControlAssist);
@@ -199,6 +199,17 @@ public sealed class PacketParserFormat2026Tests
     public void CarStatus_Format2026_WrongBodyLengthFails()
     {
         AssertWrongLengthFails(PacketId.CarStatus, new CarStatusPacketParser(), UdpPacketConstants.CarStatusBodySizeByFormat[Format26]);
+    }
+
+    /// <summary>Verifies the legacy positional constructor defaults the F1 26 field.</summary>
+    [Fact]
+    public void CarStatusData_OldPositionalConstructor_DefaultsF126Field()
+    {
+        var status = new CarStatusData(
+            1, true, 2, 55, false, 1.1f, 2.2f, 3.3f, (ushort)10000, (ushort)5000,
+            8, true, (ushort)250, 16, 17, 12, -1, 100f, 200f, 300f, 4, 5f, 6f, 7f, false);
+
+        Assert.Equal(0f, status.ErsHarvestedLimitPerLap);
     }
 
     [Fact]
@@ -515,18 +526,18 @@ public sealed class PacketParserFormat2026Tests
 
         ProtocolTestData.WriteByte(body, ref offset, 3);        // activeAeroTrackStatus
         ProtocolTestData.WriteByte(body, ref offset, 2);        // numActiveAeroZonesFull
-        ProtocolTestData.WriteFloat(body, ref offset, 100f);    // zone0.start
-        ProtocolTestData.WriteFloat(body, ref offset, 150f);    // zone0.end
-        ProtocolTestData.WriteFloat(body, ref offset, 200f);    // zone1.start
-        ProtocolTestData.WriteFloat(body, ref offset, 250f);    // zone1.end
+        ProtocolTestData.WriteFloat(body, ref offset, 0.10f);   // zone0.start
+        ProtocolTestData.WriteFloat(body, ref offset, 0.15f);   // zone0.end
+        ProtocolTestData.WriteFloat(body, ref offset, 0.20f);   // zone1.start
+        ProtocolTestData.WriteFloat(body, ref offset, 0.25f);   // zone1.end
         offset += 6 * 8;                                        // zone2..7 全零
         ProtocolTestData.WriteByte(body, ref offset, 4);        // numActiveAeroZonesPartial
-        ProtocolTestData.WriteFloat(body, ref offset, 300f);    // partial zone0.start
-        ProtocolTestData.WriteFloat(body, ref offset, 350f);    // partial zone0.end
+        ProtocolTestData.WriteFloat(body, ref offset, 0.30f);   // partial zone0.start
+        ProtocolTestData.WriteFloat(body, ref offset, 0.35f);   // partial zone0.end
         offset += 7 * 8;                                        // partial zone1..7 全零
         ProtocolTestData.WriteByte(body, ref offset, 2);        // numDrsZones
-        ProtocolTestData.WriteFloat(body, ref offset, 400f);    // drs zone0.start
-        ProtocolTestData.WriteFloat(body, ref offset, 450f);    // drs zone0.end
+        ProtocolTestData.WriteFloat(body, ref offset, 0.40f);   // drs zone0.start
+        ProtocolTestData.WriteFloat(body, ref offset, 0.45f);   // drs zone0.end
         offset += 3 * 8;                                        // drs zone1..3 全零
         ProtocolTestData.WriteFloat(body, ref offset, 0.75f);   // startReactionTime
         ProtocolTestData.WriteByte(body, ref offset, 1);        // antiLockBrakesAssist

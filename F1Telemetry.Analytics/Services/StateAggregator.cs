@@ -70,7 +70,7 @@ public sealed class StateAggregator : IStateAggregator
         switch (parsedPacket.Packet)
         {
             case SessionPacket packet:
-                ApplySession(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
+                ApplySession(packet, parsedPacket.Header.PacketFormat, parsedPacket.Header.PlayerCarIndex, receivedAt);
                 break;
             case ParticipantsPacket packet:
                 ApplyParticipants(packet, receivedAt);
@@ -81,8 +81,11 @@ public sealed class StateAggregator : IStateAggregator
             case CarTelemetryPacket packet:
                 ApplyCarTelemetry(packet, receivedAt);
                 break;
+            case CarTelemetry2Packet packet:
+                ApplyCarTelemetry2(packet, receivedAt);
+                break;
             case CarStatusPacket packet:
-                ApplyCarStatus(packet, receivedAt);
+                ApplyCarStatus(packet, parsedPacket.Header.PacketFormat, receivedAt);
                 break;
             case CarDamagePacket packet:
                 ApplyCarDamage(packet, parsedPacket.Header.PlayerCarIndex, receivedAt);
@@ -117,7 +120,7 @@ public sealed class StateAggregator : IStateAggregator
         _eventDetectionService?.Observe(sessionState);
     }
 
-    private void ApplySession(SessionPacket packet, byte playerCarIndex, DateTimeOffset receivedAt)
+    private void ApplySession(SessionPacket packet, ushort packetFormat, byte playerCarIndex, DateTimeOffset receivedAt)
     {
         SessionStateStore.SetPlayerCarIndex(playerCarIndex, receivedAt);
         SessionStateStore.ApplySessionSnapshot(
@@ -141,6 +144,7 @@ public sealed class StateAggregator : IStateAggregator
             numSessionsInWeekend: packet.NumSessionsInWeekend,
             weekendStructure: packet.WeekendStructure,
             marshalZoneFlags: BuildMarshalZoneFlags(packet),
+            regulations2026: BuildSessionRegulations2026Snapshot(packet, packetFormat),
             updatedAt: receivedAt);
     }
 
@@ -248,7 +252,39 @@ public sealed class StateAggregator : IStateAggregator
         }
     }
 
-    private void ApplyCarStatus(CarStatusPacket packet, DateTimeOffset receivedAt)
+    private void ApplyCarTelemetry2(CarTelemetry2Packet packet, DateTimeOffset receivedAt)
+    {
+        for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
+        {
+            if (!SessionStateStore.CarStateStore.HasTelemetryAccess(carIndex))
+            {
+                SessionStateStore.CarStateStore.ClearRestrictedTelemetry(carIndex, receivedAt);
+                continue;
+            }
+
+            var car = packet.Cars[carIndex];
+            SessionStateStore.CarStateStore.UpdateCar(
+                carIndex,
+                snapshot => snapshot with
+                {
+                    ActiveAeroTelemetry = new ActiveAeroTelemetrySnapshot
+                    {
+                        ActiveAeroMode = car.ActiveAeroMode,
+                        IsActiveAeroAvailable = car.ActiveAeroAvailable != 0,
+                        ActiveAeroActivationDistanceMetres = car.ActiveAeroActivationDistance,
+                        IsOvertakeAvailable = car.OvertakeAvailable != 0,
+                        IsOvertakeActive = car.OvertakeActive != 0,
+                        OvertakeActivationDistanceMetres = car.OvertakeActivationDistance,
+                        Regulations2026 = car.Regulations2026,
+                        IsDrivingWrongWay = car.DrivingWrongWay != 0,
+                        CapturedAt = receivedAt
+                    }
+                },
+                receivedAt);
+        }
+    }
+
+    private void ApplyCarStatus(CarStatusPacket packet, ushort packetFormat, DateTimeOffset receivedAt)
     {
         for (var carIndex = 0; carIndex < packet.Cars.Length; carIndex++)
         {
@@ -266,6 +302,9 @@ public sealed class StateAggregator : IStateAggregator
                     FuelInTank = car.FuelInTank,
                     FuelRemainingLaps = car.FuelRemainingLaps,
                     ErsStoreEnergy = car.ErsStoreEnergy,
+                    ErsHarvestedLimitPerLap = packetFormat == UdpPacketConstants.Format2026
+                        ? car.ErsHarvestedLimitPerLap
+                        : null,
                     ActualTyreCompound = car.ActualTyreCompound,
                     VisualTyreCompound = car.VisualTyreCompound,
                     TyresAgeLaps = car.TyresAgeLaps
@@ -398,6 +437,19 @@ public sealed class StateAggregator : IStateAggregator
 
     private void ApplyEvent(EventPacket packet, DateTimeOffset receivedAt)
     {
+        if (packet.Code == EventCode.Collision && packet.Detail is CollisionEventDetail collision)
+        {
+            SessionStateStore.SetLastCollision(
+                new CollisionSnapshot
+                {
+                    Vehicle1Index = collision.Vehicle1Index,
+                    Vehicle2Index = collision.Vehicle2Index,
+                    Severity = collision.Severity,
+                    CapturedAt = receivedAt
+                },
+                receivedAt);
+        }
+
         SessionStateStore.SetLastEventCode(packet.RawEventCode, receivedAt);
     }
 
@@ -499,5 +551,72 @@ public sealed class StateAggregator : IStateAggregator
         }
 
         return flags;
+    }
+
+    private static SessionRegulations2026Snapshot? BuildSessionRegulations2026Snapshot(
+        SessionPacket packet,
+        ushort packetFormat)
+    {
+        if (packetFormat != UdpPacketConstants.Format2026)
+        {
+            return null;
+        }
+
+        return new SessionRegulations2026Snapshot
+        {
+            ActiveAeroTrackStatus = packet.ActiveAeroTrackStatus,
+            FullActiveAeroZones = BuildActiveAeroZones(
+                packet.ActiveAeroZonesFull,
+                packet.NumActiveAeroZonesFull,
+                UdpPacketConstants.MaxActiveAeroZones),
+            PartialActiveAeroZones = BuildActiveAeroZones(
+                packet.ActiveAeroZonesPartial,
+                packet.NumActiveAeroZonesPartial,
+                UdpPacketConstants.MaxActiveAeroZones),
+            DrsZones = BuildDrsZones(packet.DrsZones, packet.NumDrsZones),
+            StartReactionTime = packet.StartReactionTime,
+            AntiLockBrakesAssist = packet.AntiLockBrakesAssist,
+            TractionControlAssist = packet.TractionControlAssist,
+            DynamicRacingLineHiVis = packet.DynamicRacingLineHiVis,
+            DynamicRacingLineColourBlind = packet.DynamicRacingLineColourBlind,
+            RecurringRewindPrompt = packet.RecurringRewindPrompt
+        };
+    }
+
+    private static IReadOnlyList<LapFractionZoneSnapshot> BuildActiveAeroZones(
+        ActiveAeroZone[]? sourceZones,
+        byte rawCount,
+        int protocolCapacity)
+    {
+        var zones = sourceZones ?? Array.Empty<ActiveAeroZone>();
+        var zoneCount = Math.Min(rawCount, Math.Min(zones.Length, protocolCapacity));
+        var snapshots = new LapFractionZoneSnapshot[zoneCount];
+        for (var index = 0; index < zoneCount; index++)
+        {
+            snapshots[index] = new LapFractionZoneSnapshot
+            {
+                StartLapFraction = zones[index].ZoneStart,
+                EndLapFraction = zones[index].ZoneEnd
+            };
+        }
+
+        return snapshots;
+    }
+
+    private static IReadOnlyList<LapFractionZoneSnapshot> BuildDrsZones(DRSZone[]? sourceZones, byte rawCount)
+    {
+        var zones = sourceZones ?? Array.Empty<DRSZone>();
+        var zoneCount = Math.Min(rawCount, Math.Min(zones.Length, UdpPacketConstants.MaxDrsZones));
+        var snapshots = new LapFractionZoneSnapshot[zoneCount];
+        for (var index = 0; index < zoneCount; index++)
+        {
+            snapshots[index] = new LapFractionZoneSnapshot
+            {
+                StartLapFraction = zones[index].ZoneStart,
+                EndLapFraction = zones[index].ZoneEnd
+            };
+        }
+
+        return snapshots;
     }
 }

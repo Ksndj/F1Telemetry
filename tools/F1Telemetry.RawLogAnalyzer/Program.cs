@@ -23,7 +23,7 @@ public static class Program
             Console.WriteLine(
                 $"Race session: {result.RaceReport?.SessionUid}.");
             Console.WriteLine(
-                $"Issues: invalidJson={result.InvalidJsonLineCount}, invalidBase64={result.InvalidBase64LineCount}, lengthMismatch={result.PayloadLengthMismatchCount}, unknownPacketIds={result.UnknownPacketIdCount}, unsupportedKnownPacketIds={result.UnsupportedPacketIdCount}, parseFailures={result.PacketParseFailureCount}.");
+                $"Issues: invalidJson={result.InvalidJsonLineCount}, invalidBase64={result.InvalidBase64LineCount}, lengthMismatch={result.PayloadLengthMismatchCount}, unknownPacketIds={result.UnknownPacketIdCount}, unsupportedKnownPacketIds={result.UnsupportedPacketIdCount}, countOnlyPacketIds={result.CountOnlyPacketIdCount}, parseFailures={result.PacketParseFailureCount}.");
             return 0;
         }
         catch (Exception ex)

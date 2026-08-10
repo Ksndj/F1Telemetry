@@ -97,12 +97,12 @@ public sealed record MarshalZoneData(
     float ZoneStart,
     sbyte ZoneFlag);
 
-/// <summary>F1 26 主动空气动力学（Active Aero）激活区段（zoneStart/zoneEnd，单位米）。</summary>
+/// <summary>F1 26 主动空气动力学激活区段；ZoneStart 和 ZoneEnd 均为 0 到 1 的单圈进度分数。</summary>
 public sealed record ActiveAeroZone(
     float ZoneStart,
     float ZoneEnd);
 
-/// <summary>F1 26 DRS 区段（zoneStart/zoneEnd，单位米）。</summary>
+/// <summary>F1 26 DRS 区段；ZoneStart 和 ZoneEnd 均为 0 到 1 的单圈进度分数。</summary>
 public sealed record DRSZone(
     float ZoneStart,
     float ZoneEnd);

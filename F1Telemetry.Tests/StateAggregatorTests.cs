@@ -195,11 +195,447 @@ public sealed class StateAggregatorTests
         Assert.Equal((uint)1, state.SessionLinkIdentifier);
     }
 
-    private static ParsedPacket CreateParsedPacket(IUdpPacket packet, byte playerCarIndex)
+    /// <summary>
+    /// Verifies that F1 26 active-aero telemetry is retained for the 24th player car.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarTelemetry2_StoresAllActiveAeroFieldsForCarIndex23()
+    {
+        var aggregator = new StateAggregator();
+        var receivedAt = new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 23,
+            packetFormat: 2026,
+            gameYear: 26,
+            receivedAt: receivedAt));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        var activeAero = Assert.IsType<ActiveAeroTelemetrySnapshot>(player.ActiveAeroTelemetry);
+
+        Assert.Equal(23, player.CarIndex);
+        Assert.Equal((byte)7, activeAero.ActiveAeroMode);
+        Assert.True(activeAero.IsActiveAeroAvailable);
+        Assert.Equal((ushort)345, activeAero.ActiveAeroActivationDistanceMetres);
+        Assert.True(activeAero.IsOvertakeAvailable);
+        Assert.True(activeAero.IsOvertakeActive);
+        Assert.Equal((ushort)789, activeAero.OvertakeActivationDistanceMetres);
+        Assert.Equal((byte)9, activeAero.Regulations2026);
+        Assert.True(activeAero.IsDrivingWrongWay);
+        Assert.Equal(receivedAt, activeAero.CapturedAt);
+    }
+
+    /// <summary>
+    /// Verifies that active-aero telemetry is cleared after an opponent becomes telemetry restricted.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarTelemetry2_ClearsSnapshotWhenOpponentBecomesRestricted()
+    {
+        var aggregator = new StateAggregator();
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: -1)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var publicOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.NotNull(publicOpponent.ActiveAeroTelemetry);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarTelemetry2Packet(BuildCarTelemetry2Cars()),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var restrictedOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.True(restrictedOpponent.IsTelemetryRestricted);
+        Assert.Null(restrictedOpponent.ActiveAeroTelemetry);
+    }
+
+    /// <summary>
+    /// Verifies that the F1 26 per-lap ERS harvested limit is projected into player car state.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CarStatus_StoresErsHarvestedLimitPerLap()
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[3] = statusCars[3] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        Assert.Equal(2500f, player.ErsHarvestedLimitPerLap);
+    }
+
+    /// <summary>
+    /// Verifies that F1 24 and F1 25 status packets do not expose the F1 26 ERS limit field.
+    /// </summary>
+    [Theory]
+    [InlineData(2024, 24)]
+    [InlineData(2025, 25)]
+    public void ApplyPacket_Pre2026CarStatus_LeavesErsHarvestedLimitPerLapNull(int packetFormat, int gameYear)
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[3] = statusCars[3] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: (ushort)packetFormat,
+            gameYear: (byte)gameYear));
+
+        var player = Assert.IsType<CarSnapshot>(aggregator.SessionStateStore.CaptureState().PlayerCar);
+        Assert.Null(player.ErsHarvestedLimitPerLap);
+    }
+
+    /// <summary>
+    /// Verifies that a previously visible per-lap ERS limit is cleared when an opponent is restricted.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_RestrictedOpponent_ClearsErsHarvestedLimitPerLap()
+    {
+        var aggregator = new StateAggregator();
+        var statusCars = BuildStatusCars();
+        statusCars[4] = statusCars[4] with { ErsHarvestedLimitPerLap = 2500f };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: -1)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var publicOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.Equal(2500f, publicOpponent.ErsHarvestedLimitPerLap);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new ParticipantsPacket(22, BuildParticipants(playerIndex: 3, restrictedOpponentIndex: 4)),
+            playerCarIndex: 3));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new CarStatusPacket(statusCars),
+            playerCarIndex: 3,
+            packetFormat: 2026,
+            gameYear: 26));
+
+        var restrictedOpponent = Assert.Single(
+            aggregator.SessionStateStore.CaptureState().Opponents,
+            car => car.CarIndex == 4);
+        Assert.True(restrictedOpponent.IsTelemetryRestricted);
+        Assert.Null(restrictedOpponent.ErsHarvestedLimitPerLap);
+    }
+
+    /// <summary>
+    /// Verifies that F1 26 session regulations preserve all raw protocol values.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_PreservesRegulationsValues()
+    {
+        var aggregator = new StateAggregator();
+        var sessionPacket = CreateSessionPacket() with
+        {
+            ActiveAeroTrackStatus = 7,
+            NumActiveAeroZonesFull = 1,
+            ActiveAeroZonesFull = [new ActiveAeroZone(0.125f, 0.375f)],
+            NumActiveAeroZonesPartial = 1,
+            ActiveAeroZonesPartial = [new ActiveAeroZone(0.5f, 0.75f)],
+            NumDrsZones = 1,
+            DrsZones = [new DRSZone(0.2f, 0.8f)],
+            StartReactionTime = 0.321f,
+            AntiLockBrakesAssist = 2,
+            TractionControlAssist = 3,
+            DynamicRacingLineHiVis = 4,
+            DynamicRacingLineColourBlind = 5,
+            RecurringRewindPrompt = 6
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Equal((byte)7, regulations.ActiveAeroTrackStatus);
+        Assert.Equal(0.125f, regulations.FullActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.375f, regulations.FullActiveAeroZones[0].EndLapFraction);
+        Assert.Equal(0.5f, regulations.PartialActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.75f, regulations.PartialActiveAeroZones[0].EndLapFraction);
+        Assert.Equal(0.2f, regulations.DrsZones[0].StartLapFraction);
+        Assert.Equal(0.8f, regulations.DrsZones[0].EndLapFraction);
+        Assert.Equal(0.321f, regulations.StartReactionTime);
+        Assert.Equal((byte)2, regulations.AntiLockBrakesAssist);
+        Assert.Equal((byte)3, regulations.TractionControlAssist);
+        Assert.Equal((byte)4, regulations.DynamicRacingLineHiVis);
+        Assert.Equal((byte)5, regulations.DynamicRacingLineColourBlind);
+        Assert.Equal((byte)6, regulations.RecurringRewindPrompt);
+    }
+
+    /// <summary>
+    /// Verifies that F1 26 regulation zone lists are trimmed and isolated from parser arrays.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_TrimsAndDefensivelyCopiesZoneLists()
+    {
+        var aggregator = new StateAggregator();
+        var fullZones = new[] { new ActiveAeroZone(0.1f, 0.2f), new ActiveAeroZone(0.3f, 0.4f) };
+        var partialZones = new[] { new ActiveAeroZone(0.5f, 0.6f), new ActiveAeroZone(0.7f, 0.8f) };
+        var drsZones = new[] { new DRSZone(0.15f, 0.25f), new DRSZone(0.35f, 0.45f) };
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = 1,
+            ActiveAeroZonesFull = fullZones,
+            NumActiveAeroZonesPartial = 1,
+            ActiveAeroZonesPartial = partialZones,
+            NumDrsZones = 1,
+            DrsZones = drsZones
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+        fullZones[0] = new ActiveAeroZone(0.9f, 1f);
+        partialZones[0] = new ActiveAeroZone(0.9f, 1f);
+        drsZones[0] = new DRSZone(0.9f, 1f);
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Single(regulations.FullActiveAeroZones);
+        Assert.Single(regulations.PartialActiveAeroZones);
+        Assert.Single(regulations.DrsZones);
+        Assert.Equal(0.1f, regulations.FullActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.5f, regulations.PartialActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.15f, regulations.DrsZones[0].StartLapFraction);
+    }
+
+    /// <summary>
+    /// Verifies that oversized F1 26 regulation zone counts are clamped to protocol capacities.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_ClampsExcessZoneCounts()
+    {
+        var aggregator = new StateAggregator();
+        var fullZones = Enumerable.Range(0, 10).Select(index => new ActiveAeroZone(index, index + 0.5f)).ToArray();
+        var partialZones = Enumerable.Range(0, 9).Select(index => new ActiveAeroZone(index, index + 0.5f)).ToArray();
+        var drsZones = Enumerable.Range(0, 5).Select(index => new DRSZone(index, index + 0.5f)).ToArray();
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = byte.MaxValue,
+            ActiveAeroZonesFull = fullZones,
+            NumActiveAeroZonesPartial = byte.MaxValue,
+            ActiveAeroZonesPartial = partialZones,
+            NumDrsZones = byte.MaxValue,
+            DrsZones = drsZones
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Equal(UdpPacketConstants.MaxActiveAeroZones, regulations.FullActiveAeroZones.Count);
+        Assert.Equal(UdpPacketConstants.MaxActiveAeroZones, regulations.PartialActiveAeroZones.Count);
+        Assert.Equal(UdpPacketConstants.MaxDrsZones, regulations.DrsZones.Count);
+    }
+
+    /// <summary>
+    /// Verifies that F1 26 regulation zone counts are clamped to shorter source arrays.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_ClampsZoneCountsToSourceArrayLengths()
+    {
+        var aggregator = new StateAggregator();
+        var fullZones = new[] { new ActiveAeroZone(0.1f, 0.2f), new ActiveAeroZone(0.3f, 0.4f) };
+        var partialZones = new[] { new ActiveAeroZone(0.5f, 0.6f) };
+        var drsZones = new[] { new DRSZone(0.7f, 0.8f), new DRSZone(0.9f, 1f) };
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = byte.MaxValue,
+            ActiveAeroZonesFull = fullZones,
+            NumActiveAeroZonesPartial = byte.MaxValue,
+            ActiveAeroZonesPartial = partialZones,
+            NumDrsZones = byte.MaxValue,
+            DrsZones = drsZones
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Equal(2, regulations.FullActiveAeroZones.Count);
+        Assert.Equal(0.3f, regulations.FullActiveAeroZones[1].StartLapFraction);
+        Assert.Equal(0.4f, regulations.FullActiveAeroZones[1].EndLapFraction);
+        Assert.Single(regulations.PartialActiveAeroZones);
+        Assert.Equal(0.5f, regulations.PartialActiveAeroZones[0].StartLapFraction);
+        Assert.Equal(0.6f, regulations.PartialActiveAeroZones[0].EndLapFraction);
+        Assert.Equal(2, regulations.DrsZones.Count);
+        Assert.Equal(0.9f, regulations.DrsZones[1].StartLapFraction);
+        Assert.Equal(1f, regulations.DrsZones[1].EndLapFraction);
+    }
+
+    /// <summary>
+    /// Verifies that absent F1 26 optional regulation arrays produce empty zone lists.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F126Session_NullZoneArraysProduceEmptyLists()
+    {
+        var aggregator = new StateAggregator();
+        var sessionPacket = CreateSessionPacket() with
+        {
+            NumActiveAeroZonesFull = byte.MaxValue,
+            ActiveAeroZonesFull = null,
+            NumActiveAeroZonesPartial = byte.MaxValue,
+            ActiveAeroZonesPartial = null,
+            NumDrsZones = byte.MaxValue,
+            DrsZones = null
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            sessionPacket,
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+
+        var regulations = Assert.IsType<SessionRegulations2026Snapshot>(
+            aggregator.SessionStateStore.CaptureState().Regulations2026);
+        Assert.Empty(regulations.FullActiveAeroZones);
+        Assert.Empty(regulations.PartialActiveAeroZones);
+        Assert.Empty(regulations.DrsZones);
+    }
+
+    /// <summary>
+    /// Verifies that pre-F1 26 session packets do not expose their DTO tail values.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_F125Session_LeavesRegulations2026Null()
+    {
+        var aggregator = new StateAggregator();
+        var sessionPacket = CreateSessionPacket() with
+        {
+            ActiveAeroTrackStatus = 7,
+            NumActiveAeroZonesFull = 1,
+            ActiveAeroZonesFull = [new ActiveAeroZone(0.1f, 0.2f)],
+            StartReactionTime = 0.321f,
+            AntiLockBrakesAssist = 2,
+            TractionControlAssist = 3,
+            DynamicRacingLineHiVis = 4,
+            DynamicRacingLineColourBlind = 5,
+            RecurringRewindPrompt = 6
+        };
+
+        aggregator.ApplyPacket(CreateParsedPacket(sessionPacket, playerCarIndex: 3));
+
+        Assert.Null(aggregator.SessionStateStore.CaptureState().Regulations2026);
+    }
+
+    /// <summary>
+    /// Verifies that collision events retain both vehicle indices, raw severity, and receive time.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_CollisionEvent_StoresCollisionSnapshot()
+    {
+        var aggregator = new StateAggregator();
+        var receivedAt = new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero);
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new EventPacket("COLL", EventCode.Collision, new CollisionEventDetail(8, 17, 255)),
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26,
+            receivedAt: receivedAt));
+
+        var collision = Assert.IsType<CollisionSnapshot>(aggregator.SessionStateStore.CaptureState().LastCollision);
+        Assert.Equal((byte)8, collision.Vehicle1Index);
+        Assert.Equal((byte)17, collision.Vehicle2Index);
+        Assert.Equal(byte.MaxValue, collision.Severity);
+        Assert.Equal(receivedAt, collision.CapturedAt);
+    }
+
+    /// <summary>
+    /// Verifies that subsequent non-collision events preserve the last collision snapshot.
+    /// </summary>
+    [Fact]
+    public void ApplyPacket_NonCollisionEvent_PreservesLastCollision()
+    {
+        var aggregator = new StateAggregator();
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new EventPacket("COLL", EventCode.Collision, new CollisionEventDetail(8, 17, 6)),
+            playerCarIndex: 3));
+
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new EventPacket("SSTA", EventCode.SessionStarted, new EmptyEventDetail()),
+            playerCarIndex: 3));
+
+        var state = aggregator.SessionStateStore.CaptureState();
+        Assert.Equal("SSTA", state.LastEventCode);
+        var collision = Assert.IsType<CollisionSnapshot>(state.LastCollision);
+        Assert.Equal((byte)6, collision.Severity);
+    }
+
+    /// <summary>
+    /// Verifies that resetting the session store clears F1 26 regulations and collision state.
+    /// </summary>
+    [Fact]
+    public void SessionStateStore_Reset_ClearsRegulations2026AndLastCollision()
+    {
+        var aggregator = new StateAggregator();
+        aggregator.ApplyPacket(CreateParsedPacket(
+            CreateSessionPacket() with { ActiveAeroTrackStatus = 1 },
+            playerCarIndex: 3,
+            packetFormat: UdpPacketConstants.Format2026,
+            gameYear: 26));
+        aggregator.ApplyPacket(CreateParsedPacket(
+            new EventPacket("COLL", EventCode.Collision, new CollisionEventDetail(8, 17, 6)),
+            playerCarIndex: 3));
+
+        aggregator.SessionStateStore.Reset();
+
+        var state = aggregator.SessionStateStore.CaptureState();
+        Assert.Null(state.Regulations2026);
+        Assert.Null(state.LastCollision);
+    }
+
+    private static ParsedPacket CreateParsedPacket(
+        IUdpPacket packet,
+        byte playerCarIndex,
+        ushort packetFormat = 2025,
+        byte gameYear = 25,
+        DateTimeOffset? receivedAt = null)
     {
         var header = new PacketHeader(
-            PacketFormat: 2025,
-            GameYear: 25,
+            PacketFormat: packetFormat,
+            GameYear: gameYear,
             GameMajorVersion: 1,
             GameMinorVersion: 0,
             PacketVersion: 1,
@@ -211,7 +647,10 @@ public sealed class StateAggregatorTests
             PlayerCarIndex: playerCarIndex,
             SecondaryPlayerCarIndex: 255);
 
-        var datagram = new UdpDatagram(Array.Empty<byte>(), new IPEndPoint(IPAddress.Loopback, 20777), DateTimeOffset.UtcNow);
+        var datagram = new UdpDatagram(
+            Array.Empty<byte>(),
+            new IPEndPoint(IPAddress.Loopback, 20777),
+            receivedAt ?? DateTimeOffset.UtcNow);
         return new ParsedPacket((PacketId)header.RawPacketId, header, packet, datagram);
     }
 
@@ -224,9 +663,11 @@ public sealed class StateAggregatorTests
             LapDataPacket => (byte)PacketId.LapData,
             SessionHistoryPacket => (byte)PacketId.SessionHistory,
             CarTelemetryPacket => (byte)PacketId.CarTelemetry,
+            CarTelemetry2Packet => (byte)PacketId.CarTelemetry2,
             CarStatusPacket => (byte)PacketId.CarStatus,
             CarDamagePacket => (byte)PacketId.CarDamage,
             FinalClassificationPacket => (byte)PacketId.FinalClassification,
+            EventPacket => (byte)PacketId.Event,
             _ => throw new ArgumentOutOfRangeException(nameof(packet))
         };
     }
@@ -444,6 +885,36 @@ public sealed class StateAggregatorTests
                 TyresPressure: new WheelSet<float>(22f, 22f, 22f, 22f),
                 SurfaceType: new WheelSet<byte>(0, 0, 0, 0));
         }
+
+        return cars;
+    }
+
+    private static CarTelemetry2Data[] BuildCarTelemetry2Cars()
+    {
+        var cars = new CarTelemetry2Data[24];
+
+        for (var index = 0; index < cars.Length; index++)
+        {
+            cars[index] = new CarTelemetry2Data(
+                ActiveAeroMode: 1,
+                ActiveAeroAvailable: 1,
+                ActiveAeroActivationDistance: 100,
+                OvertakeAvailable: 1,
+                OvertakeActive: 0,
+                OvertakeActivationDistance: 200,
+                Regulations2026: 1,
+                DrivingWrongWay: 0);
+        }
+
+        cars[23] = new CarTelemetry2Data(
+            ActiveAeroMode: 7,
+            ActiveAeroAvailable: 2,
+            ActiveAeroActivationDistance: 345,
+            OvertakeAvailable: 255,
+            OvertakeActive: 1,
+            OvertakeActivationDistance: 789,
+            Regulations2026: 9,
+            DrivingWrongWay: 3);
 
         return cars;
     }

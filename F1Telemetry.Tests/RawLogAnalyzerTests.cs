@@ -915,6 +915,34 @@ public sealed class RawLogAnalyzerTests
         Assert.False(File.Exists(outputPath));
     }
 
+    /// <summary>Verifies parsed F1 26 CarTelemetry2 packets are counted without analysis output.</summary>
+    [Fact]
+    public async Task AnalyzeAsync_TracksParsedF126CarTelemetry2AsCountOnly()
+    {
+        var inputPath = CreateTempJsonlPath();
+        var outputPath = Path.ChangeExtension(inputPath, ".md");
+        await File.WriteAllLinesAsync(
+            inputPath,
+            new[]
+            {
+                BuildRecord(BuildSessionPacket(1001UL, trackId: 9, sessionType: 15, totalLaps: 1)),
+                BuildRecord(BuildF126CarTelemetry2Packet(1001UL))
+            });
+        var analyzer = new RawLogAnalyzerService();
+
+        var result = await analyzer.AnalyzeAsync(new RawLogAnalyzerOptions(inputPath, outputPath, 1001UL));
+
+        Assert.Equal(2, result.ParsedPacketCount);
+        Assert.Equal(1, result.PacketIdCounts[PacketId.CarTelemetry2]);
+        Assert.Equal(0, result.UnsupportedPacketIdCount);
+        Assert.False(result.UnsupportedPacketIdCounts.ContainsKey(PacketId.CarTelemetry2));
+        Assert.Equal(1, result.CountOnlyPacketIdCount);
+        Assert.Equal(1, result.CountOnlyPacketIdCounts[PacketId.CarTelemetry2]);
+        Assert.Equal(1, result.Sessions[1001UL].CountOnlyPacketIdCount);
+        Assert.Equal(1, result.Sessions[1001UL].PacketCounts[PacketId.CarTelemetry2]);
+        Assert.Contains("Parsed count-only packet ids: 1", result.RaceReport!.DataQualityWarnings);
+    }
+
     [Fact]
     public async Task ProgramMain_AcceptsSessionUidArgumentAndWritesRaceReport()
     {
@@ -1204,6 +1232,29 @@ public sealed class RawLogAnalyzerTests
             ProtocolTestData.WriteUInt16(body, ref offset, speed);
             ProtocolTestData.WriteFloat(body, ref offset, throttle);
         });
+    }
+
+    private static byte[] BuildF126CarTelemetry2Packet(ulong sessionUid)
+    {
+        var payload = new byte[PacketHeader.Size + UdpPacketConstants.CarTelemetry2BodySize];
+        ProtocolTestData.WriteHeader(
+            payload.AsSpan(0, PacketHeader.Size),
+            PacketId.CarTelemetry2,
+            ProtocolTestData.PacketFormat26);
+        payload[2] = 26;
+        BinaryPrimitives.WriteUInt64LittleEndian(payload.AsSpan(7, sizeof(ulong)), sessionUid);
+
+        var body = payload.AsSpan(PacketHeader.Size);
+        var offset = 0;
+        ProtocolTestData.WriteByte(body, ref offset, 1);
+        ProtocolTestData.WriteByte(body, ref offset, 1);
+        ProtocolTestData.WriteUInt16(body, ref offset, 1500);
+        ProtocolTestData.WriteByte(body, ref offset, 1);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        ProtocolTestData.WriteUInt16(body, ref offset, 3200);
+        ProtocolTestData.WriteByte(body, ref offset, 1);
+        ProtocolTestData.WriteByte(body, ref offset, 0);
+        return payload;
     }
 
     private static byte[] BuildCarStatusPacket(

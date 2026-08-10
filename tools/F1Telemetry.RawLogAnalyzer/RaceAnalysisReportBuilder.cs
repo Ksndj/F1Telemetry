@@ -125,6 +125,7 @@ public static class RaceAnalysisReportBuilder
         AppendCountWarning(warnings, "Payload length mismatches", result.PayloadLengthMismatchCount);
         AppendCountWarning(warnings, "Unknown packet ids", result.UnknownPacketIdCount);
         AppendCountWarning(warnings, "Unsupported known packet ids", result.UnsupportedPacketIdCount);
+        AppendCountWarning(warnings, "Parsed count-only packet ids", result.CountOnlyPacketIdCount);
         AppendCountWarning(warnings, "Packet parse failures", result.PacketParseFailureCount);
         AppendCountWarning(warnings, "Dispatch failures", result.DispatchFailureCount);
 
