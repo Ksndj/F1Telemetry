@@ -36,3 +36,66 @@ jobs:
 
       - name: Test solution
         run: dotnet test .\F1Telemetry.Tests\F1Telemetry.Tests.csproj -c Release --no-build
+
+  package-windows:
+    name: Package Windows installer
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve build version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$props = Get-Content -LiteralPath '.\Directory.Build.props' -Raw
+          $baseVersion = [string]$props.Project.PropertyGroup.VersionPrefix
+          if ($baseVersion -notmatch '^\d+\.\d+\.\d+$') {
+            throw "VersionPrefix must contain three numeric segments: $baseVersion"
+          }
+
+          $runNumber = [int64]'${{ github.run_number }}'
+          if ($runNumber -lt 0 -or $runNumber -gt 65535) {
+            throw "github.run_number must be between 0 and 65535: $runNumber"
+          }
+
+          $buildVersion = "$baseVersion.$runNumber"
+          "value=$buildVersion" >> $env:GITHUB_OUTPUT
+          Write-Host "Build version: $buildVersion"
+
+      - name: Publish Windows x64 application
+        shell: pwsh
+        run: .\build\publish.ps1 -Version '${{ steps.version.outputs.value }}'
+
+      - name: Compile Windows installer
+        shell: pwsh
+        env:
+          F1TELEMETRY_BUILD_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          $isccPath = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $isccPath)) {
+            throw "Inno Setup compiler was not found: $isccPath"
+          }
+
+          & $isccPath '.\build\F1Telemetry.iss'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: F1Telemetry-${{ steps.version.outputs.value }}-win-x64-setup
+          path: .\build\output\F1Telemetry-${{ steps.version.outputs.value }}-win-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

@@ -1,5 +1,6 @@
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Xml.Linq;
 using F1Telemetry.App;
 using F1Telemetry.App.ViewModels;
 using Xunit;
@@ -17,7 +18,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void CurrentVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("3.1.1", VersionInfo.CurrentVersion);
+        Assert.Equal("3.1.2", VersionInfo.CurrentVersion);
     }
 
     /// <summary>
@@ -26,7 +27,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v3.1.1", VersionInfo.DisplayVersion);
+        Assert.Equal("v3.1.2", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
@@ -38,7 +39,7 @@ public sealed class VersionInfoTests
         var viewModel = Assert.IsType<DashboardViewModel>(
             RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
 
-        Assert.Contains("3.1.1", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.Contains("3.1.2", viewModel.AppTitleText, StringComparison.Ordinal);
         Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
@@ -72,13 +73,14 @@ public sealed class VersionInfoTests
     public void ApplicationVersionMetadata_UseCurrentApplicationVersion()
     {
         var root = FindRepositoryRoot();
-        var directoryBuildProps = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
+        var document = XDocument.Load(Path.Combine(root, "Directory.Build.props"));
+        var propertyGroup = Assert.Single(document.Root!.Elements("PropertyGroup"));
 
-        Assert.Contains("<Version>3.1.1</Version>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<VersionPrefix>3.1.1</VersionPrefix>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<AssemblyVersion>3.1.1.0</AssemblyVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<FileVersion>3.1.1.0</FileVersion>", directoryBuildProps, StringComparison.Ordinal);
-        Assert.Contains("<InformationalVersion>3.1.1</InformationalVersion>", directoryBuildProps, StringComparison.Ordinal);
+        Assert.Equal("3.1.2", propertyGroup.Element("VersionPrefix")?.Value);
+        Assert.Equal("$(VersionPrefix)", propertyGroup.Element("Version")?.Value);
+        Assert.Equal("$(VersionPrefix).0", propertyGroup.Element("AssemblyVersion")?.Value);
+        Assert.Equal("$(VersionPrefix).0", propertyGroup.Element("FileVersion")?.Value);
+        Assert.Equal("$(VersionPrefix)", propertyGroup.Element("InformationalVersion")?.Value);
     }
 
     private static string FindRepositoryRoot()

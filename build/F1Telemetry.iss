@@ -1,18 +1,23 @@
 #define MyAppName "F1Telemetry"
-#define MyAppVersion "3.1.1"
+#define MyAppVersion GetEnv("F1TELEMETRY_BUILD_VERSION")
+#if MyAppVersion == ""
+  #error F1TELEMETRY_BUILD_VERSION must be set before compiling the installer
+#endif
 #define MyAppExeName "F1Telemetry.App.exe"
 
 [Setup]
 AppName={#MyAppName}
 AppId={{F1Telemetry}}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}
+VersionInfoProductVersion={#MyAppVersion}
 AppPublisher=F1Telemetry
 DefaultDirName={autopf}\F1Telemetry
 DefaultGroupName=F1Telemetry
 DisableDirPage=no
 ShowLanguageDialog=yes
 OutputDir=output
-OutputBaseFilename=F1Telemetry-3.1.1-win-x64-setup
+OutputBaseFilename=F1Telemetry-{#MyAppVersion}-win-x64-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
