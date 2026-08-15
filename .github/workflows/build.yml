@@ -43,6 +43,8 @@ jobs:
     needs: build-and-test
     runs-on: windows-latest
     timeout-minutes: 20
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -99,3 +101,190 @@ jobs:
           if-no-files-found: error
           retention-days: 30
           compression-level: 0
+          overwrite: true
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v${{ steps.version.outputs.value }}
+          RELEASE_TITLE: F1Telemetry ${{ steps.version.outputs.value }}
+          INSTALLER_PATH: .\build\output\F1Telemetry-${{ steps.version.outputs.value }}-win-x64-setup.exe
+          REPOSITORY: ${{ github.repository }}
+          TARGET_SHA: ${{ github.sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          function Invoke-GitHubApiJson {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Endpoint,
+
+              [switch]$AllowNotFound,
+
+              [switch]$Paginate
+            )
+
+            $apiArguments = @('api')
+            if ($Paginate) {
+              $apiArguments += @('--paginate', '--slurp')
+            }
+
+            $apiArguments += $Endpoint
+            $output = gh @apiArguments 2>&1
+            $exitCode = $LASTEXITCODE
+            $responseText = ($output | Out-String).Trim()
+            if ($exitCode -eq 0) {
+              if ([string]::IsNullOrWhiteSpace($responseText)) {
+                return $null
+              }
+
+              return $responseText | ConvertFrom-Json -NoEnumerate
+            }
+
+            if ($AllowNotFound -and $responseText -match 'HTTP 404') {
+              return $null
+            }
+
+            throw "GitHub API request failed for '$Endpoint' with exit code $exitCode. $responseText"
+          }
+
+          function Resolve-TagCommit {
+            param(
+              [Parameter(Mandatory)]
+              [string]$Tag
+            )
+
+            $escapedTag = [Uri]::EscapeDataString($Tag)
+            $reference = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/git/ref/tags/$escapedTag" -AllowNotFound
+            if ($null -eq $reference) {
+              return $null
+            }
+
+            $gitObject = $reference.object
+            for ($depth = 0; $gitObject.type -eq 'tag'; $depth++) {
+              if ($depth -ge 5) {
+                throw "Git tag '$Tag' has too many nested annotated tag objects."
+              }
+
+              $tagObject = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/git/tags/$($gitObject.sha)"
+              $gitObject = $tagObject.object
+            }
+
+            if ($gitObject.type -ne 'commit') {
+              throw "Git tag '$Tag' resolves to unsupported object type '$($gitObject.type)'."
+            }
+
+            return [string]$gitObject.sha
+          }
+
+          function Reconcile-LatestRelease {
+            $maximumLatestUpdates = 5
+            for ($updateCount = 0; $updateCount -le $maximumLatestUpdates; $updateCount++) {
+              $releasePages = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/releases?per_page=100" -Paginate
+              $versionedReleases = @(
+                foreach ($page in @($releasePages)) {
+                  foreach ($release in @($page)) {
+                    $tag = [string]$release.tag_name
+                    if (-not $release.draft -and -not $release.prerelease -and $tag -match '^v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)$') {
+                      [pscustomobject]@{
+                        Tag = $tag
+                        Version = [version]$Matches.version
+                      }
+                    }
+                  }
+                }
+              )
+
+              if ($versionedReleases.Count -eq 0) {
+                throw 'No published numeric GitHub Release was found after publication.'
+              }
+
+              $newestRelease = $versionedReleases | Sort-Object -Property Version -Descending | Select-Object -First 1
+              $currentLatestRelease = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/releases/latest" -AllowNotFound
+              $currentLatestTag = if ($null -eq $currentLatestRelease) { $null } else { [string]$currentLatestRelease.tag_name }
+              if ($null -ne $currentLatestTag -and $currentLatestTag -notmatch '^v\d+\.\d+\.\d+(?:\.\d+)?$') {
+                Write-Warning "Current Latest tag '$currentLatestTag' is not a supported numeric version; the highest published numeric version will replace it."
+              }
+
+              if ($currentLatestTag -eq $newestRelease.Tag) {
+                return
+              }
+
+              if ($updateCount -eq $maximumLatestUpdates) {
+                throw "GitHub Latest Release could not be reconciled after $maximumLatestUpdates updates. Expected '$($newestRelease.Tag)', found '$currentLatestTag'."
+              }
+
+              gh release edit $newestRelease.Tag --latest --repo $env:REPOSITORY
+              if ($LASTEXITCODE -ne 0) {
+                throw "GitHub Latest Release update failed with exit code $LASTEXITCODE."
+              }
+
+              Start-Sleep -Seconds 1
+            }
+          }
+
+          $releaseNotes = @"
+          Automated Windows x64 installer.
+
+          - Build version: ${{ steps.version.outputs.value }}
+          - Commit: $env:TARGET_SHA
+          - Workflow run: $env:RUN_URL
+          "@
+
+          $escapedReleaseTag = [Uri]::EscapeDataString($env:RELEASE_TAG)
+          $existingRelease = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/releases/tags/$escapedReleaseTag" -AllowNotFound
+          $releaseExists = $null -ne $existingRelease
+
+          $tagCommit = Resolve-TagCommit -Tag $env:RELEASE_TAG
+          if ($null -ne $tagCommit -and $tagCommit -ne $env:TARGET_SHA) {
+            throw "Git tag '$env:RELEASE_TAG' points to '$tagCommit', expected '$env:TARGET_SHA'."
+          }
+
+          if ($releaseExists -and $null -eq $tagCommit) {
+            throw "GitHub Release '$env:RELEASE_TAG' exists, but its Git tag cannot be resolved."
+          }
+
+          if ($releaseExists) {
+            gh release upload $env:RELEASE_TAG $env:INSTALLER_PATH --clobber --repo $env:REPOSITORY
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitHub Release asset upload failed with exit code $LASTEXITCODE."
+            }
+
+            $editArguments = @(
+              'release', 'edit', $env:RELEASE_TAG,
+              '--title', $env:RELEASE_TITLE,
+              '--notes', $releaseNotes,
+              '--repo', $env:REPOSITORY
+            )
+            gh @editArguments
+          }
+          else {
+            $createArguments = @(
+              'release', 'create', $env:RELEASE_TAG, $env:INSTALLER_PATH,
+              '--target', $env:TARGET_SHA,
+              '--title', $env:RELEASE_TITLE,
+              '--notes', $releaseNotes,
+              '--repo', $env:REPOSITORY
+            )
+            $createArguments += '--latest=false'
+
+            gh @createArguments
+          }
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release publication failed with exit code $LASTEXITCODE."
+          }
+
+          $publishedTagCommit = Resolve-TagCommit -Tag $env:RELEASE_TAG
+          if ($publishedTagCommit -ne $env:TARGET_SHA) {
+            throw "Published Git tag '$env:RELEASE_TAG' points to '$publishedTagCommit', expected '$env:TARGET_SHA'."
+          }
+
+          Reconcile-LatestRelease
+
+          $releaseUrl = gh release view $env:RELEASE_TAG --repo $env:REPOSITORY --json url --jq '.url'
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release verification failed with exit code $LASTEXITCODE."
+          }
+
+          Write-Host "Published release: $releaseUrl"
