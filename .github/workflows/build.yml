@@ -49,6 +49,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v5
@@ -109,6 +111,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: v${{ steps.version.outputs.value }}
           RELEASE_TITLE: F1Telemetry ${{ steps.version.outputs.value }}
+          BUILD_VERSION: ${{ steps.version.outputs.value }}
           INSTALLER_PATH: .\build\output\F1Telemetry-${{ steps.version.outputs.value }}-win-x64-setup.exe
           REPOSITORY: ${{ github.repository }}
           TARGET_SHA: ${{ github.sha }}
@@ -177,23 +180,25 @@ jobs:
             return [string]$gitObject.sha
           }
 
+          function Get-VersionedReleases {
+            $releasePages = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/releases?per_page=100" -Paginate
+            foreach ($page in @($releasePages)) {
+              foreach ($release in @($page)) {
+                $tag = [string]$release.tag_name
+                if (-not $release.draft -and -not $release.prerelease -and $tag -match '^v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)$') {
+                  [pscustomobject]@{
+                    Tag = $tag
+                    Version = [version]$Matches.version
+                  }
+                }
+              }
+            }
+          }
+
           function Reconcile-LatestRelease {
             $maximumLatestUpdates = 5
             for ($updateCount = 0; $updateCount -le $maximumLatestUpdates; $updateCount++) {
-              $releasePages = Invoke-GitHubApiJson -Endpoint "repos/$env:REPOSITORY/releases?per_page=100" -Paginate
-              $versionedReleases = @(
-                foreach ($page in @($releasePages)) {
-                  foreach ($release in @($page)) {
-                    $tag = [string]$release.tag_name
-                    if (-not $release.draft -and -not $release.prerelease -and $tag -match '^v(?<version>\d+\.\d+\.\d+(?:\.\d+)?)$') {
-                      [pscustomobject]@{
-                        Tag = $tag
-                        Version = [version]$Matches.version
-                      }
-                    }
-                  }
-                }
-              )
+              $versionedReleases = @(Get-VersionedReleases)
 
               if ($versionedReleases.Count -eq 0) {
                 throw 'No published numeric GitHub Release was found after publication.'
@@ -223,12 +228,26 @@ jobs:
             }
           }
 
+          $currentVersion = [version]$env:BUILD_VERSION
+          $previousRelease = Get-VersionedReleases |
+            Where-Object { $_.Version -lt $currentVersion } |
+            Sort-Object -Property Version -Descending |
+            Select-Object -First 1
+          $previousTag = if ($null -eq $previousRelease) { '' } else { $previousRelease.Tag }
+          $changeNotesLines = & '.\build\generate-release-notes.ps1' `
+            -RepositoryPath '.' `
+            -PreviousTag $previousTag `
+            -TargetSha $env:TARGET_SHA
+          $changeNotes = $changeNotesLines -join [Environment]::NewLine
+
           $releaseNotes = @"
           Automated Windows x64 installer.
 
           - Build version: ${{ steps.version.outputs.value }}
           - Commit: $env:TARGET_SHA
           - Workflow run: $env:RUN_URL
+
+          $changeNotes
           "@
 
           $escapedReleaseTag = [Uri]::EscapeDataString($env:RELEASE_TAG)

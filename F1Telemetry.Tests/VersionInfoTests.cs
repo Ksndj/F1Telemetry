@@ -18,7 +18,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void CurrentVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("3.1.3", VersionInfo.CurrentVersion);
+        Assert.Equal("3.1.4", VersionInfo.CurrentVersion);
     }
 
     /// <summary>
@@ -27,7 +27,7 @@ public sealed class VersionInfoTests
     [Fact]
     public void DisplayVersion_ReturnsCurrentReleaseVersion()
     {
-        Assert.Equal("v3.1.3", VersionInfo.DisplayVersion);
+        Assert.Equal("v3.1.4", VersionInfo.DisplayVersion);
     }
 
     /// <summary>
@@ -39,7 +39,7 @@ public sealed class VersionInfoTests
         var viewModel = Assert.IsType<DashboardViewModel>(
             RuntimeHelpers.GetUninitializedObject(typeof(DashboardViewModel)));
 
-        Assert.Contains("3.1.3", viewModel.AppTitleText, StringComparison.Ordinal);
+        Assert.Contains("3.1.4", viewModel.AppTitleText, StringComparison.Ordinal);
         Assert.DoesNotContain(" V1", viewModel.AppTitleText, StringComparison.Ordinal);
     }
 
@@ -76,7 +76,7 @@ public sealed class VersionInfoTests
         var document = XDocument.Load(Path.Combine(root, "Directory.Build.props"));
         var propertyGroup = Assert.Single(document.Root!.Elements("PropertyGroup"));
 
-        Assert.Equal("3.1.3", propertyGroup.Element("VersionPrefix")?.Value);
+        Assert.Equal("3.1.4", propertyGroup.Element("VersionPrefix")?.Value);
         Assert.Equal("$(VersionPrefix)", propertyGroup.Element("Version")?.Value);
         Assert.Equal("$(VersionPrefix).0", propertyGroup.Element("AssemblyVersion")?.Value);
         Assert.Equal("$(VersionPrefix).0", propertyGroup.Element("FileVersion")?.Value);
